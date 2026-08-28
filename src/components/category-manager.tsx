@@ -8,7 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, Plus, X, Check } from "lucide-react";
 import type { Category } from "@/db/schema";
 
-export function CategoryManager() {
+export function CategoryManager({
+  listId,
+  listName,
+}: {
+  listId?: number | null;
+  listName?: string | null;
+} = {}) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -18,16 +24,38 @@ export function CategoryManager() {
   const [newShelfLife, setNewShelfLife] = useState("14");
   const [saving, setSaving] = useState(false);
 
-  function load() {
-    fetch("/api/categories")
+  function load(signal?: AbortSignal) {
+    fetch("/api/categories", { signal })
       .then((res) => res.json())
-      .then(setCategories)
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!signal?.aborted) setCategories(data);
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") toast.error("Konnte Kategorien nicht laden.");
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
+  }
+
+  function upsertLocal(category: Category) {
+    setCategories((prev) =>
+      [...prev.filter((c) => c.id !== category.id), category].sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
+    );
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    // Re-fetch when the active list changes elsewhere on the page (e.g. via
+    // ListManager) -- categories are scoped to the active list server-side.
+    // Keyed on the id (not the display name) so this can't miss a change.
+    // Aborting the in-flight request on cleanup stops a stale response from
+    // a previous list overwriting the current one if they resolve out of order.
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [listId]);
 
   function startEdit(category: Category) {
     setEditingId(category.id);
@@ -53,9 +81,10 @@ export function CategoryManager() {
         body: JSON.stringify({ label: editLabel.trim(), shelfLifeDays: Math.round(days) }),
       });
       if (!res.ok) throw new Error();
+      const updated = (await res.json()) as Category;
       toast.success("Kategorie aktualisiert");
       setEditingId(null);
-      load();
+      upsertLocal(updated);
     } catch {
       toast.error("Konnte Kategorie nicht aktualisieren.");
     } finally {
@@ -72,7 +101,7 @@ export function CategoryManager() {
         throw new Error(body?.error ?? "Konnte Kategorie nicht löschen.");
       }
       toast.success("Kategorie gelöscht");
-      load();
+      setCategories((prev) => prev.filter((c) => c.id !== id));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Konnte Kategorie nicht löschen.");
     } finally {
@@ -98,10 +127,11 @@ export function CategoryManager() {
         body: JSON.stringify({ label: newLabel.trim(), shelfLifeDays: Math.round(days) }),
       });
       if (!res.ok) throw new Error();
+      const created = (await res.json()) as Category;
       toast.success("Kategorie hinzugefügt");
       setNewLabel("");
       setNewShelfLife("14");
-      load();
+      upsertLocal(created);
     } catch {
       toast.error("Konnte Kategorie nicht anlegen.");
     } finally {
@@ -111,7 +141,19 @@ export function CategoryManager() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Label>Kategorien</Label>
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Label>Kategorien</Label>
+          {listName && (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+              Liste „{listName}“
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Gilt nur für diese Liste – jede Liste hat ihre eigenen Kategorien.
+        </p>
+      </div>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Lädt…</p>

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { requireSession, requireActiveList } from "@/lib/session";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
   const { id } = await params;
   const body = await req.json();
   const { name, category, expiryDate, quantity, status } = body as {
@@ -30,7 +34,7 @@ export async function PATCH(
     const categoryRow = await db
       .select()
       .from(categories)
-      .where(eq(categories.key, category))
+      .where(and(eq(categories.key, category), eq(categories.listId, listId)))
       .get();
     if (!categoryRow) {
       return NextResponse.json({ error: "ungültige Kategorie" }, { status: 400 });
@@ -65,7 +69,7 @@ export async function PATCH(
   const [updated] = await db
     .update(items)
     .set(update)
-    .where(eq(items.id, Number(id)))
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
     .returning();
 
   if (!updated) {
@@ -73,4 +77,24 @@ export async function PATCH(
   }
 
   return NextResponse.json(updated);
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
+  const { id } = await params;
+  const deleted = await db
+    .delete(items)
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+    .returning();
+
+  if (deleted.length === 0) {
+    return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

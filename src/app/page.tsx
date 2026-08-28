@@ -1,24 +1,39 @@
 import { db } from "@/db";
-import { categories, items } from "@/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { items, listMembers, lists } from "@/db/schema";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { InventoryList } from "@/components/inventory-list";
 import { Button } from "@/components/ui/button";
+import { ListSwitcher } from "@/components/list-switcher";
+import { ManualAddDialog } from "@/components/manual-add-dialog";
 import Link from "next/link";
-import { Settings, Camera, Plus, Archive } from "lucide-react";
-
-export const dynamic = "force-dynamic";
+import { Settings, Camera, Archive } from "lucide-react";
+import { requireSession, requireActiveList } from "@/lib/session";
+import { getCategoriesForList } from "@/lib/data";
 
 export default async function HomePage() {
-  const [activeItems, allCategories] = await Promise.all([
-    db.select().from(items).where(eq(items.status, "active")).orderBy(items.expiryDate),
-    db.select().from(categories).orderBy(asc(categories.label)),
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
+  const [activeItems, allCategories, myLists] = await Promise.all([
+    db
+      .select()
+      .from(items)
+      .where(and(eq(items.status, "active"), eq(items.listId, listId)))
+      .orderBy(items.expiryDate),
+    getCategoriesForList(listId),
+    db
+      .select({ id: lists.id, name: lists.name })
+      .from(lists)
+      .innerJoin(listMembers, eq(listMembers.listId, lists.id))
+      .where(and(eq(listMembers.userId, session.user.id), isNull(lists.archivedAt)))
+      .orderBy(asc(lists.createdAt)),
   ]);
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between p-4">
-        <h1 className="text-lg font-semibold">Vorrat</h1>
-        <div className="flex gap-1">
+      <div className="flex items-center justify-between gap-2 p-4">
+        <ListSwitcher activeListId={listId} lists={myLists} />
+        <div className="flex shrink-0 gap-1">
           <Link href="/archive">
             <Button variant="ghost" size="icon" aria-label="Archiv">
               <Archive className="size-5" />
@@ -41,12 +56,9 @@ export default async function HomePage() {
             Scannen
           </Button>
         </Link>
-        <Link href="/add" className="flex-1">
-          <Button variant="outline" className="w-full" size="lg">
-            <Plus className="size-4" />
-            Manuell
-          </Button>
-        </Link>
+        <div className="flex-1">
+          <ManualAddDialog />
+        </div>
       </div>
     </div>
   );

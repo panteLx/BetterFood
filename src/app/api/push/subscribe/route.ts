@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { pushSubscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { requireSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
+  const session = await requireSession();
+
   const body = await req.json();
   const { endpoint, keys } = body as {
     endpoint: string;
@@ -26,7 +29,13 @@ export async function POST(req: NextRequest) {
       p256dh: keys.p256dh,
       auth: keys.auth,
       createdAt: new Date(),
+      userId: session.user.id,
     });
+  } else if (existing.userId !== session.user.id) {
+    await db
+      .update(pushSubscriptions)
+      .set({ userId: session.user.id })
+      .where(eq(pushSubscriptions.id, existing.id));
   }
 
   return NextResponse.json({ ok: true });

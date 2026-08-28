@@ -6,7 +6,18 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogPortal,
+  AlertDialogBackdrop,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogActions,
+  AlertDialogClose,
+} from "@/components/ui/alert-dialog";
+import { RotateCcw, Trash2 } from "lucide-react";
 import type { Category, Item } from "@/db/schema";
 
 function formatDate(date: Date | null): string {
@@ -25,7 +36,13 @@ export function ArchiveList({
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
+  const [prevInitialItems, setPrevInitialItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<number | null>(null);
+
+  if (initialItems !== prevInitialItems) {
+    setPrevInitialItems(initialItems);
+    setItems(initialItems);
+  }
 
   const categoryLabels = Object.fromEntries(categories.map((c) => [c.key, c.label]));
 
@@ -45,6 +62,20 @@ export function ArchiveList({
     } catch {
       toast.error("Konnte nicht wiederhergestellt werden.");
       setItems(initialItems);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function deleteItem(id: number, name: string) {
+    setPendingId(id);
+    try {
+      const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      toast.success(`${name} endgültig gelöscht`);
+    } catch {
+      toast.error("Konnte nicht gelöscht werden.");
     } finally {
       setPendingId(null);
     }
@@ -80,15 +111,52 @@ export function ArchiveList({
               <span className="text-xs text-muted-foreground">{formatDate(item.resolvedAt)}</span>
             </div>
           </div>
-          <Button
-            size="icon"
-            variant="outline"
-            disabled={pendingId === item.id}
-            onClick={() => restoreItem(item.id, item.name)}
-            aria-label="Wiederherstellen"
-          >
-            <RotateCcw className="size-4" />
-          </Button>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              size="icon"
+              variant="outline"
+              disabled={pendingId === item.id}
+              onClick={() => restoreItem(item.id, item.name)}
+              aria-label="Wiederherstellen"
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    disabled={pendingId === item.id}
+                    aria-label="Endgültig löschen"
+                  />
+                }
+              >
+                <Trash2 className="size-4" />
+              </AlertDialogTrigger>
+              <AlertDialogPortal>
+                <AlertDialogBackdrop />
+                <AlertDialogPopup>
+                  <AlertDialogTitle>Endgültig löschen?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    &quot;{item.name}&quot; wird unwiderruflich gelöscht. Das kann nicht rückgängig
+                    gemacht werden.
+                  </AlertDialogDescription>
+                  <AlertDialogActions>
+                    <AlertDialogClose render={<Button variant="outline" />}>
+                      Abbrechen
+                    </AlertDialogClose>
+                    <AlertDialogClose
+                      render={<Button variant="destructive" />}
+                      onClick={() => deleteItem(item.id, item.name)}
+                    >
+                      Löschen
+                    </AlertDialogClose>
+                  </AlertDialogActions>
+                </AlertDialogPopup>
+              </AlertDialogPortal>
+            </AlertDialog>
+          </div>
         </Card>
       ))}
     </div>
