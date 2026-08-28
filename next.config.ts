@@ -5,6 +5,7 @@ const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
+  customWorkerSrc: "src/worker",
 });
 
 const allowedDevOrigins = process.env.ALLOWED_DEV_ORIGINS?.split(",")
@@ -13,6 +14,7 @@ const allowedDevOrigins = process.env.ALLOWED_DEV_ORIGINS?.split(",")
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  serverExternalPackages: ["better-sqlite3"],
 };
 
 export default withPWA(nextConfig);

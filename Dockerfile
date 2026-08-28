@@ -21,22 +21,6 @@ COPY . .
 # the same tables and intermittently hitting SQLITE_BUSY.
 RUN npm run db:migrate
 
-# src/lib/push.ts calls webpush.setVapidDetails() at module load time, and
-# Next.js imports every route module during `next build` to collect page
-# data - so these must be set here too, not just at container runtime.
-# NEXT_PUBLIC_VAPID_PUBLIC_KEY is additionally inlined into the client bundle
-# at build time. No defaults on purpose: docker-compose.yml supplies the real
-# values from .env, so a build without them fails loudly instead of silently
-# shipping placeholder keys.
-ARG VAPID_SUBJECT
-ARG VAPID_PUBLIC_KEY
-ARG VAPID_PRIVATE_KEY
-ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
-ENV VAPID_SUBJECT=$VAPID_SUBJECT \
-    VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY \
-    VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY \
-    NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
-
 RUN npm run build
 
 # ---- Runner ----

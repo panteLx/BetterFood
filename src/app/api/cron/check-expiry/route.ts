@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items, pushSubscriptions, settings } from "@/db/schema";
 import { and, eq, lte } from "drizzle-orm";
-import { webpush } from "@/lib/push";
+import { getWebPush } from "@/lib/push";
 
 function startOfToday(): Date {
   const d = new Date();
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   const subscriptions = await db.select().from(pushSubscriptions);
+  const webpush = getWebPush();
 
   const names = dueItems.map((i) => i.name).join(", ");
   const payload = JSON.stringify({
@@ -68,6 +69,8 @@ export async function POST(req: NextRequest) {
       const statusCode = (err as { statusCode?: number }).statusCode;
       if (statusCode === 404 || statusCode === 410) {
         await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+      } else {
+        console.error("push notification failed", sub.endpoint, err);
       }
     }
   }

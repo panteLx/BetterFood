@@ -1,14 +1,7 @@
 services:
   betterfood:
     container_name: betterfood
-    build:
-      context: .
-      args:
-        VAPID_SUBJECT: ${VAPID_SUBJECT}
-        VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-        VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
-    image: betterfood:local
+    image: ghcr.io/pantelx/betterfood:latest
     env_file:
       - .env
     ports:
