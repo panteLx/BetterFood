@@ -14,7 +14,10 @@ export async function subscribeToPush(): Promise<boolean> {
   if (permission !== "granted") return false;
 
   const registration = await navigator.serviceWorker.ready;
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+  const keyRes = await fetch("/api/push/public-key");
+  if (!keyRes.ok) return false;
+  const { publicKey } = (await keyRes.json()) as { publicKey?: string };
   if (!publicKey) return false;
 
   const subscription = await registration.pushManager.subscribe({

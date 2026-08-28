@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permission, setPermission] = useState<string>("default");
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -52,6 +53,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleTestNotification() {
+    setTesting(true);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      if (!res.ok) throw new Error();
+      toast.success("Testbenachrichtigung gesendet");
+    } catch {
+      toast.error("Testbenachrichtigung konnte nicht gesendet werden.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4">
       <div className="flex items-center gap-2">
@@ -82,7 +96,17 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-1.5">
         <Label>Push-Benachrichtigungen</Label>
         {permission === "granted" ? (
-          <p className="text-sm text-muted-foreground">Aktiviert.</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">Aktiviert.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestNotification}
+              disabled={testing}
+            >
+              Testbenachrichtigung senden
+            </Button>
+          </div>
         ) : (
           <Button variant="outline" onClick={handleEnablePush}>
             Benachrichtigungen aktivieren

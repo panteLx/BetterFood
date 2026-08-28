@@ -13,6 +13,7 @@ const allowedDevOrigins = process.env.ALLOWED_DEV_ORIGINS?.split(",")
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  serverExternalPackages: ["better-sqlite3"],
 };
 
 export default withPWA(nextConfig);
