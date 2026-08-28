@@ -1,0 +1,21 @@
+services:
+  betterfood:
+    container_name: betterfood
+    build:
+      context: .
+      args:
+        VAPID_SUBJECT: ${VAPID_SUBJECT}
+        VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+        VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+    image: betterfood:local
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - data:/app/data
+    restart: unless-stopped
+
+volumes:
+  data:

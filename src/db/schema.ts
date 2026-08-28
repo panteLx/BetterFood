@@ -1,0 +1,31 @@
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+export const items = sqliteTable("items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  barcode: text("barcode"),
+  addedAt: integer("added_at", { mode: "timestamp" }).notNull(),
+  expiryDate: integer("expiry_date", { mode: "timestamp" }).notNull(),
+  status: text("status", { enum: ["active", "used", "thrown_away"] })
+    .notNull()
+    .default("active"),
+  lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
+});
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+export type Item = typeof items.$inferSelect;
+export type NewItem = typeof items.$inferInsert;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
