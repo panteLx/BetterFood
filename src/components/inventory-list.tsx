@@ -1,15 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2 } from "lucide-react";
-import { CATEGORY_LABELS } from "@/lib/categories";
+import { Check, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Item } from "@/db/schema";
+import type { Category, Item } from "@/db/schema";
 
 function daysUntil(date: Date): number {
   const today = new Date();
@@ -32,10 +31,18 @@ function daysLabel(days: number): string {
   return `Noch ${days} Tage`;
 }
 
-export function InventoryList({ initialItems }: { initialItems: Item[] }) {
+export function InventoryList({
+  initialItems,
+  categories,
+}: {
+  initialItems: Item[];
+  categories: Pick<Category, "key" | "label">[];
+}) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<number | null>(null);
+
+  const categoryLabels = Object.fromEntries(categories.map((c) => [c.key, c.label]));
 
   async function resolveItem(id: number, status: "used" | "thrown_away", name: string) {
     setPendingId(id);
@@ -69,45 +76,75 @@ export function InventoryList({ initialItems }: { initialItems: Item[] }) {
     );
   }
 
+  const groups = new Map<string, Item[]>();
+  for (const item of items) {
+    const group = groups.get(item.category);
+    if (group) group.push(item);
+    else groups.set(item.category, [item]);
+  }
+
+  const sections = Array.from(groups.entries()).sort(
+    ([, a], [, b]) => daysUntil(a[0].expiryDate) - daysUntil(b[0].expiryDate),
+  );
+
   return (
-    <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
-      {items.map((item) => {
-        const days = daysUntil(item.expiryDate);
-        return (
-          <Card
-            key={item.id}
-            className={cn("flex-row items-center justify-between gap-2 p-3", urgencyStyles(days))}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{item.name}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <Badge variant="secondary">{CATEGORY_LABELS[item.category] ?? item.category}</Badge>
-                <span className="text-xs text-muted-foreground">{daysLabel(days)}</span>
-              </div>
-            </div>
-            <div className="flex shrink-0 gap-1">
-              <Button
-                size="icon"
-                variant="outline"
-                disabled={pendingId === item.id}
-                onClick={() => resolveItem(item.id, "used", item.name)}
-                aria-label="Aufgebraucht"
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+      {sections.map(([categoryKey, categoryItems]) => (
+        <div key={categoryKey} className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            {categoryLabels[categoryKey] ?? categoryKey}
+          </h2>
+          {categoryItems.map((item) => {
+            const days = daysUntil(item.expiryDate);
+            return (
+              <Card
+                key={item.id}
+                className={cn(
+                  "flex-row items-center justify-between gap-2 p-3",
+                  urgencyStyles(days),
+                )}
               >
-                <Check className="size-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                disabled={pendingId === item.id}
-                onClick={() => resolveItem(item.id, "thrown_away", item.name)}
-                aria-label="Weggeworfen"
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          </Card>
-        );
-      })}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {item.name}
+                    {item.quantity > 1 && (
+                      <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                        ×{item.quantity}
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{daysLabel(days)}</p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Link href={`/edit/${item.id}`}>
+                    <Button size="icon" variant="outline" aria-label="Bearbeiten">
+                      <Pencil className="size-4" />
+                    </Button>
+                  </Link>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    disabled={pendingId === item.id}
+                    onClick={() => resolveItem(item.id, "used", item.name)}
+                    aria-label="Aufgebraucht"
+                  >
+                    <Check className="size-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    disabled={pendingId === item.id}
+                    onClick={() => resolveItem(item.id, "thrown_away", item.name)}
+                    aria-label="Weggeworfen"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

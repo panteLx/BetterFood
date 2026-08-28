@@ -1,9 +1,7 @@
-import { guessCategoryFromOffTags } from "./categories";
-
 export type ProductLookupResult = {
   found: boolean;
   name?: string;
-  category?: string;
+  categoryTags?: string[];
 };
 
 export async function lookupProductByBarcode(barcode: string): Promise<ProductLookupResult> {
@@ -24,6 +22,6 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
   return {
     found: Boolean(name),
     name,
-    category: guessCategoryFromOffTags(tags),
+    categoryTags: tags,
   };
 }

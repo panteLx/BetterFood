@@ -1,5 +1,9 @@
 import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
+import { guessCategoryFromOffTags } from "@/lib/categories";
+import { db } from "@/db";
+import { categories } from "@/db/schema";
+import { asc } from "drizzle-orm";
 
 export default async function ConfirmPage({
   searchParams,
@@ -7,16 +11,17 @@ export default async function ConfirmPage({
   searchParams: Promise<{ barcode?: string }>;
 }) {
   const { barcode } = await searchParams;
+  const allCategories = await db.select().from(categories).orderBy(asc(categories.label));
 
   let initialName = "";
-  let initialCategory = "sonstiges";
+  let initialCategory: string | undefined;
 
   if (barcode) {
     try {
       const result = await lookupProductByBarcode(barcode);
       if (result.found) {
         initialName = result.name ?? "";
-        initialCategory = result.category ?? "sonstiges";
+        initialCategory = guessCategoryFromOffTags(result.categoryTags ?? [], allCategories);
       }
     } catch {
       // Lookup fehlgeschlagen -- Nutzer füllt Felder manuell aus.
@@ -34,6 +39,7 @@ export default async function ConfirmPage({
         )}
       </div>
       <ItemForm
+        categories={allCategories}
         initialName={initialName}
         initialCategory={initialCategory}
         barcode={barcode}
