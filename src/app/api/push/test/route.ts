@@ -3,9 +3,15 @@ import { db } from "@/db";
 import { pushSubscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getWebPush } from "@/lib/push";
+import { requireSession } from "@/lib/session";
 
 export async function POST() {
-  const subscriptions = await db.select().from(pushSubscriptions);
+  const session = await requireSession();
+
+  const subscriptions = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, session.user.id));
 
   if (subscriptions.length === 0) {
     return NextResponse.json({ error: "keine subscription vorhanden" }, { status: 404 });

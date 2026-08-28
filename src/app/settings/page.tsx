@@ -8,15 +8,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { subscribeToPush, getNotificationPermissionState } from "@/lib/push-client";
 import { CategoryManager } from "@/components/category-manager";
+import { ListManager } from "@/components/list-manager";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { authClient, useSession } from "@/lib/auth-client";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [leadDays, setLeadDays] = useState(2);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permission, setPermission] = useState<string>("default");
   const [testing, setTesting] = useState(false);
+  const [activeList, setActiveList] = useState<{ id: number; name: string } | null>(null);
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     fetch("/api/settings")
@@ -87,6 +97,15 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold">Einstellungen</h1>
       </div>
 
+      {session && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Angemeldet als {session.user.email}</p>
+          <Button variant="outline" size="sm" onClick={handleSignOut}>
+            Abmelden
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label>Darstellung</Label>
         <ThemeToggle />
@@ -136,7 +155,12 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <CategoryManager />
+      <div className="flex flex-col gap-4 rounded-xl border border-input p-3">
+        <ListManager onActiveListChange={setActiveList} />
+        <div className="flex flex-col gap-3 border-t border-dashed border-input pt-4">
+          <CategoryManager listId={activeList?.id} listName={activeList?.name} />
+        </div>
+      </div>
     </div>
   );
 }

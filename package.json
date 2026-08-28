@@ -1,5 +1,5 @@
 {
-  "name": "food-tracker",
+  "name": "betterfood",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@better-auth/drizzle-adapter": "^1.7.2",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@zxing/browser": "^0.2.1",
-    "better-sqlite3": "^13.0.3",
+    "@zxing/library": "^0.23.0",
+    "better-auth": "^1.7.2",
+    "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",

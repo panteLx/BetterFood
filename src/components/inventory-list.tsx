@@ -40,7 +40,13 @@ export function InventoryList({
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
+  const [prevInitialItems, setPrevInitialItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<number | null>(null);
+
+  if (initialItems !== prevInitialItems) {
+    setPrevInitialItems(initialItems);
+    setItems(initialItems);
+  }
 
   const categoryLabels = Object.fromEntries(categories.map((c) => [c.key, c.label]));
 

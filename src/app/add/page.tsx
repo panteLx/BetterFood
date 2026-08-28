@@ -1,10 +1,12 @@
 import { ItemForm } from "@/components/item-form";
-import { db } from "@/db";
-import { categories } from "@/db/schema";
-import { asc } from "drizzle-orm";
+import { requireSession, requireActiveList } from "@/lib/session";
+import { getCategoriesForList } from "@/lib/data";
 
 export default async function AddPage() {
-  const allCategories = await db.select().from(categories).orderBy(asc(categories.label));
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
+  const allCategories = await getCategoriesForList(listId);
 
   return (
     <div className="flex flex-1 flex-col">

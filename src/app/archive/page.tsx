@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { categories, items } from "@/db/schema";
-import { asc, desc, ne } from "drizzle-orm";
+import { items } from "@/db/schema";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { ArchiveList } from "@/components/archive-list";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-
-export const dynamic = "force-dynamic";
+import { requireSession, requireActiveList } from "@/lib/session";
+import { getCategoriesForList } from "@/lib/data";
 
 export default async function ArchivePage() {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
   const [resolvedItems, allCategories] = await Promise.all([
     db
       .select()
       .from(items)
-      .where(ne(items.status, "active"))
+      .where(and(ne(items.status, "active"), eq(items.listId, listId)))
       .orderBy(desc(items.resolvedAt)),
-    db.select().from(categories).orderBy(asc(categories.label)),
+    getCategoriesForList(listId),
   ]);
 
   return (

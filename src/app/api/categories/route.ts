@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
-import { asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { slugifyCategoryKey } from "@/lib/categories";
+import { requireSession, requireActiveList } from "@/lib/session";
+import { categoriesTag, getCategoriesForList } from "@/lib/data";
 
 export async function GET() {
-  const rows = await db.select().from(categories).orderBy(asc(categories.label));
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
+  const rows = await getCategoriesForList(listId);
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
   const body = await req.json();
   const { label, shelfLifeDays } = body as { label: string; shelfLifeDays: number };
 
@@ -23,7 +32,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existing = await db.select({ key: categories.key }).from(categories);
+  const existing = await db
+    .select({ key: categories.key })
+    .from(categories)
+    .where(eq(categories.listId, listId));
   const existingKeys = new Set(existing.map((c) => c.key));
 
   const baseKey = slugifyCategoryKey(label);
@@ -41,8 +53,11 @@ export async function POST(req: NextRequest) {
       label: label.trim(),
       shelfLifeDays: Math.round(shelfLifeDays),
       createdAt: new Date(),
+      listId,
     })
     .returning();
+
+  revalidateTag(categoriesTag(listId), "max");
 
   return NextResponse.json(created, { status: 201 });
 }

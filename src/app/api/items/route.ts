@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
+import { requireSession, requireActiveList } from "@/lib/session";
 
 export async function GET() {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
   const rows = await db
     .select()
     .from(items)
-    .where(eq(items.status, "active"))
+    .where(and(eq(items.status, "active"), eq(items.listId, listId)))
     .orderBy(items.expiryDate);
 
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+
   const body = await req.json();
   const { name, category, barcode, expiryDate, quantity } = body as {
     name: string;
@@ -31,7 +38,7 @@ export async function POST(req: NextRequest) {
   const categoryRow = await db
     .select()
     .from(categories)
-    .where(eq(categories.key, category))
+    .where(and(eq(categories.key, category), eq(categories.listId, listId)))
     .get();
 
   if (!categoryRow) {
@@ -56,6 +63,8 @@ export async function POST(req: NextRequest) {
       addedAt: now,
       expiryDate: expiry,
       status: "active",
+      listId,
+      addedById: session.user.id,
     })
     .returning();
 
