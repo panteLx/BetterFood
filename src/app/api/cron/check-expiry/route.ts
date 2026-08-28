@@ -69,6 +69,8 @@ export async function POST(req: NextRequest) {
       const statusCode = (err as { statusCode?: number }).statusCode;
       if (statusCode === 404 || statusCode === 410) {
         await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+      } else {
+        console.error("push notification failed", sub.endpoint, err);
       }
     }
   }

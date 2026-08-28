@@ -24,6 +24,14 @@ export default function SettingsPage() {
         setPermission(getNotificationPermissionState());
       })
       .finally(() => setLoading(false));
+
+    // Permission can be "granted" from a previous attempt that never
+    // finished storing a subscription (e.g. no service worker was
+    // available at the time) - resync silently so this device isn't
+    // stuck without a way to (re-)trigger subscribeToPush().
+    if (getNotificationPermissionState() === "granted") {
+      subscribeToPush();
+    }
   }, []);
 
   async function handleSaveLeadDays() {
@@ -58,6 +66,8 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/push/test", { method: "POST" });
       if (!res.ok) throw new Error();
+      const { sent } = (await res.json()) as { sent: number };
+      if (sent === 0) throw new Error();
       toast.success("Testbenachrichtigung gesendet");
     } catch {
       toast.error("Testbenachrichtigung konnte nicht gesendet werden.");
