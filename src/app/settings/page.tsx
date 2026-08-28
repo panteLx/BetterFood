@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { subscribeToPush, getNotificationPermissionState } from "@/lib/push-client";
+import { CategoryManager } from "@/components/category-manager";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -86,6 +88,11 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label>Darstellung</Label>
+        <ThemeToggle />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="leadDays">Erinnerung wie viele Tage vorher?</Label>
         <div className="flex gap-2">
           <Input
@@ -128,6 +135,8 @@ export default function SettingsPage() {
           </p>
         )}
       </div>
+
+      <CategoryManager />
     </div>
   );
 }
