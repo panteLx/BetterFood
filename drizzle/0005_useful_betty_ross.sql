@@ -1,0 +1,1 @@
+ALTER TABLE `items` ADD `hidden_at` integer;

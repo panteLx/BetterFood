@@ -20,7 +20,13 @@ export function proxy(request: NextRequest) {
 
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Ziel merken, statt jeden Deep-Link (Push-Benachrichtigung, Lesezeichen,
+    // Home-Bildschirm-Shortcut) nach dem Login auf der Startseite enden zu
+    // lassen. /login und /register reichen den Parameter weiter durch.
+    const login = new URL("/login", request.url);
+    const target = pathname + request.nextUrl.search;
+    if (target !== "/") login.searchParams.set("redirect", target);
+    return NextResponse.redirect(login);
   }
 
   return NextResponse.next();

@@ -2,11 +2,12 @@ import { notFound } from "next/navigation";
 import { ItemForm } from "@/components/item-form";
 import { db } from "@/db";
 import { items, user } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
 
-export async function EditItemPage({ id }: { id: string }) {
+/** standalone: siehe AddItemPage -- verhindert router.back() aus der App heraus. */
+export async function EditItemPage({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const session = await requireSession();
   const listId = await requireActiveList(session.user.id);
 
@@ -23,7 +24,7 @@ export async function EditItemPage({ id }: { id: string }) {
       })
       .from(items)
       .leftJoin(user, eq(user.id, items.addedById))
-      .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+      .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
       .get(),
     getCategoriesForList(listId),
   ]);
@@ -43,6 +44,7 @@ export async function EditItemPage({ id }: { id: string }) {
       <ItemForm
         key={item.id}
         itemId={item.id}
+        redirectTo={standalone ? "/" : undefined}
         categories={allCategories}
         initialName={item.name}
         initialCategory={item.category}

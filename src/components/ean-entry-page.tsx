@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -41,6 +42,11 @@ export function EanEntryPage() {
           Weiter
         </Button>
       </form>
+      {/* Rueckweg zur Kamera: als Gast gibt es hier keine Navigationsleiste,
+          und /scan verlinkt umgekehrt schon hierher. */}
+      <Link href="/scan" className="text-sm text-muted-foreground underline underline-offset-4">
+        Stattdessen Barcode scannen
+      </Link>
     </div>
   );
 }

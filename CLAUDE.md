@@ -27,13 +27,15 @@ BetterFood ("Vorrat") is a self-hosted PWA for tracking household food inventory
 
 **Migrations**: hand-write nothing under `drizzle/` — always run `db:generate` after a schema change. In production, migrations run at boot via `src/instrumentation.ts` → `src/instrumentation.node.ts`, gated on `RUN_MIGRATIONS=true` (see `Dockerfile`/`compose.yaml`); locally use `npm run db:migrate`.
 
-**Categories**: `src/lib/categories.ts` holds the canonical `DEFAULT_CATEGORIES` (key, label, shelf-life days) — the source of truth for the seed migration and for `guessCategoryFromOffTags`, which does a rough OFF-category → local-category match. Users can freely rename/add/delete categories after seeding, so don't assume `DEFAULT_CATEGORIES` reflects any given list's actual categories.
+**Categories**: `src/lib/categories.ts` holds the canonical `DEFAULT_CATEGORIES` (key, label, shelf-life days) — the source of truth for the seed migration. Users can freely rename/add/delete categories after seeding, so don't assume `DEFAULT_CATEGORIES` reflects any given list's actual categories.
+
+**Category preselection is learned, never guessed.** `product_knowledge` (one row per list × product, keyed by barcode or by `nameKey` = `normalizeProductName(name)`) records how a household sorts a product. Every item save calls `rememberProduct`; `lookupKnownProduct` reads it back via `GET /api/items/known`, which `ItemForm` calls from the client — deliberately not a server-rendered prop, because `<Activity>` keeps a navigated-away `/confirm` alive and it would show a stale answer. A product the list has never seen gets no preselected category and no expiry date. There is no OFF-tag heuristic any more; it was removed because it was wrong too often and cannot work with user-defined categories. `/knowledge` (`knowledge-manager.tsx`) is where both halves — categories and learned products — are edited; `backfillProductKnowledge()` runs once at boot (`src/instrumentation.ts`) to seed the table from pre-existing item history.
 
 **Barcode scanning**: `/scan` uses `@zxing` client-side, then `src/lib/off.ts` looks up the barcode against the Open Food Facts API (unauthenticated, public prefix) to prefill name/category on `/confirm` and `/add`.
 
 **Push notifications**: `src/lib/push.ts` wraps `web-push`, configured lazily on first use (not at module load) so `VAPID_*` env vars aren't required during `next build`'s route-collection pass — they only need to be present as container runtime env vars. `POST /api/cron/check-expiry` is the notification job: bearer-token-protected via `CRON_SECRET`, iterates every list, applies each owner's `notification_lead_days` setting (default 2), and dedupes so an item is only notified once per day (`lastNotifiedAt`). A 404/410 from a push send means the subscription is dead and gets deleted. The custom service worker (`src/worker/index.js`, built by `@ducanh2912/next-pwa` via `customWorkerSrc`) handles the `push`/`notificationclick` events.
 
-**UI components**: shadcn/ui-based primitives live in `src/components/ui/`; feature components (`inventory-list`, `item-form`, `list-manager`, `list-switcher`, `archive-list`, `category-manager`, `manual-add-dialog`, `user-combobox`) are flat under `src/components/`.
+**UI components**: shadcn/ui-based primitives live in `src/components/ui/`; feature components (`inventory-list`, `item-form`, `list-manager`, `list-switcher`, `archive-list`, `category-manager`, `manual-add-dialog`, `knowledge-manager`, `user-combobox`) are flat under `src/components/`.
 
 ## Deployment
 

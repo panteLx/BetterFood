@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
-  revalidateTag(categoriesTag(listId), "max");
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json(created, { status: 201 });
 }

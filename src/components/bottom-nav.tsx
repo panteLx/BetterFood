@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Archive, Settings, type LucideIcon } from "lucide-react";
+import {
+  Home,
+  Archive,
+  BookOpen,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddActionSheet } from "@/components/add-action-sheet";
 
@@ -10,7 +16,10 @@ import { AddActionSheet } from "@/components/add-action-sheet";
 // den zentralen AddActionSheet-Button erreichbar (siehe dort fuer die
 // Begruendung). LEFT_ITEMS/RIGHT_ITEMS werden links bzw. rechts der zentralen
 // Aktion gerendert.
-const LEFT_ITEMS = [{ href: "/", label: "Start", icon: Home }] as const;
+const LEFT_ITEMS = [
+  { href: "/", label: "Start", icon: Home },
+  { href: "/knowledge", label: "Datenbank", icon: BookOpen },
+] as const;
 const RIGHT_ITEMS = [
   { href: "/archive", label: "Archiv", icon: Archive },
   { href: "/settings", label: "Einstellungen", icon: Settings },
@@ -66,38 +75,20 @@ function CenterAction() {
 // usePathname() liest die aktuelle URL und blockiert damit bei
 // cacheComponents:true das statische Prerendering des Layouts (siehe
 // node_modules/next/dist/docs Fehlermeldung "blocking-prerender-client-hook").
-// Deshalb steckt BottomNav selbst hinter einem <Suspense> im Layout, und
-// BottomNavFallback (ohne usePathname) liefert dafuer die statische Huelle,
-// die sofort mitgeliefert werden kann.
-export function BottomNavFallback() {
-  return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background">
-      <div className="flex flex-1 justify-evenly">
-        {LEFT_ITEMS.map((item) => (
-          <NavLink key={item.href} {...item} active={false} />
-        ))}
-      </div>
-      <div className="flex flex-1 justify-evenly">
-        {RIGHT_ITEMS.map((item) => (
-          <NavLink key={item.href} {...item} active={false} />
-        ))}
-      </div>
-      <CenterAction />
-    </nav>
-  );
-}
-
+// Deshalb steckt BottomNav im Layout hinter einem <Suspense> -- gerendert wird
+// sie ohnehin nur fuer angemeldete Nutzer (siehe BottomNavGate).
 export function BottomNav() {
   const pathname = usePathname();
 
-  if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
+  if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix)))
+    return null;
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href);
   }
 
   return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background">
+    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background pb-[env(safe-area-inset-bottom)]">
       <div className="flex flex-1 justify-evenly">
         {LEFT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={isActive(item.href)} />

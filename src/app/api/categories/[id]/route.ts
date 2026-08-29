@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { categoriesTag } from "@/lib/data";
+import { categoriesTag, forgetProductsInCategory } from "@/lib/data";
 
 export async function PATCH(
   req: NextRequest,
@@ -50,7 +50,7 @@ export async function PATCH(
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
-  revalidateTag(categoriesTag(listId), "max");
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json(updated);
 }
@@ -87,7 +87,11 @@ export async function DELETE(
   const usingItems = await db
     .select({ id: items.id })
     .from(items)
-    .where(and(eq(items.category, target.key), eq(items.listId, listId)))
+    // Ausgeblendete Artikel zaehlen hier nicht: sie sind fuer den Nutzer
+    // nicht mehr da und duerfen das Loeschen einer Kategorie nicht auf ewig
+    // blockieren. Die Vorauswahl prueft ohnehin, ob die gelernte Kategorie
+    // noch existiert.
+    .where(and(eq(items.category, target.key), eq(items.listId, listId), isNull(items.hiddenAt)))
     .limit(1);
 
   if (usingItems.length > 0) {
@@ -98,8 +102,11 @@ export async function DELETE(
   }
 
   await db.delete(categories).where(eq(categories.id, Number(id)));
+  // Sonst blieben in der Wissensdatenbank Produkte stehen, die auf eine
+  // Kategorie zeigen, die es nicht mehr gibt.
+  await forgetProductsInCategory(listId, target.key);
 
-  revalidateTag(categoriesTag(listId), "max");
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json({ ok: true });
 }

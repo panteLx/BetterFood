@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { safeRedirect, withRedirect } from "@/lib/utils";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +28,9 @@ export default function RegisterPage() {
         toast.error(error.message ?? "Registrierung fehlgeschlagen.");
         return;
       }
-      router.push("/");
+      // Ziel beibehalten: wer von /confirm mit einem gescannten Produkt kommt,
+      // soll nach der Registrierung genau dort weitermachen.
+      router.push(safeRedirect(redirect));
       router.refresh();
     } finally {
       setLoading(false);
@@ -33,18 +38,27 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col justify-center gap-6 p-4">
-      <h1 className="text-lg font-semibold">Registrieren</h1>
+    <div className="flex flex-col gap-4">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Name</Label>
-          <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+          <Input
+            id="name"
+            name="name"
+            autoComplete="name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">E-Mail</Label>
           <Input
             id="email"
+            name="email"
             type="email"
+            autoComplete="email"
+            autoCapitalize="none"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -54,7 +68,9 @@ export default function RegisterPage() {
           <Label htmlFor="password">Passwort</Label>
           <Input
             id="password"
+            name="password"
             type="password"
+            autoComplete="new-password"
             required
             minLength={8}
             value={password}
@@ -67,10 +83,21 @@ export default function RegisterPage() {
       </form>
       <p className="text-sm text-muted-foreground">
         Bereits ein Konto?{" "}
-        <Link href="/login" className="underline">
+        <Link href={withRedirect("/login", redirect)} className="underline">
           Anmelden
         </Link>
       </p>
+    </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <div className="flex flex-1 flex-col justify-center gap-6 p-4">
+      <h1 className="text-lg font-semibold">Registrieren</h1>
+      <Suspense fallback={<div className="h-52" />}>
+        <RegisterForm />
+      </Suspense>
     </div>
   );
 }

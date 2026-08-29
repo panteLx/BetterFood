@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
+import { rememberProduct } from "@/lib/data";
 
 export async function PATCH(
   req: NextRequest,
@@ -69,16 +70,36 @@ export async function PATCH(
   const [updated] = await db
     .update(items)
     .set(update)
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
     .returning();
 
   if (!updated) {
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
+  // Wer einen falsch einsortierten Artikel oeffnet und die Kategorie
+  // korrigiert, korrigiert damit auch die Vorauswahl fuer das naechste Mal --
+  // der kuerzeste Weg, das Wissen richtigzustellen. Nur bei einer Aenderung
+  // an Name oder Kategorie: ein reines Umdatieren sagt darueber nichts aus.
+  if (update.name !== undefined || update.category !== undefined) {
+    await rememberProduct(listId, {
+      barcode: updated.barcode,
+      name: updated.name,
+      category: updated.category,
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
+/**
+ * Blendet einen Artikel aus, statt ihn zu loeschen.
+ *
+ * Die Zeile bleibt in der Datenbank, taucht aber in keiner Ansicht mehr auf
+ * (alle Abfragen filtern auf hiddenAt IS NULL) -- ein Aufraeumen im Archiv
+ * soll nichts unwiederbringlich vernichten. Die Kategorie-Zuordnung haengt
+ * nicht daran: die steht in product_knowledge und bleibt so oder so.
+ */
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -87,12 +108,13 @@ export async function DELETE(
   const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
-  const deleted = await db
-    .delete(items)
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+  const hidden = await db
+    .update(items)
+    .set({ hiddenAt: new Date() })
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
     .returning();
 
-  if (deleted.length === 0) {
+  if (hidden.length === 0) {
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 

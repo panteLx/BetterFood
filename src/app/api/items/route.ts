@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
+import { rememberProduct } from "@/lib/data";
+import { normalizeProductName } from "@/lib/utils";
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
 
 export async function GET() {
   const session = await requireSession();
@@ -12,7 +22,7 @@ export async function GET() {
   const rows = await db
     .select()
     .from(items)
-    .where(and(eq(items.status, "active"), eq(items.listId, listId)))
+    .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
     .orderBy(items.expiryDate);
 
   return NextResponse.json(rows);
@@ -53,6 +63,46 @@ export async function POST(req: NextRequest) {
   const now = new Date();
   const expiry = expiryDate ? new Date(expiryDate) : estimateExpiryDate(categoryRow.shelfLifeDays, now);
 
+  // Drei gleiche Joghurts aus einem Einkauf wurden bisher zu drei identischen
+  // Zeilen, obwohl quantity genau dafuer existiert. Zusammengefasst wird nur
+  // bei gleichem MHD-Tag: eine frische Milch darf nicht stillschweigend mit
+  // einer aelteren verschmelzen.
+  //
+  // Ohne Barcode entscheidet der Name -- wer denselben Artikel zweimal von
+  // Hand eintraegt, meint dasselbe Produkt. Verglichen wird normalisiert
+  // (Gross-/Kleinschreibung, doppelte Leerzeichen), sonst trennt schon
+  // "Milch " von "Milch".
+  const sameProduct = await db
+    .select()
+    .from(items)
+    .where(
+      and(
+        eq(items.listId, listId),
+        eq(items.status, "active"),
+        isNull(items.hiddenAt),
+        eq(items.category, category),
+        barcode ? eq(items.barcode, barcode) : isNull(items.barcode),
+      ),
+    );
+
+  const existing = sameProduct.find(
+    (item) =>
+      isSameDay(item.expiryDate, expiry) &&
+      (barcode ? true : normalizeProductName(item.name) === normalizeProductName(name)),
+  );
+
+  if (existing) {
+    const [merged] = await db
+      .update(items)
+      .set({ quantity: existing.quantity + qty })
+      .where(eq(items.id, existing.id))
+      .returning();
+
+    await rememberProduct(listId, { barcode, name, category });
+
+    return NextResponse.json({ ...merged, merged: true }, { status: 200 });
+  }
+
   const [created] = await db
     .insert(items)
     .values({
@@ -67,6 +117,11 @@ export async function POST(req: NextRequest) {
       addedById: session.user.id,
     })
     .returning();
+
+  // Jeder gespeicherte Artikel ist zugleich eine Aussage darueber, wohin
+  // dieses Produkt in diesem Haushalt gehoert -- genau davon lebt die
+  // Vorauswahl beim naechsten Mal.
+  await rememberProduct(listId, { barcode, name, category });
 
   return NextResponse.json(created, { status: 201 });
 }

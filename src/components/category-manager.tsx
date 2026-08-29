@@ -1,22 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, Plus, X, Check } from "lucide-react";
 import type { Category } from "@/db/schema";
 
+/**
+ * Der Kategorie-Teil der Wissensdatenbank.
+ *
+ * Kontrolliert von aussen: auf derselben Seite haengt die Produktliste an
+ * denselben Kategorien, und eine gerade umbenannte oder geloeschte Kategorie
+ * muss dort sofort stimmen -- mit zwei getrennten Kopien widersprachen sich
+ * die beiden Haelften der Seite.
+ */
 export function CategoryManager({
-  listId,
-  listName,
+  categories,
+  onCategoriesChange,
 }: {
-  listId?: number | null;
-  listName?: string | null;
-} = {}) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  categories: Category[];
+  onCategoriesChange: (next: Category[]) => void;
+}) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editShelfLife, setEditShelfLife] = useState("");
@@ -24,38 +29,9 @@ export function CategoryManager({
   const [newShelfLife, setNewShelfLife] = useState("14");
   const [saving, setSaving] = useState(false);
 
-  function load(signal?: AbortSignal) {
-    fetch("/api/categories", { signal })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!signal?.aborted) setCategories(data);
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") toast.error("Konnte Kategorien nicht laden.");
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
+  function sorted(list: Category[]) {
+    return [...list].sort((a, b) => a.label.localeCompare(b.label));
   }
-
-  function upsertLocal(category: Category) {
-    setCategories((prev) =>
-      [...prev.filter((c) => c.id !== category.id), category].sort((a, b) =>
-        a.label.localeCompare(b.label),
-      ),
-    );
-  }
-
-  useEffect(() => {
-    // Re-fetch when the active list changes elsewhere on the page (e.g. via
-    // ListManager) -- categories are scoped to the active list server-side.
-    // Keyed on the id (not the display name) so this can't miss a change.
-    // Aborting the in-flight request on cleanup stops a stale response from
-    // a previous list overwriting the current one if they resolve out of order.
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [listId]);
 
   function startEdit(category: Category) {
     setEditingId(category.id);
@@ -84,7 +60,7 @@ export function CategoryManager({
       const updated = (await res.json()) as Category;
       toast.success("Kategorie aktualisiert");
       setEditingId(null);
-      upsertLocal(updated);
+      onCategoriesChange(sorted([...categories.filter((c) => c.id !== updated.id), updated]));
     } catch {
       toast.error("Konnte Kategorie nicht aktualisieren.");
     } finally {
@@ -101,7 +77,7 @@ export function CategoryManager({
         throw new Error(body?.error ?? "Konnte Kategorie nicht löschen.");
       }
       toast.success("Kategorie gelöscht");
-      setCategories((prev) => prev.filter((c) => c.id !== id));
+      onCategoriesChange(categories.filter((c) => c.id !== id));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Konnte Kategorie nicht löschen.");
     } finally {
@@ -131,7 +107,7 @@ export function CategoryManager({
       toast.success("Kategorie hinzugefügt");
       setNewLabel("");
       setNewShelfLife("14");
-      upsertLocal(created);
+      onCategoriesChange(sorted([...categories, created]));
     } catch {
       toast.error("Konnte Kategorie nicht anlegen.");
     } finally {
@@ -141,96 +117,82 @@ export function CategoryManager({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Label>Kategorien</Label>
-          {listName && (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
-              Liste „{listName}“
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Gilt nur für diese Liste – jede Liste hat ihre eigenen Kategorien.
-        </p>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Die Haltbarkeit einer Kategorie bestimmt, welches MHD beim Erfassen vorgeschlagen wird.
+      </p>
 
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Lädt…</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {categories.map((category) => (
-            <div
-              key={category.id}
-              className="flex items-center gap-2 rounded-lg border border-input p-2"
-            >
-              {editingId === category.id ? (
-                <>
-                  <Input
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    className="flex-1"
-                    autoFocus
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    value={editShelfLife}
-                    onChange={(e) => setEditShelfLife(e.target.value)}
-                    className="w-20"
-                  />
-                  <span className="text-xs whitespace-nowrap text-muted-foreground">Tage</span>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => saveEdit(category.id)}
-                    aria-label="Speichern"
-                  >
-                    <Check className="size-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={saving}
-                    onClick={() => setEditingId(null)}
-                    aria-label="Abbrechen"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{category.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Haltbarkeit: {category.shelfLifeDays} Tage
-                    </p>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => startEdit(category)}
-                    aria-label="Bearbeiten"
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => deleteCategory(category.id)}
-                    aria-label="Löschen"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        {categories.map((category) => (
+          <div
+            key={category.id}
+            className="flex items-center gap-2 rounded-lg border border-input p-2"
+          >
+            {editingId === category.id ? (
+              <>
+                <Input
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={editShelfLife}
+                  onChange={(e) => setEditShelfLife(e.target.value)}
+                  className="w-20"
+                />
+                <span className="text-xs whitespace-nowrap text-muted-foreground">Tage</span>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => saveEdit(category.id)}
+                  aria-label="Speichern"
+                >
+                  <Check className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  disabled={saving}
+                  onClick={() => setEditingId(null)}
+                  aria-label="Abbrechen"
+                >
+                  <X className="size-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{category.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Haltbarkeit: {category.shelfLifeDays} Tage
+                  </p>
+                </div>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => startEdit(category)}
+                  aria-label="Bearbeiten"
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => deleteCategory(category.id)}
+                  aria-label="Löschen"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
 
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-input p-2">
         <Input

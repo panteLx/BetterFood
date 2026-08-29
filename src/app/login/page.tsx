@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { safeRedirect, withRedirect } from "@/lib/utils";
 
 const oidcDisplayName = process.env.NEXT_PUBLIC_OIDC_DISPLAY_NAME;
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,7 @@ function LoginForm() {
         toast.error("E-Mail oder Passwort ist falsch.");
         return;
       }
-      router.push(searchParams.get("redirect") ?? "/");
+      router.push(safeRedirect(redirect));
       router.refresh();
     } finally {
       setLoading(false);
@@ -40,7 +42,7 @@ function LoginForm() {
     try {
       await authClient.signIn.social({
         provider: "oidc",
-        callbackURL: searchParams.get("redirect") ?? "/",
+        callbackURL: safeRedirect(redirect),
       });
     } finally {
       setSsoLoading(false);
@@ -52,9 +54,14 @@ function LoginForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">E-Mail</Label>
+          {/* name + autoComplete: ohne beides bietet iOS weder das Ausfuellen
+              aus dem Schluesselbund noch das Speichern eines Passworts an. */}
           <Input
             id="email"
+            name="email"
             type="email"
+            autoComplete="email"
+            autoCapitalize="none"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -64,7 +71,9 @@ function LoginForm() {
           <Label htmlFor="password">Passwort</Label>
           <Input
             id="password"
+            name="password"
             type="password"
+            autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -87,6 +96,16 @@ function LoginForm() {
           </Button>
         </>
       )}
+
+      {/* Der Redirect muss mit auf /register: wer erst scannt und dann ein
+          Konto anlegt, verliert sonst genau das Produkt, das ihn hergefuehrt
+          hat, und landet auf einer leeren Startseite. */}
+      <p className="text-sm text-muted-foreground">
+        Noch kein Konto?{" "}
+        <Link href={withRedirect("/register", redirect)} className="underline">
+          Registrieren
+        </Link>
+      </p>
     </div>
   );
 }
@@ -98,12 +117,6 @@ export default function LoginPage() {
       <Suspense fallback={<div className="h-40" />}>
         <LoginForm />
       </Suspense>
-      <p className="text-sm text-muted-foreground">
-        Noch kein Konto?{" "}
-        <Link href="/register" className="underline">
-          Registrieren
-        </Link>
-      </p>
       <p className="text-sm text-muted-foreground">
         Nur ein Produkt nachschlagen?{" "}
         <Link href="/scan" className="underline">

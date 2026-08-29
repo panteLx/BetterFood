@@ -5,6 +5,7 @@ import { InventoryList } from "@/components/inventory-list";
 import { ListSwitcher } from "@/components/list-switcher";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
+import { InstallHintBanner } from "@/components/install-hint";
 
 export default async function HomePage() {
   const session = await requireSession();
@@ -14,7 +15,7 @@ export default async function HomePage() {
     db
       .select()
       .from(items)
-      .where(and(eq(items.status, "active"), eq(items.listId, listId)))
+      .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
       .orderBy(items.expiryDate),
     getCategoriesForList(listId),
     db
@@ -30,6 +31,8 @@ export default async function HomePage() {
       <div className="flex items-center justify-between gap-2 p-4">
         <ListSwitcher activeListId={listId} lists={myLists} />
       </div>
+
+      {activeItems.length > 0 && <InstallHintBanner />}
 
       <InventoryList initialItems={activeItems} categories={allCategories} />
     </div>

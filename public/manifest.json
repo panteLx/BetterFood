@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "Lebensmittel-Tracker",
   "short_name": "Vorrat",
   "description": "Behalte den Überblick, welche Lebensmittel bald ablaufen.",
@@ -19,6 +20,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Barcode scannen",
+      "short_name": "Scannen",
+      "description": "Direkt die Kamera öffnen und einen Artikel erfassen",
+      "url": "/scan",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Artikel eintragen",
+      "short_name": "Eintragen",
+      "description": "Einen Artikel ohne Barcode von Hand hinzufügen",
+      "url": "/add",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

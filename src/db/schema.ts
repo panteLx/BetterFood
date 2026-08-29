@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
@@ -40,6 +40,11 @@ export const items = sqliteTable("items", {
     .notNull()
     .default("active"),
   resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  // Ausgeblendet statt geloescht: der Artikel verschwindet ueberall aus der
+  // Oberflaeche, bleibt aber als Beleg dessen erhalten, was hier tatsaechlich
+  // im Vorrat lag. Was die Liste ueber das Produkt gelernt hat, steht davon
+  // unabhaengig in product_knowledge und ueberlebt jedes Aufraeumen ohnehin.
+  hiddenAt: integer("hidden_at", { mode: "timestamp" }),
   lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
   listId: integer("list_id").references(() => lists.id),
   addedById: text("added_by_id").references(() => user.id),
@@ -56,6 +61,45 @@ export const categories = sqliteTable(
     listId: integer("list_id").references(() => lists.id),
   },
   (table) => [uniqueIndex("categories_list_id_key_unique").on(table.listId, table.key)],
+);
+
+/**
+ * Die Wissensdatenbank einer Liste: "dieses Produkt gehoert bei uns in diese
+ * Kategorie".
+ *
+ * Bewusst eine eigene Tabelle und nicht mehr der zuletzt erfasste Artikel:
+ * Wissen und Vorrat sind zwei verschiedene Dinge. Nur so laesst sich eine
+ * einmal falsch getroffene Zuordnung spaeter korrigieren, ohne dabei
+ * rueckwirkend echte Vorratsartikel umzuschreiben -- und nur so ueberlebt
+ * das Wissen jedes Aufraeumen im Archiv.
+ *
+ * Ein Eintrag wird ueber den Barcode identifiziert, oder -- bei von Hand
+ * eingetragenen Artikeln, die keinen haben -- ueber den normalisierten Namen.
+ */
+export const productKnowledge = sqliteTable(
+  "product_knowledge",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    barcode: text("barcode"),
+    // Vergleichsform des Namens (siehe normalizeProductName). Getrennt vom
+    // Anzeigenamen gespeichert, damit "Milch" und "milch " denselben Eintrag
+    // treffen, die Liste dem Nutzer aber seine eigene Schreibweise zeigt.
+    nameKey: text("name_key").notNull(),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    // SQLite behandelt NULLs in einem UNIQUE-Index als verschieden -- die
+    // vielen barcodelosen Eintraege kollidieren hier also nicht miteinander.
+    // Deren Eindeutigkeit ueber den Namen stellt rememberProduct sicher.
+    uniqueIndex("product_knowledge_list_id_barcode_unique").on(table.listId, table.barcode),
+    index("product_knowledge_list_id_name_key_idx").on(table.listId, table.nameKey),
+  ],
 );
 
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
@@ -85,3 +129,4 @@ export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 export type List = typeof lists.$inferSelect;
 export type NewList = typeof lists.$inferInsert;
 export type ListMember = typeof listMembers.$inferSelect;
+export type ProductKnowledge = typeof productKnowledge.$inferSelect;
