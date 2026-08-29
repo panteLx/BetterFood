@@ -59,6 +59,7 @@ export default function ScanPage() {
   const [manualEntry, setManualEntry] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
   const [retrySession, setRetrySession] = useState(0);
+  const [videoReady, setVideoReady] = useState(false);
 
   useLayoutEffect(() => {
     // Mit cacheComponents:true haelt Next.js diese Seite beim Navigieren via
@@ -94,6 +95,7 @@ export default function ScanPage() {
     function startScanning() {
       if (!active) return;
       setError(null);
+      setVideoReady(false);
       const reader = new BrowserMultiFormatReader();
 
       reader
@@ -182,10 +184,23 @@ export default function ScanPage() {
             statt ueber explizite Positionierung bestimmt wird. */}
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          onLoadedMetadata={() => setVideoReady(true)}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+            videoReady ? "opacity-100" : "opacity-0"
+          }`}
           muted
           playsInline
         />
+        {/* Solange die Video-Metadaten (und damit videoWidth/-Height) noch nicht
+            vorliegen, hat der Browser die tatsaechliche Groesse des Streams noch
+            nicht in die object-cover-Berechnung einbezogen und rendert kurz die
+            intrinsische Groesse zentriert statt gestreckt -- das Video bleibt bis
+            dahin unsichtbar, damit dieser Zwischenzustand nicht aufblitzt. */}
+        {!videoReady && !error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          </div>
+        )}
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
       </div>
 
