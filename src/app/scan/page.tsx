@@ -28,7 +28,16 @@ const EXPECTED_DECODE_ERRORS = new Set([
 // noch 0 sind (canvas.getImageData wirft dann ein natives IndexSizeError,
 // keine ZXing-Exception) -- daher starten wir die Kamera hier automatisch
 // neu statt den Nutzer mit einer toten Kamera sitzen zu lassen.
+//
+// Fuer genau dieses "Video noch nicht bereit"-Szenario bekommt der Restart
+// ein eigenes, grosszuegigeres Budget: auf manchen iPhones dauert es laenger
+// als die 2*250ms des allgemeinen Budgets, bis videoWidth/-Height einen Wert
+// > 0 melden, wodurch sonst die Fehlermeldung aufblitzt, bevor ueberhaupt
+// ein Frame gescannt wurde -- der Scan-Loop laeuft danach aber normal weiter.
+// Ein echter, wiederholter Fehler bei bereits laufendem Video (kleines
+// Budget) bleibt weiterhin ein Fehlerfall.
 const MAX_SILENT_RESTARTS = 2;
+const MAX_STARTUP_RESTARTS = 12;
 
 export default function ScanPage() {
   const router = useRouter();
@@ -36,6 +45,7 @@ export default function ScanPage() {
   const controlsRef = useRef<IScannerControls | null>(null);
   const scannedRef = useRef(false);
   const silentRestartsRef = useRef(0);
+  const startupRestartsRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
@@ -65,6 +75,12 @@ export default function ScanPage() {
     let active = true;
     scannedRef.current = false;
     silentRestartsRef.current = 0;
+    startupRestartsRef.current = 0;
+
+    function isVideoReady() {
+      const video = videoRef.current;
+      return !!video && video.videoWidth > 0 && video.videoHeight > 0;
+    }
 
     function startScanning() {
       if (!active) return;
@@ -76,8 +92,8 @@ export default function ScanPage() {
           { video: { facingMode: "environment" } },
           videoRef.current ?? undefined,
           (result, err) => {
-            if (!active) return;
-            if (result && !scannedRef.current) {
+            if (!active || scannedRef.current) return;
+            if (result) {
               scannedRef.current = true;
               controlsRef.current?.stop();
               router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}`);
@@ -85,8 +101,16 @@ export default function ScanPage() {
             }
             if (err && !EXPECTED_DECODE_ERRORS.has(err.name)) {
               console.error("Barcode scan error:", err);
-              if (silentRestartsRef.current < MAX_SILENT_RESTARTS) {
-                silentRestartsRef.current += 1;
+              const videoStillStarting = !isVideoReady();
+              const canRestart = videoStillStarting
+                ? startupRestartsRef.current < MAX_STARTUP_RESTARTS
+                : silentRestartsRef.current < MAX_SILENT_RESTARTS;
+              if (canRestart) {
+                if (videoStillStarting) {
+                  startupRestartsRef.current += 1;
+                } else {
+                  silentRestartsRef.current += 1;
+                }
                 controlsRef.current?.stop();
                 setTimeout(() => {
                   if (active) startScanning();
