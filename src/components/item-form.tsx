@@ -3,18 +3,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronRight, Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Chip } from "@/components/ui/chip";
+import { DateSheet } from "@/components/date-sheet";
 import {
   Dialog,
   DialogPortal,
@@ -34,54 +28,55 @@ import {
   AlertDialogClose,
 } from "@/components/ui/alert-dialog";
 import { estimateExpiryDate } from "@/lib/categories";
-import type { Category } from "@/db/schema";
+import {
+  expiryLabel,
+  formatLong,
+  fromDateInputValue,
+  toDateInputValue,
+} from "@/lib/expiry";
+import { useIsClient } from "@/lib/use-is-client";
+import { cn } from "@/lib/utils";
+import type { Category, Place, ProductKnowledge } from "@/db/schema";
 
-const NEW_CATEGORY_VALUE = "__new__";
-
-// Schnellauswahl statt Datumsrad: fuer frische Ware ist "+3 Tage" schneller
-// als jede Radbedienung, und fuer Lagerware trifft "1 Monat" meist besser als
-// die Kategorie-Schaetzung.
-const QUICK_DATES = [
-  { label: "+3 Tage", days: 3 },
-  { label: "1 Woche", days: 7 },
-  { label: "1 Monat", days: 30 },
-] as const;
-
-function toDateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+// Wie viele bereits gelernte Produkte als Vorschlag unter dem Namensfeld
+// stehen. Mehr als drei fuellen auf dem Telefon eine ganze Zeile und
+// verdraengen die Frage, die darunter kommt.
+const SUGGESTION_COUNT = 3;
 
 type CategoryOption = Pick<Category, "key" | "label" | "shelfLifeDays">;
+type PlaceOption = Pick<Place, "id" | "name">;
 
 export function ItemForm({
   categories,
+  places,
   itemId,
   initialName = "",
   initialCategory,
   initialExpiryDate,
   initialQuantity = 1,
+  initialPlaceId = null,
+  initialNote = "",
   barcode,
-  addedBy,
+  title,
   redirectTo,
-  showScanNext = false,
 }: {
   categories: CategoryOption[];
+  places: PlaceOption[];
   itemId?: number;
   initialName?: string;
   initialCategory?: string;
   initialExpiryDate?: Date;
   initialQuantity?: number;
+  initialPlaceId?: number | null;
+  initialNote?: string;
   barcode?: string;
-  addedBy?: { name: string; email: string } | null;
+  title: string;
   // Nur fuer Formulare ausserhalb der Modal-Routen (z.B. /confirm nach dem
   // Scannen, erreicht per echter Navigation von /scan aus, oder /add als
   // Vollseite ueber einen Deep-Link): dort landet router.back() auf der
   // Kamera-Seite oder sogar ausserhalb der App. Wenn gesetzt, wird
   // stattdessen dorthin navigiert.
   redirectTo?: string;
-  // Zeigt zusaetzlich "Speichern & weiter scannen": nach dem Einkauf ist der
-  // naechste Artikel der Normalfall, nicht die Ausnahme.
-  showScanNext?: boolean;
 }) {
   const router = useRouter();
   const [categoryList, setCategoryList] = useState<CategoryOption[]>(categories);
@@ -105,21 +100,27 @@ export function ItemForm({
 
   const [name, setName] = useState(initialName);
   const [category, setCategory] = useState(fallbackCategory);
-  const [quantity, setQuantity] = useState(String(initialQuantity));
+  const [placeId, setPlaceId] = useState<number | null>(initialPlaceId);
+  const [quantity, setQuantity] = useState(initialQuantity);
+  const [note, setNote] = useState(initialNote);
   const [dateTouched, setDateTouched] = useState(Boolean(initialExpiryDate));
   const [expiryDate, setExpiryDate] = useState(initialExpiryValue);
+  const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   // Sobald der Nutzer selbst gewaehlt hat, wird nichts mehr ueberschrieben.
   const categoryTouchedRef = useRef(false);
   const nameTouchedRef = useRef(false);
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [learnedCategory, setLearnedCategory] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
 
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [newCategoryShelfLife, setNewCategoryShelfLife] = useState("14");
   const [creatingCategory, setCreatingCategory] = useState(false);
+
+  const isClient = useIsClient();
 
   // Nach einem erfolgreichen Speichern muss das Formular zurueckgesetzt
   // werden: Cache Components unmountet die verlassene Route nicht, sondern
@@ -146,7 +147,9 @@ export function ItemForm({
     resetToInitialRef.current = () => {
       setName(initialName);
       setCategory(fallbackCategory);
-      setQuantity(String(initialQuantity));
+      setPlaceId(initialPlaceId);
+      setQuantity(initialQuantity);
+      setNote(initialNote);
       setDateTouched(Boolean(initialExpiryDate));
       setExpiryDate(initialExpiryValue());
       categoryTouchedRef.current = false;
@@ -182,11 +185,7 @@ export function ItemForm({
     try {
       const res = await fetch(`/api/items/known?${params}`);
       if (!res.ok) return;
-      const known = (await res.json()) as {
-        found: boolean;
-        category?: string;
-        name?: string;
-      };
+      const known = (await res.json()) as { found: boolean; category?: string; name?: string };
       // In der Zwischenzeit koennte der Nutzer selbst gewaehlt haben.
       if (!known.found || !known.category || categoryTouchedRef.current) return;
 
@@ -217,17 +216,29 @@ export function ItemForm({
     };
   }, []);
 
-  function handleNameChange(value: string) {
-    nameTouchedRef.current = true;
-    setName(value);
-    if (itemId) return;
-    // Auch von Hand eingetragene Artikel sollen wiedererkannt werden -- dort
-    // gibt es keinen Barcode, nur den Namen.
-    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
-    nameDebounceRef.current = setTimeout(() => {
-      void applyKnownProduct({ barcode, name: value }, { withName: false });
-    }, 500);
-  }
+  // Was die Liste schon kennt, als Vorschlag unter dem leeren Namensfeld:
+  // "Reste vom Abendessen" tippt niemand gern zweimal.
+  useEffect(() => {
+    if (itemId || barcode) return;
+    let active = true;
+    fetch("/api/knowledge")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((entries: ProductKnowledge[]) => {
+        if (!active) return;
+        setSuggestions(
+          [...entries]
+            .sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)))
+            .slice(0, SUGGESTION_COUNT)
+            .map((entry) => entry.name),
+        );
+      })
+      .catch(() => {
+        // Ohne Vorschlaege tippt man eben -- kein Fehler, der jemanden interessiert.
+      });
+    return () => {
+      active = false;
+    };
+  }, [itemId, barcode]);
 
   function leave(target?: string) {
     const destination = target ?? redirectTo;
@@ -243,25 +254,21 @@ export function ItemForm({
     }
   }
 
-  function applyQuickDate(days: number) {
-    setDateTouched(true);
-    setExpiryDate(toDateInputValue(estimateExpiryDate(days)));
+  function handleNameChange(value: string) {
+    nameTouchedRef.current = true;
+    setName(value);
+    if (itemId) return;
+    // Auch von Hand eingetragene Artikel sollen wiedererkannt werden -- dort
+    // gibt es keinen Barcode, nur den Namen.
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    nameDebounceRef.current = setTimeout(() => {
+      void applyKnownProduct({ barcode, name: value }, { withName: false });
+    }, 500);
   }
 
-  function openNewCategoryDialog() {
-    setNewCategoryLabel("");
-    setNewCategoryShelfLife("14");
-    setNewCategoryOpen(true);
-  }
-
-  function handleCategoryChange(value: string | null) {
-    if (!value) return;
+  function handleCategoryChange(value: string) {
     categoryTouchedRef.current = true;
     setLearnedCategory(null);
-    if (value === NEW_CATEGORY_VALUE) {
-      openNewCategoryDialog();
-      return;
-    }
     applyCategory(value);
   }
 
@@ -286,6 +293,7 @@ export function ItemForm({
       const created = (await res.json()) as Category;
       const nextList = [...categoryList, created].sort((a, b) => a.label.localeCompare(b.label));
       setCategoryList(nextList);
+      categoryTouchedRef.current = true;
       applyCategory(created.key, nextList);
       setNewCategoryOpen(false);
       toast.success("Kategorie erstellt");
@@ -303,16 +311,15 @@ export function ItemForm({
       const res = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       toast.success(`${name} gelöscht`);
-      leave();
+      router.push("/");
       router.refresh();
     } catch {
       toast.error("Konnte Artikel nicht löschen.");
-    } finally {
       setDeleting(false);
     }
   }
 
-  async function handleSave(nextTarget?: string) {
+  async function handleSave() {
     if (!name.trim()) {
       toast.error("Bitte einen Namen eingeben.");
       return;
@@ -325,11 +332,6 @@ export function ItemForm({
       toast.error("Bitte ein Haltbarkeitsdatum wählen.");
       return;
     }
-    const qty = Number(quantity);
-    if (!Number.isFinite(qty) || qty < 1) {
-      toast.error("Bitte eine gültige Menge eingeben.");
-      return;
-    }
 
     setSaving(true);
     try {
@@ -340,30 +342,36 @@ export function ItemForm({
           name: name.trim(),
           category,
           barcode,
-          quantity: Math.round(qty),
-          expiryDate: new Date(expiryDate).toISOString(),
+          placeId,
+          note: note.trim() || null,
+          quantity,
+          expiryDate: fromDateInputValue(expiryDate).toISOString(),
         }),
       });
 
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
 
-      const saved = (await res.json()) as { merged?: boolean; quantity?: number };
-
       if (itemId) {
         toast.success(`${name} aktualisiert`);
-      } else if (saved.merged) {
-        // Der Artikel lag schon mit demselben MHD im Vorrat -- der Nutzer soll
-        // sehen, dass nichts verloren ging, sondern zusammengezaehlt wurde.
-        toast.success(`${name} – jetzt ${saved.quantity}× im Vorrat`);
-      } else {
-        toast.success(`${name} hinzugefügt`);
+        leave();
+        router.refresh();
+        return;
       }
 
-      if (!itemId) {
-        // Reset erst beim Verstecken durch Activity, siehe shouldResetRef.
-        shouldResetRef.current = true;
-      }
-      leave(nextTarget);
+      const saved = (await res.json()) as { merged?: boolean; quantity?: number };
+      // Reset erst beim Verstecken durch Activity, siehe shouldResetRef.
+      shouldResetRef.current = true;
+
+      // Statt einer Meldung, die nach vier Sekunden verschwindet: ein Screen,
+      // der die naechste Entscheidung anbietet. Nach dem Einkauf ist der
+      // naechste Artikel der Normalfall, nicht die Ausnahme.
+      const params = new URLSearchParams({
+        name: name.trim(),
+        date: expiryDate,
+        method: barcode ? "scan" : "manual",
+      });
+      if (saved.merged && saved.quantity) params.set("merged", String(saved.quantity));
+      router.push(`/saved?${params}`);
       router.refresh();
     } catch {
       toast.error("Konnte Artikel nicht speichern.");
@@ -372,131 +380,174 @@ export function ItemForm({
     }
   }
 
+  const shelfLifeDays = categoryList.find((c) => c.key === category)?.shelfLifeDays;
+  const categoryLabel = categoryList.find((c) => c.key === category)?.label;
+  const selectedDate = expiryDate ? fromDateInputValue(expiryDate) : null;
+
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      {itemId && (
-        <p className="text-xs text-muted-foreground">
-          Hinzugefügt von {addedBy ? `${addedBy.name} (${addedBy.email})` : "Unbekannt"}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="name">Name</Label>
-        <Input
-          id="name"
-          value={name}
-          onChange={(e) => handleNameChange(e.target.value)}
-          placeholder="z.B. Vollmilch 3,5%"
-          autoFocus
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="category">Kategorie</Label>
-        {categoryList.length === 0 ? (
+    <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-5 px-5 pt-2 pb-5">
+        <div className="flex items-center gap-2.5">
           <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-start"
-            onClick={openNewCategoryDialog}
+            variant="ghost"
+            size="icon-touch"
+            aria-label="Zurück"
+            onClick={() => leave()}
+            className="-ml-2 rounded-2xl"
           >
-            <Plus className="size-4" />
-            Erste Kategorie erstellen
+            <ArrowLeft className="size-5.5" />
           </Button>
-        ) : (
-          <Select
-            value={category}
-            onValueChange={handleCategoryChange}
-            items={[
-              ...categoryList.map((c) => ({ value: c.key, label: c.label })),
-              { value: NEW_CATEGORY_VALUE, label: "Neue Kategorie erstellen" },
-            ]}
-          >
-            <SelectTrigger id="category" className="w-full">
-              <SelectValue placeholder="Kategorie wählen" />
-            </SelectTrigger>
-            <SelectContent>
-              {categoryList.map((c) => (
-                <SelectItem key={c.key} value={c.key}>
-                  {c.label}
-                </SelectItem>
+          <h1 className="text-xl leading-tight">{title}</h1>
+        </div>
+
+        <Field label="Was ist es?" htmlFor="name">
+          <Input
+            id="name"
+            value={name}
+            onChange={(event) => handleNameChange(event.target.value)}
+            placeholder="z. B. Feldsalat"
+            autoFocus={!itemId && !initialName}
+            className="h-14 rounded-[18px] border-border bg-card px-4 text-base font-semibold"
+          />
+          {!itemId && !name && suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-0.5">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => handleNameChange(suggestion)}
+                  className="h-8.5 rounded-xl border border-dashed border-border bg-surface-2 px-3 text-[13px] font-semibold text-muted-foreground"
+                >
+                  {suggestion}
+                </button>
               ))}
-              <SelectSeparator />
-              <SelectItem value={NEW_CATEGORY_VALUE} className="text-primary">
-                <Plus className="size-3.5" />
-                Neue Kategorie erstellen
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-        {learnedCategory === category && category !== "" && (
-          <p className="text-xs text-muted-foreground">
-            Übernommen aus deinem letzten Eintrag zu diesem Artikel.
-          </p>
-        )}
-      </div>
+            </div>
+          )}
+        </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="quantity">Menge</Label>
-        <Input
-          id="quantity"
-          type="number"
-          min={1}
-          step={1}
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-        />
-      </div>
+        {places.length > 0 && (
+          <Field label="Wo liegt es?">
+            <div className="flex flex-wrap gap-2">
+              {places.map((place) => (
+                <Chip
+                  key={place.id}
+                  active={placeId === place.id}
+                  // Nochmals antippen hebt die Wahl auf: nicht jeder Artikel
+                  // gehoert in ein Fach.
+                  onClick={() => setPlaceId(placeId === place.id ? null : place.id)}
+                  className="h-10 flex-1 px-2.5 text-xs"
+                >
+                  {place.name}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+        )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="expiry">Haltbar bis (MHD)</Label>
-        <Input
-          id="expiry"
-          type="date"
-          value={expiryDate}
-          onChange={(e) => {
-            setDateTouched(true);
-            setExpiryDate(e.target.value);
-          }}
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_DATES.map((quick) => (
-            <Button
-              key={quick.days}
+        <Field label="Kategorie">
+          <div className="flex flex-wrap gap-2">
+            {categoryList.map((option) => (
+              <Chip
+                key={option.key}
+                active={category === option.key}
+                onClick={() => handleCategoryChange(option.key)}
+                className="text-[12.5px]"
+              >
+                {option.label}
+              </Chip>
+            ))}
+            <button
               type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => applyQuickDate(quick.days)}
+              onClick={() => {
+                setNewCategoryLabel("");
+                setNewCategoryShelfLife("14");
+                setNewCategoryOpen(true);
+              }}
+              className="inline-flex h-[34px] items-center gap-1 rounded-xl border border-dashed border-border px-3 text-[12.5px] font-semibold text-primary"
             >
-              {quick.label}
-            </Button>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Automatisch geschätzt anhand der Kategorie – bei Bedarf anpassen.
-        </p>
-      </div>
+              <Plus className="size-3.5" strokeWidth={2.4} />
+              Neue Kategorie
+            </button>
+          </div>
+          {learnedCategory === category && category !== "" && (
+            <p className="pl-1 text-xs font-medium text-faint">
+              Übernommen aus deinem letzten Eintrag zu diesem Artikel.
+            </p>
+          )}
+        </Field>
 
-      <div className="mt-auto flex flex-col gap-2 pt-2">
-        {showScanNext && (
-          <Button
-            variant="secondary"
-            className="h-11"
-            disabled={saving}
-            onClick={() => handleSave("/scan")}
+        <Field label="Menge">
+          <div className="flex h-14 w-fit items-center gap-1 rounded-[18px] border border-border bg-card px-1.5">
+            <Button
+              variant="ghost"
+              size="icon-touch"
+              aria-label="Menge verringern"
+              disabled={quantity <= 1}
+              onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+              className="rounded-2xl"
+            >
+              <Minus className="size-5" />
+            </Button>
+            <span className="w-10 text-center text-lg font-bold tabular-nums">{quantity}</span>
+            <Button
+              variant="ghost"
+              size="icon-touch"
+              aria-label="Menge erhöhen"
+              onClick={() => setQuantity((value) => value + 1)}
+              className="rounded-2xl"
+            >
+              <Plus className="size-5" />
+            </Button>
+          </div>
+        </Field>
+
+        <Field label="Haltbar bis">
+          <button
+            type="button"
+            onClick={() => setDateSheetOpen(true)}
+            className="flex h-16 items-center gap-3 rounded-[18px] border border-border bg-card px-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <Camera className="size-4" />
-            Speichern & weiter scannen
-          </Button>
-        )}
-        <div className="flex gap-2">
-          <Button variant="outline" className="h-11 flex-1" onClick={() => leave()}>
-            Abbrechen
-          </Button>
-          <Button className="h-11 flex-1" onClick={() => handleSave()} disabled={saving}>
-            {saving ? "Speichern…" : "Speichern"}
-          </Button>
-        </div>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
+              <CalendarDays className="size-5" strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold">
+                {selectedDate ? formatLong(selectedDate) : "Datum wählen"}
+              </span>
+              {selectedDate && isClient && (
+                <span className="mt-0.5 block text-[12.5px] font-medium text-muted-foreground">
+                  {expiryLabel(
+                    Math.round(
+                      (selectedDate.getTime() - startOfDay(new Date()).getTime()) / 86_400_000,
+                    ),
+                    selectedDate,
+                  )}
+                </span>
+              )}
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
+          </button>
+          {shelfLifeDays !== undefined && categoryLabel && (
+            <p className="pl-1 text-[12.5px] leading-relaxed font-medium text-balance text-faint">
+              {categoryLabel} hält typischerweise{" "}
+              {shelfLifeDays > 60
+                ? `${Math.round(shelfLifeDays / 30)} Monate`
+                : `${shelfLifeDays} Tage`}
+              . Der Vorschlag kommt aus deiner Datenbank.
+            </p>
+          )}
+        </Field>
+
+        <Field label="Notiz" htmlFor="note">
+          <textarea
+            id="note"
+            rows={2}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="z. B. Großer Topf, hinten links"
+            className="resize-none rounded-[18px] border border-border bg-card px-4 py-3 text-[15px] font-medium outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </Field>
 
         {/* Vorher liess sich ein versehentlich angelegter Artikel nur ueber den
             Umweg "als aufgebraucht markieren, dann im Archiv loeschen"
@@ -504,7 +555,13 @@ export function ItemForm({
         {itemId && (
           <AlertDialog>
             <AlertDialogTrigger
-              render={<Button variant="ghost" className="h-11 text-destructive" disabled={deleting} />}
+              render={
+                <Button
+                  variant="ghost"
+                  disabled={deleting}
+                  className="h-12 w-full rounded-2xl text-danger"
+                />
+              }
             >
               <Trash2 className="size-4" />
               Artikel löschen
@@ -514,13 +571,11 @@ export function ItemForm({
               <AlertDialogPopup>
                 <AlertDialogTitle>Artikel entfernen?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  &quot;{name}&quot; verschwindet aus dem Vorrat und taucht auch nicht im Archiv
-                  auf. Die App merkt sich weiterhin, in welche Kategorie dieser Artikel gehört.
+                  „{name}“ verschwindet aus dem Vorrat und taucht auch nicht im Archiv auf. Die App
+                  merkt sich weiterhin, in welche Kategorie dieser Artikel gehört.
                 </AlertDialogDescription>
                 <AlertDialogActions>
-                  <AlertDialogClose render={<Button variant="outline" />}>
-                    Abbrechen
-                  </AlertDialogClose>
+                  <AlertDialogClose render={<Button variant="outline" />}>Abbrechen</AlertDialogClose>
                   <AlertDialogClose
                     render={<Button variant="destructive" />}
                     onClick={handleDelete}
@@ -534,6 +589,30 @@ export function ItemForm({
         )}
       </div>
 
+      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-4">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="h-14 w-full rounded-2xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+        >
+          {saving ? "Speichern…" : "Speichern"}
+        </button>
+      </div>
+
+      {isClient && (
+        <DateSheet
+          open={dateSheetOpen}
+          onOpenChange={setDateSheetOpen}
+          value={expiryDate}
+          onChange={(value) => {
+            setDateTouched(true);
+            setExpiryDate(value);
+          }}
+          today={startOfDay(new Date())}
+        />
+      )}
+
       <Dialog open={newCategoryOpen} onOpenChange={setNewCategoryOpen}>
         <DialogPortal>
           <DialogBackdrop />
@@ -546,8 +625,9 @@ export function ItemForm({
                   id="newCategoryLabel"
                   value={newCategoryLabel}
                   onChange={(e) => setNewCategoryLabel(e.target.value)}
-                  placeholder="z.B. Tiefkühl"
+                  placeholder="z. B. Tiefkühl"
                   autoFocus
+                  className="h-11 rounded-2xl"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -558,15 +638,54 @@ export function ItemForm({
                   min={1}
                   value={newCategoryShelfLife}
                   onChange={(e) => setNewCategoryShelfLife(e.target.value)}
+                  className="h-11 rounded-2xl"
                 />
               </div>
-              <Button onClick={handleCreateCategory} disabled={creatingCategory}>
+              <Button
+                onClick={handleCreateCategory}
+                disabled={creatingCategory}
+                className="h-11 rounded-2xl"
+              >
                 {creatingCategory ? "Erstellen…" : "Kategorie erstellen"}
               </Button>
             </div>
           </DialogPopup>
         </DialogPortal>
       </Dialog>
+    </div>
+  );
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Beschriftung und Feld als eine Einheit. Die Labels stehen im Design in
+ * Grossbuchstaben und gesperrt -- das trennt die Fragen ("Wo liegt es?")
+ * sichtbar von den Antworten, ohne eine Linie dazwischen zu ziehen.
+ */
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label
+        htmlFor={htmlFor}
+        className={cn(
+          "pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase",
+          !htmlFor && "pointer-events-none",
+        )}
+      >
+        {label}
+      </label>
+      {children}
     </div>
   );
 }

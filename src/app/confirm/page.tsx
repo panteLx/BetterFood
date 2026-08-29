@@ -1,11 +1,9 @@
 import Link from "next/link";
+import { Barcode, Camera, ClipboardList } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
 import { optionalSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList } from "@/lib/data";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Camera, Hash } from "lucide-react";
+import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 
 export default async function ConfirmPage({
   searchParams,
@@ -26,81 +24,22 @@ export default async function ConfirmPage({
     }
   }
 
-  if (!session) {
-    const redirect = `/confirm?barcode=${barcode ?? ""}`;
-
-    return (
-      <div className="flex flex-1 flex-col">
-        <div className="p-4">
-          <h1 className="text-lg font-semibold">Artikel bestätigen</h1>
-        </div>
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {barcode && !initialName && (
-            <p className="text-sm text-muted-foreground">
-              Produkt zu Barcode {barcode} nicht gefunden.
-            </p>
-          )}
-          <Card>
-            <CardHeader>
-              <CardTitle>{initialName || "Unbekanntes Produkt"}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-              {barcode && <p>Barcode: {barcode}</p>}
-            </CardContent>
-          </Card>
-          <p className="text-sm text-muted-foreground">
-            Als Gast wird nichts gespeichert. Lege ein Konto an oder melde dich an – dieser
-            Artikel wartet dann hier auf dich.
-          </p>
-          {/* Beide Wege behalten den Barcode: wer erst scannt und dann ein
-              Konto anlegt, soll genau hier weitermachen und nicht auf einer
-              leeren Startseite landen. */}
-          <div className="flex flex-col gap-2">
-            <Link href={`/register?redirect=${encodeURIComponent(redirect)}`}>
-              <Button className="h-11 w-full">Konto erstellen und speichern</Button>
-            </Link>
-            <Link href={`/login?redirect=${encodeURIComponent(redirect)}`}>
-              <Button variant="outline" className="h-11 w-full">
-                Ich habe schon ein Konto
-              </Button>
-            </Link>
-          </div>
-          {/* Ohne diesen Weg war /confirm fuer Gaeste eine Sackgasse: wer sich
-              (noch) nicht anmelden will, kam von hier nur ueber den
-              Zurueck-Knopf des Browsers wieder weg -- und die
-              Navigationsleiste gibt es hier bewusst nicht. */}
-          <div className="flex flex-col gap-2 border-t border-input pt-4">
-            <Link href="/scan">
-              <Button variant="ghost" className="h-11 w-full">
-                <Camera className="size-4" />
-                Nächsten Artikel scannen
-              </Button>
-            </Link>
-            <Link href="/scan-ean">
-              <Button variant="ghost" className="h-11 w-full">
-                <Hash className="size-4" />
-                EAN eingeben
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!session) return <GuestPrompt barcode={barcode} productName={initialName} />;
 
   const listId = await requireActiveList(session.user.id);
-  const allCategories = await getCategoriesForList(listId);
+  const [allCategories, allPlaces] = await Promise.all([
+    getCategoriesForList(listId),
+    getPlacesForList(listId),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="p-4">
-        <h1 className="text-lg font-semibold">Artikel bestätigen</h1>
-        {barcode && !initialName && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Produkt zu Barcode {barcode} nicht gefunden – bitte Details ergänzen.
-          </p>
-        )}
-      </div>
+      {barcode && !initialName && (
+        <p className="px-5 pt-3 text-[13px] font-medium text-muted-foreground">
+          Zu Barcode <span className="font-mono">{barcode}</span> ist nichts hinterlegt – bitte
+          Details ergänzen.
+        </p>
+      )}
       {/* key=barcode erzwingt einen frischen ItemForm-Mount pro Barcode: unter
           cacheComponents:true haelt React <Activity> die vorherige Instanz
           samt useState-Werten am Leben, wenn man erneut zu /confirm mit
@@ -108,15 +47,88 @@ export default async function ConfirmPage({
           initialName wuerde sonst nur beim allerersten Scan uebernommen. */}
       <ItemForm
         key={barcode}
+        title="Artikel bestätigen"
         categories={allCategories}
+        places={allPlaces}
         initialName={initialName}
         barcode={barcode}
         redirectTo="/"
-        // Nach dem Einkauf ist der naechste Artikel der Normalfall: ohne diesen
-        // Weg kostete jeder weitere Scan erneut FAB, Auswahl-Sheet und einen
-        // kompletten Kamera-Start.
-        showScanNext
       />
     </div>
+  );
+}
+
+/**
+ * /confirm steht auch Gaesten offen -- wer einen Barcode scannt, soll nicht
+ * erst ein Konto anlegen muessen, um zu sehen, was dahintersteckt. Gespeichert
+ * wird aber nichts, also fuehrt von hier genau ein Weg weiter.
+ */
+function GuestPrompt({ barcode, productName }: { barcode?: string; productName: string }) {
+  const redirect = `/confirm?barcode=${barcode ?? ""}`;
+
+  return (
+    <div className="flex flex-1 flex-col gap-5 px-5 py-6">
+      <h1 className="text-2xl leading-tight">Artikel gefunden</h1>
+
+      <div className="flex flex-col gap-2 rounded-3xl border border-border bg-card px-4 py-4">
+        <p className="text-lg leading-snug font-bold text-balance">
+          {productName || "Unbekanntes Produkt"}
+        </p>
+        {barcode && <p className="font-mono text-[11.5px] text-faint">{barcode}</p>}
+      </div>
+
+      <p className="text-sm leading-relaxed font-medium text-balance text-muted-foreground">
+        Als Gast wird nichts gespeichert. Lege ein Konto an oder melde dich an – dieser Artikel
+        wartet dann hier auf dich.
+      </p>
+
+      {/* Beide Wege behalten den Barcode: wer erst scannt und dann ein
+          Konto anlegt, soll genau hier weitermachen und nicht auf einer
+          leeren Startseite landen. */}
+      <div className="flex flex-col gap-2.5">
+        <Link
+          href={`/register?redirect=${encodeURIComponent(redirect)}`}
+          className="flex h-14 items-center justify-center rounded-2xl bg-primary text-base font-bold text-primary-foreground"
+        >
+          Konto erstellen und speichern
+        </Link>
+        <Link
+          href={`/login?redirect=${encodeURIComponent(redirect)}`}
+          className="flex h-13 items-center justify-center rounded-2xl border border-border bg-card text-[15px] font-semibold"
+        >
+          Ich habe schon ein Konto
+        </Link>
+      </div>
+
+      {/* Ohne diesen Weg war /confirm fuer Gaeste eine Sackgasse: wer sich
+          (noch) nicht anmelden will, kam von hier nur ueber den
+          Zurueck-Knopf des Browsers wieder weg -- und die
+          Navigationsleiste gibt es hier bewusst nicht. */}
+      <div className="flex flex-col gap-1 border-t border-border pt-4">
+        <GuestLink href="/scan" icon={Camera} label="Nächsten Artikel scannen" />
+        <GuestLink href="/scan-ean" icon={Barcode} label="EAN eingeben" />
+        <GuestLink href="/add" icon={ClipboardList} label="Von Hand eintragen" />
+      </div>
+    </div>
+  );
+}
+
+function GuestLink({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex h-12 items-center gap-3 rounded-2xl px-2 text-[15px] font-semibold text-muted-foreground"
+    >
+      <Icon className="size-5" />
+      {label}
+    </Link>
   );
 }

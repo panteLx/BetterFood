@@ -30,9 +30,9 @@ export function ArchiveView({
   }
 
   return (
-    <>
+    <div className="flex flex-1 flex-col gap-4.5 px-5">
       <ArchiveStats items={items} />
       <ArchiveList items={items} setItems={setItems} categories={categories} />
-    </>
+    </div>
   );
 }

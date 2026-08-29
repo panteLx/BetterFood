@@ -1,57 +1,72 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Camera, Check, ClipboardList, Hash, Plus, Search, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Category, Item } from "@/db/schema";
+import { Package, Search } from "lucide-react";
+import { Chip, Segment } from "@/components/ui/chip";
+import { ItemCard } from "@/components/item-card";
+import { EmptyState } from "@/components/empty-state";
+import {
+  resolveItem,
+  resolveVerb,
+  undoResolve,
+  type ResolveStatus,
+} from "@/lib/item-actions";
+import { URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
+import type { Category, Item, Place } from "@/db/schema";
 
-// Ab hier gilt ein Artikel als dringend und wird kategorieuebergreifend nach
-// ganz oben gezogen -- die Frage beim Oeffnen der App ist "was muss ich heute
-// aufbrauchen?", nicht "was habe ich an Milchprodukten?".
-const URGENT_WITHIN_DAYS = 3;
+type StatusFilter = "alle" | "bald" | "abgelaufen";
+type Grouping = "ablauf" | "ort" | "kategorie";
 
-type UndoInfo = { itemId: number; archiveId: number | null };
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "alle", label: "Alle" },
+  { value: "bald", label: "Bald fällig" },
+  { value: "abgelaufen", label: "Abgelaufen" },
+];
 
-function daysUntil(date: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
+const GROUPINGS: { value: Grouping; label: string }[] = [
+  { value: "ablauf", label: "Ablauf" },
+  { value: "ort", label: "Ort" },
+  { value: "kategorie", label: "Kategorie" },
+];
 
-function urgencyStyles(days: number) {
-  if (days <= 1) return "border-l-4 border-l-destructive";
-  if (days <= URGENT_WITHIN_DAYS) return "border-l-4 border-l-yellow-500";
-  return "border-l-4 border-l-green-600";
-}
-
-function daysLabel(days: number): string {
-  if (days < 0) return `Seit ${Math.abs(days)} Tag(en) abgelaufen`;
-  if (days === 0) return "Läuft heute ab";
-  if (days === 1) return "Läuft morgen ab";
-  return `Noch ${days} Tage`;
-}
+// Die Eimer der Ablauf-Gruppierung. "Diese Woche" endet bei 7 Tagen, weil
+// darueber hinaus kein Einkauf mehr geplant wird.
+const EXPIRY_BUCKETS = [
+  { title: "Abgelaufen", danger: true, test: (days: number) => days < 0 },
+  {
+    title: "Bald aufbrauchen",
+    danger: false,
+    test: (days: number) => days >= 0 && days <= URGENT_WITHIN_DAYS,
+  },
+  {
+    title: "Diese Woche",
+    danger: false,
+    test: (days: number) => days > URGENT_WITHIN_DAYS && days <= 7,
+  },
+  { title: "Später", danger: false, test: (days: number) => days > 7 },
+] as const;
 
 export function InventoryList({
   initialItems,
   categories,
+  places,
+  initialStatus = "alle",
 }: {
   initialItems: Item[];
   categories: Pick<Category, "key" | "label">[];
+  places: Pick<Place, "id" | "name">[];
+  /** Vorbelegter Filter -- die Zaehler auf der Startseite verlinken direkt hierher. */
+  initialStatus?: StatusFilter;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [prevInitialItems, setPrevInitialItems] = useState(initialItems);
-  const [pendingId, setPendingId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>(initialStatus);
+  const [grouping, setGrouping] = useState<Grouping>("ablauf");
 
   if (initialItems !== prevInitialItems) {
     setPrevInitialItems(initialItems);
@@ -59,97 +74,19 @@ export function InventoryList({
   }
 
   const categoryLabels = useMemo(
-    () => Object.fromEntries(categories.map((c) => [c.key, c.label])),
+    () => new Map(categories.map((c) => [c.key, c.label])),
     [categories],
   );
+  const placeNames = useMemo(() => new Map(places.map((p) => [p.id, p.name])), [places]);
 
-  async function undoResolve(undo: UndoInfo, previousItems: Item[]) {
-    setItems(previousItems);
-    try {
-      if (undo.archiveId !== null) {
-        // Teil-Verbrauch: die Archiv-Zeile wieder entfernen und die Menge des
-        // aktiven Artikels zurueckdrehen.
-        const item = previousItems.find((i) => i.id === undo.itemId);
-        const del = await fetch(`/api/items/${undo.archiveId}`, { method: "DELETE" });
-        if (!del.ok) throw new Error();
-        const res = await fetch(`/api/items/${undo.itemId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quantity: item?.quantity ?? 1 }),
-        });
-        if (!res.ok) throw new Error();
-      } else {
-        const res = await fetch(`/api/items/${undo.itemId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "active" }),
-        });
-        if (!res.ok) throw new Error();
-      }
-      toast.success("Wieder hergestellt");
-      router.refresh();
-    } catch {
-      toast.error("Rückgängig machen hat nicht geklappt.");
-      router.refresh();
-    }
-  }
+  const labelOf = (item: Item) => categoryLabels.get(item.category) ?? item.category;
+  const placeOf = (item: Item) =>
+    item.placeId === null ? "Ohne Ort" : (placeNames.get(item.placeId) ?? "Ohne Ort");
 
-  /**
-   * Nachgekauft: bisher musste dafuer der komplette Erfassungsweg noch einmal
-   * durchlaufen werden (scannen oder tippen), obwohl der Artikel schon in der
-   * Liste steht und quantity genau dafuer da ist.
-   */
-  async function addOne(item: Item) {
-    const previousItems = items;
-    const next = item.quantity + 1;
-
-    setPendingId(item.id);
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, quantity: next } : i)));
-
-    try {
-      const res = await fetch(`/api/items/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: next }),
-      });
-      if (!res.ok) throw new Error();
-
-      toast.success(`${item.name} – jetzt ${next}× im Vorrat`, {
-        action: {
-          label: "Rückgängig",
-          onClick: () => undoAddOne(item.id, item.quantity, previousItems),
-        },
-      });
-      router.refresh();
-    } catch {
-      toast.error("Konnte nicht aktualisiert werden.");
-      setItems(previousItems);
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function undoAddOne(itemId: number, quantity: number, previousItems: Item[]) {
-    setItems(previousItems);
-    try {
-      const res = await fetch(`/api/items/${itemId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity }),
-      });
-      if (!res.ok) throw new Error();
-      router.refresh();
-    } catch {
-      toast.error("Rückgängig machen hat nicht geklappt.");
-      router.refresh();
-    }
-  }
-
-  async function resolveItem(item: Item, status: "used" | "thrown_away") {
+  async function resolve(item: Item, nextStatus: ResolveStatus) {
     const previousItems = items;
     const remaining = item.quantity - 1;
 
-    setPendingId(item.id);
     // Optimistisch: bei mehreren Einheiten bleibt der Artikel mit einer
     // Einheit weniger stehen, statt komplett zu verschwinden.
     setItems((prev) =>
@@ -159,23 +96,23 @@ export function InventoryList({
     );
 
     try {
-      const res = await fetch(`/api/items/${item.id}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error();
-      const { undo } = (await res.json()) as { undo: UndoInfo };
-
-      const verb = status === "used" ? "aufgebraucht" : "entsorgt";
+      const undo = await resolveItem(item.id, nextStatus);
+      const verb = resolveVerb(nextStatus);
       toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
+        remaining > 0 ? `1× ${item.name} ${verb} – noch ${remaining} übrig` : `${item.name} ${verb}`,
         {
           action: {
             label: "Rückgängig",
-            onClick: () => undoResolve(undo, previousItems),
+            onClick: async () => {
+              setItems(previousItems);
+              try {
+                await undoResolve(undo, item.quantity);
+                toast.success("Wiederhergestellt");
+              } catch {
+                toast.error("Rückgängig machen hat nicht geklappt.");
+              }
+              router.refresh();
+            },
           },
         },
       );
@@ -183,189 +120,184 @@ export function InventoryList({
     } catch {
       toast.error("Konnte nicht aktualisiert werden.");
       setItems(previousItems);
-    } finally {
-      setPendingId(null);
     }
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        (categoryLabels[item.category] ?? item.category).toLowerCase().includes(q),
+  const pool = useMemo(() => {
+    const sorted = [...items].sort(
+      (a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate),
     );
-  }, [items, query, categoryLabels]);
+    const byStatus = sorted.filter((item) => {
+      const days = daysUntil(item.expiryDate);
+      if (status === "bald") return days >= 0 && days <= URGENT_WITHIN_DAYS;
+      if (status === "abgelaufen") return days < 0;
+      return true;
+    });
+
+    const needle = query.trim().toLowerCase();
+    if (!needle) return byStatus;
+    return byStatus.filter(
+      (item) =>
+        item.name.toLowerCase().includes(needle) ||
+        labelOf(item).toLowerCase().includes(needle) ||
+        placeOf(item).toLowerCase().includes(needle),
+    );
+    // labelOf/placeOf haengen nur an den beiden Maps, die hier bereits stehen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, status, query, categoryLabels, placeNames]);
 
   const sections = useMemo(() => {
-    const urgent: Item[] = [];
-    const rest: Item[] = [];
-    for (const item of filtered) {
-      if (daysUntil(item.expiryDate) <= URGENT_WITHIN_DAYS) urgent.push(item);
-      else rest.push(item);
-    }
-    urgent.sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate));
-
-    const groups = new Map<string, Item[]>();
-    for (const item of rest) {
-      const group = groups.get(item.category);
-      if (group) group.push(item);
-      else groups.set(item.category, [item]);
-    }
-
-    const categorySections = Array.from(groups.entries())
-      .sort(([, a], [, b]) => daysUntil(a[0].expiryDate) - daysUntil(b[0].expiryDate))
-      .map(([key, groupItems]) => ({
-        id: key,
-        title: categoryLabels[key] ?? key,
-        urgent: false,
-        items: groupItems,
+    if (grouping === "ort") {
+      const named = places.map((place) => ({
+        title: place.name,
+        danger: false,
+        items: pool.filter((item) => item.placeId === place.id),
       }));
+      // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende, statt
+      // stillschweigend aus der Ansicht zu fallen.
+      const unplaced = pool.filter(
+        (item) => item.placeId === null || !placeNames.has(item.placeId),
+      );
+      return [...named, { title: "Ohne Ort", danger: false, items: unplaced }].filter(
+        (section) => section.items.length > 0,
+      );
+    }
 
-    return urgent.length > 0
-      ? [{ id: "__urgent__", title: "Bald aufbrauchen", urgent: true, items: urgent }, ...categorySections]
-      : categorySections;
-  }, [filtered, categoryLabels]);
+    if (grouping === "kategorie") {
+      return categories
+        .map((category) => ({
+          title: category.label,
+          danger: false,
+          items: pool.filter((item) => item.category === category.key),
+        }))
+        .filter((section) => section.items.length > 0);
+    }
+
+    return EXPIRY_BUCKETS.map((bucket) => ({
+      title: bucket.title,
+      danger: bucket.danger,
+      items: pool.filter((item) => bucket.test(daysUntil(item.expiryDate))),
+    })).filter((section) => section.items.length > 0);
+  }, [pool, grouping, places, categories, placeNames]);
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex flex-col gap-1 text-muted-foreground">
-          <p className="font-medium text-foreground">Dein Vorrat ist leer.</p>
-          <p className="text-sm">Scanne den Barcode oder trage den ersten Artikel von Hand ein.</p>
-        </div>
-        {/* Vorher stand hier nur Text -- die eigentliche Aktion lag im FAB, den
-            der Nutzer auf dem allerersten Screen erst finden musste. */}
-        <div className="flex w-full max-w-64 flex-col gap-2">
-          <Link href="/scan" className="w-full">
-            <Button size="lg" className="w-full">
-              <Camera className="size-4" />
-              Barcode scannen
-            </Button>
-          </Link>
-          {/* Dritter Weg wie im Hinzufuegen-Sheet: eine unlesbare oder
-              fehlende Kamera darf hier nicht in eine Sackgasse fuehren. */}
-          <Link href="/scan-ean" className="w-full">
-            <Button size="lg" variant="outline" className="w-full">
-              <Hash className="size-4" />
-              EAN eingeben
-            </Button>
-          </Link>
-          <Link href="/add" className="w-full">
-            <Button size="lg" variant="outline" className="w-full">
-              <ClipboardList className="size-4" />
-              Manuell eintragen
-            </Button>
-          </Link>
-        </div>
+      <div className="flex flex-1 flex-col px-5 pt-2">
+        <Header total={0} shown={0} />
+        <EmptyState
+          className="mt-8"
+          icon={Package}
+          title="Dein Vorrat ist noch leer"
+          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
+          action={{ href: "/scan", label: "Ersten Artikel hinzufügen" }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      {/* Suche erst ab einer Menge, ab der Scrollen wirklich nervt. */}
-      {items.length >= 8 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+    <div className="flex flex-1 flex-col gap-3.5 pt-2">
+      <div className="px-5">
+        <Header total={items.length} shown={pool.length} />
+      </div>
+
+      <div className="px-5">
+        <label className="flex h-12 items-center gap-2.5 rounded-2xl border border-border bg-card px-3.5">
+          <Search className="size-4.5 shrink-0 text-faint" />
+          <input
             type="search"
             inputMode="search"
-            placeholder="Artikel oder Kategorie suchen"
-            className="h-11 pl-9"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Artikel, Ort oder Kategorie suchen"
+            className="min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold outline-none placeholder:text-faint"
           />
-        </div>
-      )}
+        </label>
+      </div>
 
-      {sections.length === 0 && (
-        <p className="p-8 text-center text-sm text-muted-foreground">
-          Nichts gefunden für „{query.trim()}“.
-        </p>
-      )}
-
-      {sections.map((section) => (
-        <div key={section.id} className="flex flex-col gap-2">
-          <h2
-            className={cn(
-              "text-sm font-semibold",
-              section.urgent ? "text-destructive" : "text-muted-foreground",
-            )}
+      <div className="flex gap-1 px-5">
+        {STATUS_FILTERS.map((filter) => (
+          <Segment
+            key={filter.value}
+            active={status === filter.value}
+            onClick={() => setStatus(filter.value)}
           >
-            {section.title}
-          </h2>
-          {section.items.map((item) => {
-            const days = daysUntil(item.expiryDate);
-            return (
-              <Card
-                key={item.id}
-                className={cn(
-                  "flex-row items-center gap-2 p-2 pl-3",
-                  urgencyStyles(days),
-                )}
+            {filter.label}
+          </Segment>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 px-5">
+        <span className="text-[11.5px] font-semibold whitespace-nowrap text-faint">Gruppiert</span>
+        {GROUPINGS.map((group) => (
+          <Chip
+            key={group.value}
+            active={grouping === group.value}
+            onClick={() => setGrouping(group.value)}
+            className="h-7.5 px-2.5 text-xs"
+          >
+            {group.label}
+          </Chip>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-4.5 px-5 pb-4">
+        {sections.map((section) => (
+          <section key={section.title} className="flex flex-col gap-2.5">
+            <div className="flex items-baseline justify-between">
+              <h2
+                className={`pl-1 text-[13px] font-bold ${section.danger ? "text-danger" : "text-muted-foreground"}`}
               >
-                {/* Die ganze Zeile fuehrt zum Bearbeiten -- das ersetzt den
-                    dritten kleinen Icon-Button und schafft Platz fuer zwei
-                    Trefferflaechen in voller Groesse. */}
-                <Link href={`/edit/${item.id}`} className="min-w-0 flex-1 py-1.5">
-                  <p className="truncate font-medium">
-                    {item.name}
-                    {item.quantity > 1 && (
-                      <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                        ×{item.quantity}
-                      </span>
-                    )}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="text-xs text-muted-foreground">{daysLabel(days)}</p>
-                    {/* In der Dringlichkeitssektion stehen Artikel aus
-                        verschiedenen Kategorien nebeneinander -- ohne Badge
-                        waere nicht erkennbar, woher sie kommen. */}
-                    {section.urgent && (
-                      <Badge variant="secondary" className="max-w-full truncate">
-                        {categoryLabels[item.category] ?? item.category}
-                      </Badge>
-                    )}
-                  </div>
-                </Link>
-                <div className="flex shrink-0 gap-1.5">
-                  <Button
-                    size="icon-touch"
-                    variant="outline"
-                    disabled={pendingId === item.id}
-                    onClick={() => addOne(item)}
-                    aria-label={`Eine weitere Einheit ${item.name} hinzufügen`}
-                  >
-                    <Plus className="size-5" />
-                  </Button>
-                  <Button
-                    size="icon-touch"
-                    variant="outline"
-                    disabled={pendingId === item.id}
-                    onClick={() => resolveItem(item, "used")}
-                    aria-label={
-                      item.quantity > 1 ? `Eine Einheit aufgebraucht` : "Aufgebraucht"
-                    }
-                  >
-                    <Check className="size-5" />
-                  </Button>
-                  <Button
-                    size="icon-touch"
-                    variant="outline"
-                    disabled={pendingId === item.id}
-                    onClick={() => resolveItem(item, "thrown_away")}
-                    aria-label={item.quantity > 1 ? "Eine Einheit weggeworfen" : "Weggeworfen"}
-                  >
-                    <Trash2 className="size-5" />
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      ))}
+                {section.title}
+              </h2>
+              <span className="text-[11.5px] font-semibold text-faint">
+                {section.items.length} {section.items.length === 1 ? "Artikel" : "Artikel"}
+              </span>
+            </div>
+            {section.items.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                meta={grouping === "ort" ? labelOf(item) : placeOf(item)}
+                onConsume={() => resolve(item, "used")}
+                onDiscard={() => resolve(item, "thrown_away")}
+              />
+            ))}
+          </section>
+        ))}
+
+        {sections.length === 0 && (
+          <EmptyState
+            icon={Search}
+            title={query.trim() ? "Nichts gefunden" : "Hier ist gerade nichts"}
+            body={
+              query.trim()
+                ? `Kein Artikel passt zu „${query.trim()}“.`
+                : "Kein Artikel passt zu diesem Filter."
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Header({ total, shown }: { total: number; shown: number }) {
+  return (
+    <div>
+      <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
+      <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
+        {total === 0 ? (
+          "Noch nichts erfasst"
+        ) : (
+          <>
+            {shown} von {total} Artikeln ·{" "}
+            <Link href="/archive" className="font-semibold text-primary">
+              Archiv
+            </Link>
+          </>
+        )}
+      </p>
     </div>
   );
 }
