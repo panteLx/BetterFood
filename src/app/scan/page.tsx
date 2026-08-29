@@ -59,6 +59,7 @@ export default function ScanPage() {
   const [manualEntry, setManualEntry] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
   const [retrySession, setRetrySession] = useState(0);
+  const [videoReady, setVideoReady] = useState(false);
 
   useLayoutEffect(() => {
     // Mit cacheComponents:true haelt Next.js diese Seite beim Navigieren via
@@ -94,6 +95,7 @@ export default function ScanPage() {
     function startScanning() {
       if (!active) return;
       setError(null);
+      setVideoReady(false);
       const reader = new BrowserMultiFormatReader();
 
       reader
@@ -176,7 +178,29 @@ export default function ScanPage() {
       </div>
 
       <div className="relative mx-4 flex-1 overflow-hidden rounded-xl bg-black">
-        <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+        {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
+            iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
+            object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
+            statt ueber explizite Positionierung bestimmt wird. */}
+        <video
+          ref={videoRef}
+          onPlaying={() => {
+            // "playing" heisst nur, dass Frames fliessen -- Safari braucht danach
+            // noch ein bis zwei gemalte Frames, bis die object-cover-Zuschneidung
+            // tatsaechlich korrekt gerendert ist (sonst blitzt kurz ein falsch
+            // zugeschnittenes erstes Frame auf). Zwei verschachtelte rAF warten,
+            // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
+            // aufdecken.
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => setVideoReady(true));
+            });
+          }}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+            videoReady ? "opacity-100" : "opacity-0"
+          }`}
+          muted
+          playsInline
+        />
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
       </div>
 
