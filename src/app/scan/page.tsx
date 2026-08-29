@@ -201,15 +201,6 @@ export default function ScanPage() {
           muted
           playsInline
         />
-        {/* Solange keine Frames sichtbar gemalt wurden, ist die Groesse/der
-            Zuschnitt des Videos noch nicht verlaesslich object-cover-korrekt --
-            das Video bleibt bis dahin unsichtbar, damit dieser Zwischenzustand
-            nicht aufblitzt. */}
-        {!videoReady && !error && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          </div>
-        )}
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
       </div>
 
