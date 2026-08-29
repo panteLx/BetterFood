@@ -99,15 +99,17 @@ export async function PATCH(
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
-  // Wer einen falsch einsortierten Artikel oeffnet und die Kategorie
+  // Wer einen falsch einsortierten Artikel oeffnet und Kategorie oder Ort
   // korrigiert, korrigiert damit auch die Vorauswahl fuer das naechste Mal --
   // der kuerzeste Weg, das Wissen richtigzustellen. Nur bei einer Aenderung
-  // an Name oder Kategorie: ein reines Umdatieren sagt darueber nichts aus.
-  if (update.name !== undefined || update.category !== undefined) {
+  // an Name, Kategorie oder Ort: ein reines Umdatieren sagt darueber nichts
+  // aus, und ein "aufgebraucht" schon gar nicht.
+  if (update.name !== undefined || update.category !== undefined || update.placeId !== undefined) {
     await rememberProduct(listId, {
       barcode: updated.barcode,
       name: updated.name,
       category: updated.category,
+      placeId: updated.placeId,
     });
   }
 

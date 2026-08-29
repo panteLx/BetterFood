@@ -23,7 +23,7 @@ export function Chip({
       type="button"
       aria-pressed={active}
       className={cn(
-        "inline-flex h-[34px] shrink-0 items-center justify-center rounded-xl border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "inline-flex h-[34px] shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         active
           ? "border-transparent bg-primary text-primary-foreground"
           : "border-border bg-card text-muted-foreground",

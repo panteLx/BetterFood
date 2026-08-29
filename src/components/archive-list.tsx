@@ -7,16 +7,7 @@ import { toast } from "sonner";
 import { Archive as ArchiveIcon, EyeOff, RotateCcw } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hideItem, restoreItem } from "@/lib/item-actions";
 import { formatShort } from "@/lib/expiry";
 import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
@@ -91,30 +82,15 @@ export function ArchiveList({
 
       {/* Ein Dialog fuer alle Zeilen statt einer je Zeile: bei 200 Eintraegen
           im Archiv waeren das 200 Dialoge im Baum. */}
-      <AlertDialog
+      <ConfirmDialog
         open={pendingHide !== null}
         onOpenChange={(open) => !open && setPendingHide(null)}
-      >
-        <AlertDialogPortal>
-          <AlertDialogBackdrop />
-          <AlertDialogPopup>
-            <AlertDialogTitle>„{pendingHide?.name}“ ausblenden?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Der Eintrag verschwindet aus dem Archiv und aus der Statistik. Was die App über die
-              Kategorie dieses Produkts gelernt hat, bleibt erhalten.
-            </AlertDialogDescription>
-            <AlertDialogActions>
-              <AlertDialogClose render={<Button variant="outline" />}>Abbrechen</AlertDialogClose>
-              <AlertDialogClose
-                render={<Button variant="destructive" />}
-                onClick={() => pendingHide && hide(pendingHide)}
-              >
-                Ausblenden
-              </AlertDialogClose>
-            </AlertDialogActions>
-          </AlertDialogPopup>
-        </AlertDialogPortal>
-      </AlertDialog>
+        icon={EyeOff}
+        title={<>„{pendingHide?.name}“ ausblenden?</>}
+        description="Der Eintrag verschwindet aus dem Archiv und aus der Statistik. Was die App über dieses Produkt gelernt hat, bleibt erhalten."
+        confirmLabel="Ausblenden"
+        onConfirm={() => pendingHide && hide(pendingHide)}
+      />
     </>
   );
 }

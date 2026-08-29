@@ -7,17 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Check, Pencil, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useIsClient } from "@/lib/use-is-client";
 import {
   STATUS_CLASSES,
@@ -171,39 +161,23 @@ export function ItemDetail({
             >
               <Pencil className="size-5" />
             </Link>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-touch"
-                    disabled={busy}
-                    aria-label="Artikel löschen"
-                    className="-mr-1.5 rounded-2xl text-danger"
-                  />
-                }
-              >
-                <Trash2 className="size-5" />
-              </AlertDialogTrigger>
-              <AlertDialogPortal>
-                <AlertDialogBackdrop />
-                <AlertDialogPopup>
-                  <AlertDialogTitle>„{item.name}“ löschen?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Der Artikel verschwindet aus deinem Vorrat und zählt nicht als aufgebraucht.
-                    Was die App über die Kategorie gelernt hat, bleibt erhalten.
-                  </AlertDialogDescription>
-                  <AlertDialogActions>
-                    <AlertDialogClose render={<Button variant="outline" />}>
-                      Abbrechen
-                    </AlertDialogClose>
-                    <AlertDialogClose render={<Button variant="destructive" />} onClick={remove}>
-                      Löschen
-                    </AlertDialogClose>
-                  </AlertDialogActions>
-                </AlertDialogPopup>
-              </AlertDialogPortal>
-            </AlertDialog>
+            <ConfirmDialog
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon-touch"
+                  disabled={busy}
+                  aria-label="Artikel löschen"
+                  className="-mr-1.5 rounded-2xl text-danger"
+                >
+                  <Trash2 className="size-5" />
+                </Button>
+              }
+              title={<>„{item.name}“ löschen?</>}
+              description="Der Artikel verschwindet aus deinem Vorrat und zählt nicht als aufgebraucht."
+              confirmLabel="Löschen"
+              onConfirm={remove}
+            />
           </div>
         </div>
 
@@ -254,7 +228,7 @@ export function ItemDetail({
           type="button"
           disabled={busy}
           onClick={() => resolve("used")}
-          className="flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+          className="flex h-14 items-center justify-center gap-2.5 rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
         >
           <Check className="size-5" strokeWidth={2.3} />
           Aufgebraucht
@@ -264,7 +238,7 @@ export function ItemDetail({
             type="button"
             disabled={busy}
             onClick={addOne}
-            className="h-12.5 flex-1 rounded-[17px] border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
+            className="h-12.5 flex-1 rounded-lg border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
           >
             Nachgekauft
           </button>
@@ -272,7 +246,7 @@ export function ItemDetail({
             type="button"
             disabled={busy}
             onClick={() => resolve("thrown_away")}
-            className="h-12.5 flex-1 rounded-[17px] border border-danger bg-danger-tint text-[15px] font-bold text-danger disabled:opacity-60"
+            className="h-12.5 flex-1 rounded-lg border border-danger bg-danger-tint text-[15px] font-bold text-danger disabled:opacity-60"
           >
             Weggeworfen
           </button>

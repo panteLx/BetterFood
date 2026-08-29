@@ -16,17 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { estimateExpiryDate } from "@/lib/categories";
 import {
   expiryLabel,
@@ -109,9 +99,11 @@ export function ItemForm({
   const [saving, setSaving] = useState(false);
   // Sobald der Nutzer selbst gewaehlt hat, wird nichts mehr ueberschrieben.
   const categoryTouchedRef = useRef(false);
+  const placeTouchedRef = useRef(false);
   const nameTouchedRef = useRef(false);
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [learnedCategory, setLearnedCategory] = useState<string | null>(null);
+  const [learnedPlace, setLearnedPlace] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
 
@@ -153,8 +145,10 @@ export function ItemForm({
       setDateTouched(Boolean(initialExpiryDate));
       setExpiryDate(initialExpiryValue());
       categoryTouchedRef.current = false;
+      placeTouchedRef.current = false;
       nameTouchedRef.current = false;
       setLearnedCategory(null);
+      setLearnedPlace(null);
     };
   });
 
@@ -168,14 +162,18 @@ export function ItemForm({
 
   /**
    * Fragt nach, ob diese Liste das Produkt schon kennt, und uebernimmt die
-   * damalige Entscheidung. Das ersetzt das frühere Raten aus den
-   * Open-Food-Facts-Kategorien vollstaendig.
+   * damalige Entscheidung -- Kategorie und Ort. Das ersetzt das frühere Raten
+   * aus den Open-Food-Facts-Kategorien vollstaendig.
+   *
+   * Beide Felder werden einzeln betrachtet: wer die Kategorie schon selbst
+   * gewaehlt hat, soll trotzdem den gelernten Ort bekommen, und umgekehrt.
    */
   async function applyKnownProduct(
     lookup: { barcode?: string; name?: string },
     options: { withName: boolean },
   ) {
-    if (itemId || categoryTouchedRef.current) return;
+    if (itemId) return;
+    if (categoryTouchedRef.current && placeTouchedRef.current) return;
 
     const params = new URLSearchParams();
     if (lookup.barcode) params.set("barcode", lookup.barcode);
@@ -185,12 +183,23 @@ export function ItemForm({
     try {
       const res = await fetch(`/api/items/known?${params}`);
       if (!res.ok) return;
-      const known = (await res.json()) as { found: boolean; category?: string; name?: string };
-      // In der Zwischenzeit koennte der Nutzer selbst gewaehlt haben.
-      if (!known.found || !known.category || categoryTouchedRef.current) return;
+      const known = (await res.json()) as {
+        found: boolean;
+        category?: string;
+        name?: string;
+        placeId?: number | null;
+      };
+      if (!known.found || !known.category) return;
 
-      setLearnedCategory(known.category);
-      applyCategory(known.category);
+      // In der Zwischenzeit koennte der Nutzer selbst gewaehlt haben.
+      if (!categoryTouchedRef.current) {
+        setLearnedCategory(known.category);
+        applyCategory(known.category);
+      }
+      if (!placeTouchedRef.current && known.placeId != null) {
+        setLearnedPlace(known.placeId);
+        setPlaceId(known.placeId);
+      }
       if (options.withName && known.name && !nameTouchedRef.current) setName(known.name);
     } catch {
       // Ohne Antwort bleibt es bei der leeren Vorauswahl -- kein Grund, dem
@@ -272,6 +281,12 @@ export function ItemForm({
     applyCategory(value);
   }
 
+  function handlePlaceChange(value: number) {
+    placeTouchedRef.current = true;
+    setLearnedPlace(null);
+    setPlaceId(value);
+  }
+
   async function handleCreateCategory() {
     if (!newCategoryLabel.trim()) {
       toast.error("Bitte einen Namen eingeben.");
@@ -322,6 +337,14 @@ export function ItemForm({
   async function handleSave() {
     if (!name.trim()) {
       toast.error("Bitte einen Namen eingeben.");
+      return;
+    }
+    // Der Ort ist Pflicht, sobald es ueberhaupt welche gibt: ein Vorrat, von
+    // dem man nicht weiss, in welchem Fach er liegt, beantwortet die Frage
+    // nicht, wegen der man nachschaut. Hat die Liste kein einziges Fach, gibt
+    // es nichts zu waehlen -- dann darf die Pflicht auch nicht blockieren.
+    if (places.length > 0 && placeId === null) {
+      toast.error("Bitte einen Ort wählen.");
       return;
     }
     if (!category) {
@@ -380,6 +403,8 @@ export function ItemForm({
     }
   }
 
+  const placeLearned = learnedPlace !== null && learnedPlace === placeId;
+  const categoryLearned = learnedCategory !== null && learnedCategory === category && category !== "";
   const shelfLifeDays = categoryList.find((c) => c.key === category)?.shelfLifeDays;
   const categoryLabel = categoryList.find((c) => c.key === category)?.label;
   const selectedDate = expiryDate ? fromDateInputValue(expiryDate) : null;
@@ -416,7 +441,7 @@ export function ItemForm({
                   key={suggestion}
                   type="button"
                   onClick={() => handleNameChange(suggestion)}
-                  className="h-8.5 rounded-xl border border-dashed border-border bg-surface-2 px-3 text-[13px] font-semibold text-muted-foreground"
+                  className="h-8.5 rounded-[10px] border border-dashed border-border bg-surface-2 px-3 text-[13px] font-semibold text-muted-foreground"
                 >
                   {suggestion}
                 </button>
@@ -432,15 +457,22 @@ export function ItemForm({
                 <Chip
                   key={place.id}
                   active={placeId === place.id}
-                  // Nochmals antippen hebt die Wahl auf: nicht jeder Artikel
-                  // gehoert in ein Fach.
-                  onClick={() => setPlaceId(placeId === place.id ? null : place.id)}
+                  // Kein Abwaehlen mehr: der Ort ist Pflicht, und ein zweites
+                  // Antippen fuehrte sonst in einen Zustand zurueck, den das
+                  // Speichern gleich wieder anmahnt.
+                  onClick={() => handlePlaceChange(place.id)}
                   className="h-10 flex-1 px-2.5 text-xs"
                 >
                   {place.name}
                 </Chip>
               ))}
             </div>
+            {/* Sind beide Felder uebernommen, sagt es der Hinweis unter der
+                Kategorie in einem Satz -- zweimal derselbe Satz untereinander
+                liest sich wie ein Fehler. */}
+            {placeLearned && !categoryLearned && (
+              <LearnedHint>Der Ort stammt aus deinem letzten Eintrag zu diesem Artikel.</LearnedHint>
+            )}
           </Field>
         )}
 
@@ -463,16 +495,17 @@ export function ItemForm({
                 setNewCategoryShelfLife("14");
                 setNewCategoryOpen(true);
               }}
-              className="inline-flex h-[34px] items-center gap-1 rounded-xl border border-dashed border-border px-3 text-[12.5px] font-semibold text-primary"
+              className="inline-flex h-[34px] items-center gap-1 rounded-[10px] border border-dashed border-border px-3 text-[12.5px] font-semibold text-primary"
             >
               <Plus className="size-3.5" strokeWidth={2.4} />
               Neue Kategorie
             </button>
           </div>
-          {learnedCategory === category && category !== "" && (
-            <p className="pl-1 text-xs font-medium text-faint">
-              Übernommen aus deinem letzten Eintrag zu diesem Artikel.
-            </p>
+          {categoryLearned && (
+            <LearnedHint>
+              {placeLearned ? "Ort und Kategorie stammen" : "Die Kategorie stammt"} aus deinem
+              letzten Eintrag zu diesem Artikel.
+            </LearnedHint>
           )}
         </Field>
 
@@ -553,39 +586,18 @@ export function ItemForm({
             Umweg "als aufgebraucht markieren, dann im Archiv loeschen"
             entfernen -- und verfaelschte dabei die Statistik. */}
         {itemId && (
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  disabled={deleting}
-                  className="h-12 w-full rounded-lg text-danger"
-                />
-              }
-            >
-              <Trash2 className="size-4" />
-              Artikel löschen
-            </AlertDialogTrigger>
-            <AlertDialogPortal>
-              <AlertDialogBackdrop />
-              <AlertDialogPopup>
-                <AlertDialogTitle>Artikel entfernen?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  „{name}“ verschwindet aus dem Vorrat und taucht auch nicht im Archiv auf. Die App
-                  merkt sich weiterhin, in welche Kategorie dieser Artikel gehört.
-                </AlertDialogDescription>
-                <AlertDialogActions>
-                  <AlertDialogClose render={<Button variant="outline" />}>Abbrechen</AlertDialogClose>
-                  <AlertDialogClose
-                    render={<Button variant="destructive" />}
-                    onClick={handleDelete}
-                  >
-                    Löschen
-                  </AlertDialogClose>
-                </AlertDialogActions>
-              </AlertDialogPopup>
-            </AlertDialogPortal>
-          </AlertDialog>
+          <ConfirmDialog
+            trigger={
+              <Button variant="ghost" disabled={deleting} className="h-12 w-full rounded-lg text-danger">
+                <Trash2 className="size-4" />
+                Artikel löschen
+              </Button>
+            }
+            title={<>„{name}“ löschen?</>}
+            description="Der Artikel verschwindet aus dem Vorrat und taucht auch nicht im Archiv auf."
+            confirmLabel="Löschen"
+            onConfirm={handleDelete}
+          />
         )}
       </div>
 
@@ -665,6 +677,15 @@ function startOfDay(date: Date) {
  * Grossbuchstaben und gesperrt -- das trennt die Fragen ("Wo liegt es?")
  * sichtbar von den Antworten, ohne eine Linie dazwischen zu ziehen.
  */
+/**
+ * Steht unter einem Feld, dessen Wert nicht der Nutzer gesetzt hat, sondern
+ * die Liste selbst -- damit eine Vorauswahl nicht wie eine eigene Eingabe
+ * aussieht, die man nur uebersehen hat.
+ */
+function LearnedHint({ children }: { children: React.ReactNode }) {
+  return <p className="pl-1 text-xs font-medium text-balance text-faint">{children}</p>;
+}
+
 function Field({
   label,
   htmlFor,

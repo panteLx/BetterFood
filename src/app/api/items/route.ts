@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       .where(eq(items.id, existing.id))
       .returning();
 
-    await rememberProduct(listId, { barcode, name, category });
+    await rememberProduct(listId, { barcode, name, category, placeId: place });
 
     return NextResponse.json({ ...merged, merged: true }, { status: 200 });
   }
@@ -149,8 +149,9 @@ export async function POST(req: NextRequest) {
 
   // Jeder gespeicherte Artikel ist zugleich eine Aussage darueber, wohin
   // dieses Produkt in diesem Haushalt gehoert -- genau davon lebt die
-  // Vorauswahl beim naechsten Mal.
-  await rememberProduct(listId, { barcode, name, category });
+  // Vorauswahl beim naechsten Mal. Der Ort gehoert dazu: Joghurt liegt in
+  // jedem Haushalt woanders, aber im selben immer am selben Platz.
+  await rememberProduct(listId, { barcode, name, category, placeId: place });
 
   return NextResponse.json(created, { status: 201 });
 }

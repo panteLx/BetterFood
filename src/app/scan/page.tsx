@@ -233,7 +233,7 @@ export default function ScanPage() {
           type="button"
           onClick={() => router.push("/")}
           aria-label="Scannen abbrechen"
-          className="flex size-10.5 items-center justify-center rounded-2xl bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+          className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
         >
           <X className="size-5" strokeWidth={2} />
         </button>
@@ -244,7 +244,7 @@ export default function ScanPage() {
             aria-label={torchOn ? "Licht ausschalten" : "Licht einschalten"}
             aria-pressed={torchOn}
             onClick={toggleTorch}
-            className="flex size-10.5 items-center justify-center rounded-2xl bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+            className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
           >
             {torchOn ? <Flashlight className="size-5" /> : <FlashlightOff className="size-5" />}
           </button>

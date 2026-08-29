@@ -209,7 +209,10 @@ export async function backfillDefaultPlaces() {
  * Was die Liste ueber dieses Produkt weiss -- ueber den Barcode oder, wenn
  * keiner vorliegt, ueber den Namen.
  *
- * Das ist die einzige Quelle fuer die Vorauswahl der Kategorie. Vorher wurde
+ * Das ist die einzige Quelle fuer die Vorauswahl von Kategorie und Ort.
+ * Beides beantwortet dieselbe Frage -- "wie haelt es dieser Haushalt mit
+ * diesem Produkt?" -- und beides steht schon in der Zeile, die beim letzten
+ * Speichern geschrieben wurde. Vorher wurde
  * aus den Open-Food-Facts-Kategorien geraten, was bei einem grossen Teil der
  * Produkte danebenlag -- und was bei selbst angelegten Kategorien gar nicht
  * funktionieren kann. Ein Produkt, das dieser Haushalt noch nie erfasst hat,
@@ -222,7 +225,11 @@ export async function lookupKnownProduct(
 ) {
   if (lookup.barcode) {
     const byBarcode = await db
-      .select({ category: productKnowledge.category, name: productKnowledge.name })
+      .select({
+        category: productKnowledge.category,
+        name: productKnowledge.name,
+        placeId: productKnowledge.placeId,
+      })
       .from(productKnowledge)
       .where(and(eq(productKnowledge.listId, listId), eq(productKnowledge.barcode, lookup.barcode)))
       .get();
@@ -233,7 +240,11 @@ export async function lookupKnownProduct(
     // Auch Eintraege MIT Barcode zaehlen: wer denselben Artikel einmal
     // gescannt und einmal von Hand eingetippt hat, meint dasselbe Produkt.
     const byName = await db
-      .select({ category: productKnowledge.category, name: productKnowledge.name })
+      .select({
+        category: productKnowledge.category,
+        name: productKnowledge.name,
+        placeId: productKnowledge.placeId,
+      })
       .from(productKnowledge)
       .where(
         and(
@@ -254,14 +265,14 @@ export async function lookupKnownProduct(
  * jedem Speichern eines Artikels.
  *
  * Die zuletzt getroffene Entscheidung gewinnt: wer einen Artikel oeffnet und
- * die Kategorie korrigiert, korrigiert damit zugleich die Vorauswahl fuer das
- * naechste Mal. Genau dieser Weg ist der Normalfall -- die Wissensdatenbank
+ * Kategorie oder Ort korrigiert, korrigiert damit zugleich die Vorauswahl
+ * fuer das naechste Mal. Genau dieser Weg ist der Normalfall -- die Wissensdatenbank
  * unter /knowledge ist fuer die Faelle da, in denen der Artikel selbst
  * laengst weg ist.
  */
 export async function rememberProduct(
   listId: number,
-  product: { barcode?: string | null; name: string; category: string },
+  product: { barcode?: string | null; name: string; category: string; placeId?: number | null },
 ) {
   const nameKey = normalizeProductName(product.name);
   if (!nameKey) return;
@@ -286,7 +297,13 @@ export async function rememberProduct(
   if (existing) {
     await db
       .update(productKnowledge)
-      .set({ name: product.name, nameKey, category: product.category, updatedAt: now })
+      .set({
+        name: product.name,
+        nameKey,
+        category: product.category,
+        placeId: product.placeId ?? null,
+        updatedAt: now,
+      })
       .where(eq(productKnowledge.id, existing.id));
     return;
   }
@@ -297,6 +314,7 @@ export async function rememberProduct(
     nameKey,
     name: product.name,
     category: product.category,
+    placeId: product.placeId ?? null,
     createdAt: now,
     updatedAt: now,
   });

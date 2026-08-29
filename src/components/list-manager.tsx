@@ -6,17 +6,7 @@ import { toast } from "sonner";
 import { Archive, ChevronDown, Plus, RotateCcw, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserCombobox } from "@/components/user-combobox";
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { List } from "@/db/schema";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -324,42 +314,23 @@ export function ListManager() {
                           <Archive className="size-4" />
                           Archivieren
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger
-                            render={
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="rounded-xl"
-                                disabled={busy}
-                              />
-                            }
-                          >
-                            <Trash2 className="size-4" />
-                            Löschen
-                          </AlertDialogTrigger>
-                          <AlertDialogPortal>
-                            <AlertDialogBackdrop />
-                            <AlertDialogPopup>
-                              <AlertDialogTitle>Liste endgültig löschen?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                „{list.name}“ wird inklusive aller Artikel, Kategorien, Orte und
-                                Mitgliedschaften unwiderruflich gelöscht.
-                              </AlertDialogDescription>
-                              <AlertDialogActions>
-                                <AlertDialogClose render={<Button variant="outline" />}>
-                                  Abbrechen
-                                </AlertDialogClose>
-                                <AlertDialogClose
-                                  render={<Button variant="destructive" />}
-                                  onClick={() => deleteList(list.id)}
-                                >
-                                  Löschen
-                                </AlertDialogClose>
-                              </AlertDialogActions>
-                            </AlertDialogPopup>
-                          </AlertDialogPortal>
-                        </AlertDialog>
+                        <ConfirmDialog
+                          trigger={
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="rounded-lg"
+                              disabled={busy}
+                            >
+                              <Trash2 className="size-4" />
+                              Löschen
+                            </Button>
+                          }
+                          title="Liste endgültig löschen?"
+                          description={`„${list.name}“ wird inklusive aller Artikel, Kategorien, Orte und Mitgliedschaften unwiderruflich gelöscht.`}
+                          confirmLabel="Löschen"
+                          onConfirm={() => deleteList(list.id)}
+                        />
                       </div>
                     )}
                   </div>

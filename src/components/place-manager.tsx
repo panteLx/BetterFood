@@ -5,16 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Pencil, Plus, Refrigerator, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { Place } from "@/db/schema";
 
 export type PlaceWithCount = Place & { itemCount: number };
@@ -198,31 +189,18 @@ export function PlaceManager({ places }: { places: PlaceWithCount[] }) {
         </button>
       </div>
 
-      <AlertDialog
+      <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
-        <AlertDialogPortal>
-          <AlertDialogBackdrop />
-          <AlertDialogPopup>
-            <AlertDialogTitle>„{pendingDelete?.name}“ entfernen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.itemCount
-                ? `${pendingDelete.itemCount} Artikel liegen laut App hier. Sie bleiben im Vorrat, verlieren aber ihre Ortszuordnung.`
-                : "Der Ort verschwindet aus der Auswahl beim Erfassen."}
-            </AlertDialogDescription>
-            <AlertDialogActions>
-              <AlertDialogClose render={<Button variant="outline" />}>Abbrechen</AlertDialogClose>
-              <AlertDialogClose
-                render={<Button variant="destructive" />}
-                onClick={() => pendingDelete && removePlace(pendingDelete)}
-              >
-                Entfernen
-              </AlertDialogClose>
-            </AlertDialogActions>
-          </AlertDialogPopup>
-        </AlertDialogPortal>
-      </AlertDialog>
+        title={<>„{pendingDelete?.name}“ entfernen?</>}
+        description={
+          pendingDelete?.itemCount
+            ? `${pendingDelete.itemCount} Artikel liegen laut App hier. Sie bleiben im Vorrat, verlieren aber ihre Ortszuordnung.`
+            : "Der Ort verschwindet aus der Auswahl beim Erfassen."
+        }
+        confirmLabel="Entfernen"
+        onConfirm={() => pendingDelete && removePlace(pendingDelete)}
+      />
     </div>
   );
 }

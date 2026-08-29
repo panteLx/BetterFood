@@ -131,7 +131,7 @@ export function AddItemButton({ label }: { label: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-1 flex h-12 items-center rounded-2xl bg-primary px-5.5 text-[15px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="mt-1 flex h-12 items-center rounded-[18px] bg-primary px-5.5 text-[15px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {label}
       </button>

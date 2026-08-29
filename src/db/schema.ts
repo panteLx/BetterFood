@@ -121,6 +121,11 @@ export const productKnowledge = sqliteTable(
     nameKey: text("name_key").notNull(),
     name: text("name").notNull(),
     category: text("category").notNull(),
+    // Wo dieser Haushalt das Produkt zuletzt hingelegt hat. Optional, weil
+    // die Tabelle aelter ist als dieses Wissen -- und weil ein geloeschtes
+    // Fach das Gelernte ueber das Produkt nicht mit sich reissen darf
+    // (onDelete "set null", genau wie bei items.placeId).
+    placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
