@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { pushSubscriptions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
@@ -37,6 +37,35 @@ export async function POST(req: NextRequest) {
       .set({ userId: session.user.id })
       .where(eq(pushSubscriptions.id, existing.id));
   }
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Gegenstück zum Abmelden: ein Gerät, das sich ausloggt, darf ab diesem Moment
+ * keine Benachrichtigungen des Kontos mehr bekommen. Früher blieb die
+ * Subscription in der Datenbank stehen und lieferte weiter -- bis sich
+ * zufällig ein anderes Konto auf demselben Gerät anmeldete und die Zeile per
+ * POST übernahm.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await requireSession();
+
+  const body = (await req.json().catch(() => null)) as { endpoint?: string } | null;
+  const endpoint = body?.endpoint;
+
+  if (!endpoint) {
+    return NextResponse.json({ error: "endpoint fehlt" }, { status: 400 });
+  }
+
+  await db
+    .delete(pushSubscriptions)
+    .where(
+      and(
+        eq(pushSubscriptions.endpoint, endpoint),
+        eq(pushSubscriptions.userId, session.user.id),
+      ),
+    );
 
   return NextResponse.json({ ok: true });
 }

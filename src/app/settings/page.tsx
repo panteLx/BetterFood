@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   subscribeToPush,
+  unsubscribeFromPush,
   getNotificationPermissionState,
+  hasPushSubscription,
 } from "@/lib/push-client";
 import { ListManager } from "@/components/list-manager";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -24,9 +26,19 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permission, setPermission] = useState<string>("default");
+  const [subscribed, setSubscribed] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
+    // Vor dem Abmelden, solange die Session den Löschaufruf noch autorisiert:
+    // sonst blieben die Erinnerungen dieses Kontos auf dem Gerät stehen.
+    setSigningOut(true);
+    const pushRemoved = await unsubscribeFromPush();
+    if (!pushRemoved) {
+      toast.warning("Benachrichtigungen konnten nicht vollständig abgemeldet werden.");
+    }
     await authClient.signOut();
     router.push("/login");
     router.refresh();
@@ -41,13 +53,13 @@ export default function SettingsPage() {
       })
       .finally(() => setLoading(false));
 
-    // Permission can be "granted" from a previous attempt that never
-    // finished storing a subscription (e.g. no service worker was
-    // available at the time) - resync silently so this device isn't
-    // stuck without a way to (re-)trigger subscribeToPush().
-    if (getNotificationPermissionState() === "granted") {
-      subscribeToPush();
-    }
+    // Nicht an der Berechtigung allein festmachen: die bleibt erteilt, auch
+    // wenn dieses Gerät gar keine Subscription (mehr) hat. Sonst bot die
+    // Seite eine Testbenachrichtigung an, die serverseitig ins Leere lief.
+    void hasPushSubscription().then(setSubscribed);
+    // Den stillen Abgleich einer bereits erteilten Berechtigung übernimmt
+    // jetzt <PushSync /> im Root-Layout -- er muss auf jeder Seite laufen,
+    // nicht nur hier, weil das Abmelden die Subscription löscht.
   }, []);
 
   async function handleSaveLeadDays() {
@@ -68,12 +80,18 @@ export default function SettingsPage() {
   }
 
   async function handleEnablePush() {
-    const ok = await subscribeToPush();
-    setPermission(getNotificationPermissionState());
-    if (ok) {
-      toast.success("Benachrichtigungen aktiviert");
-    } else {
-      toast.error("Benachrichtigungen konnten nicht aktiviert werden.");
+    setEnabling(true);
+    try {
+      const ok = await subscribeToPush();
+      setPermission(getNotificationPermissionState());
+      setSubscribed(await hasPushSubscription());
+      if (ok) {
+        toast.success("Benachrichtigungen aktiviert");
+      } else {
+        toast.error("Benachrichtigungen konnten nicht aktiviert werden.");
+      }
+    } finally {
+      setEnabling(false);
     }
   }
 
@@ -81,9 +99,19 @@ export default function SettingsPage() {
     setTesting(true);
     try {
       const res = await fetch("/api/push/test", { method: "POST" });
-      if (!res.ok) throw new Error();
-      const { sent } = (await res.json()) as { sent: number };
-      if (sent === 0) throw new Error();
+      const data = (await res.json().catch(() => null)) as
+        | { sent?: number; error?: string }
+        | null;
+
+      // Den Grund vom Server durchreichen: "konnte nicht gesendet werden" war
+      // die einzige Rückmeldung, egal ob die Subscription fehlte, die
+      // VAPID-Schlüssel oder der Push-Dienst.
+      if (!res.ok || !data?.sent) {
+        toast.error(data?.error ?? "Testbenachrichtigung konnte nicht gesendet werden.");
+        setSubscribed(await hasPushSubscription());
+        return;
+      }
+
       toast.success("Testbenachrichtigung gesendet");
     } catch {
       toast.error("Testbenachrichtigung konnte nicht gesendet werden.");
@@ -106,7 +134,12 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground">
             Angemeldet als {session.user.email}
           </p>
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
             Abmelden
           </Button>
         </div>
@@ -138,7 +171,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-2">
         <Label>Push-Benachrichtigungen</Label>
         <InstallHintSettings />
-        {permission === "granted" ? (
+        {subscribed ? (
           <div className="flex items-center gap-2">
             <p className="text-sm text-muted-foreground">Aktiviert.</p>
             <Button
@@ -151,8 +184,10 @@ export default function SettingsPage() {
             </Button>
           </div>
         ) : (
-          <Button variant="outline" onClick={handleEnablePush}>
-            Benachrichtigungen aktivieren
+          <Button variant="outline" onClick={handleEnablePush} disabled={enabling}>
+            {permission === "granted"
+              ? "Benachrichtigungen erneut einrichten"
+              : "Benachrichtigungen aktivieren"}
           </Button>
         )}
         {permission === "denied" && (

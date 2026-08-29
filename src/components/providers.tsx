@@ -3,11 +3,13 @@
 import { ThemeProvider } from "next-themes";
 import { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { PushSync } from "@/components/push-sync";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       {children}
+      <PushSync />
       {/* Ohne Offset legte sich der Toast ueber die Navigationsleiste und
           den zentralen Hinzufuegen-Button -- die Hauptaktion der App war
           waehrend jeder Rueckmeldung nicht erreichbar. Der Wert deckt
