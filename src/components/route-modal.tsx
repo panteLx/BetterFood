@@ -21,8 +21,18 @@ export function RouteModal({ children }: { children: React.ReactNode }) {
       }}
     >
       <DialogPortal>
-        <DialogBackdrop />
-        <DialogPopup className="top-auto bottom-0 left-1/2 max-h-[90dvh] w-full max-w-md translate-y-0 flex-col overflow-y-auto rounded-b-none">
+        <DialogBackdrop className="bg-(--scrim)" />
+        <DialogPopup
+          showClose={false}
+          className="top-auto bottom-0 left-1/2 max-h-[92dvh] w-full max-w-md translate-y-0 flex-col gap-0 overflow-y-auto rounded-3xl rounded-b-none border-x-0 border-b-0 bg-background p-0 pt-3"
+        >
+          {/* Griffleiste statt Schliessen-Kreuz: das Formular darunter bringt
+              seinen eigenen Zurueck-Pfeil mit, und zwei Schliesswege
+              nebeneinander sind einer zu viel. */}
+          <span
+            aria-hidden="true"
+            className="mx-auto mb-1 h-1 w-9.5 shrink-0 rounded-full bg-border"
+          />
           {children}
         </DialogPopup>
       </DialogPortal>

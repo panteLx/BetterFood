@@ -37,23 +37,32 @@ function useNeedsInstall() {
   return useSyncExternalStore(noopSubscribe, readNeedsInstall, () => false);
 }
 
-/** Ausführliche Variante für die Einstellungsseite. */
+/**
+ * Ausführliche Variante für die Einstellungsseite -- inklusive Abschnitts-
+ * ueberschrift, damit auf einem Geraet ohne diesen Fall keine leere
+ * Ueberschrift ohne Inhalt stehen bleibt.
+ */
 export function InstallHintSettings() {
   const needsInstall = useNeedsInstall();
   if (!needsInstall) return null;
 
   return (
-    <div className="flex items-start gap-3 rounded-3xl border border-border bg-card px-4 py-3.5">
-      <Upload className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.8} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-semibold">Zum Home-Bildschirm</p>
-        <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
-          BetterFood läuft im Browser. Einmal über <span className="font-semibold">Teilen › Zum
-          Home-Bildschirm</span> installiert, startet es wie eine App – und darf Erinnerungen
-          schicken.
-        </p>
+    <section className="flex flex-col gap-2">
+      <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        Auf dem Gerät
+      </h2>
+      <div className="flex items-start gap-3 rounded-3xl border border-border bg-card px-4 py-3.5">
+        <Upload className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.8} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold">Zum Home-Bildschirm</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
+            BetterFood läuft im Browser. Einmal über{" "}
+            <span className="font-semibold">Teilen › Zum Home-Bildschirm</span> installiert,
+            startet es wie eine App – und darf Erinnerungen schicken.
+          </p>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 

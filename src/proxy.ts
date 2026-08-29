@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { WELCOME_COOKIE } from "@/lib/welcome";
 
-const PUBLIC_PREFIXES = ["/login", "/register", "/scan", "/confirm", "/api/auth", "/api/lookup"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/welcome",
+  "/scan",
+  "/confirm",
+  "/api/auth",
+  "/api/lookup",
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,10 +32,16 @@ export function proxy(request: NextRequest) {
     // Ziel merken, statt jeden Deep-Link (Push-Benachrichtigung, Lesezeichen,
     // Home-Bildschirm-Shortcut) nach dem Login auf der Startseite enden zu
     // lassen. /login und /register reichen den Parameter weiter durch.
-    const login = new URL("/login", request.url);
+    //
+    // Wer die App zum ersten Mal oeffnet, bekommt die Einfuehrung statt eines
+    // Anmeldeformulars: ein Passwortfeld beantwortet nicht, wofuer man hier
+    // ein Konto anlegen sollte. Danach setzt /welcome das Cookie und dieser
+    // Zweig faellt fuer immer auf /login zurueck.
+    const seenWelcome = request.cookies.has(WELCOME_COOKIE);
+    const destination = new URL(seenWelcome ? "/login" : "/welcome", request.url);
     const target = pathname + request.nextUrl.search;
-    if (target !== "/") login.searchParams.set("redirect", target);
-    return NextResponse.redirect(login);
+    if (target !== "/") destination.searchParams.set("redirect", target);
+    return NextResponse.redirect(destination);
   }
 
   return NextResponse.next();

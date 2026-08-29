@@ -2,60 +2,49 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Barcode, Check, Pencil, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
+import { Tab, TabBar } from "@/components/ui/chip";
+import { Sheet } from "@/components/ui/sheet";
 import { CategoryManager } from "@/components/category-manager";
-import { cn, normalizeProductName } from "@/lib/utils";
+import { PlaceManager, type PlaceWithCount } from "@/components/place-manager";
+import { normalizeProductName } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { Category, ProductKnowledge } from "@/db/schema";
 
-type Tab = "produkte" | "kategorien";
+type Tabs = "produkte" | "kategorien" | "orte";
 
-const TABS: { value: Tab; label: string }[] = [
+const TABS: { value: Tabs; label: string }[] = [
   { value: "produkte", label: "Produkte" },
   { value: "kategorien", label: "Kategorien" },
+  { value: "orte", label: "Orte" },
 ];
 
 /**
- * Die Wissensdatenbank einer Liste: welche Produkte kennt sie, und in welche
- * Kategorie gehoert jedes davon.
+ * Die Wissensdatenbank einer Liste: welche Produkte kennt sie, in welche
+ * Kategorie gehoert jedes davon, und in welchen Faechern liegt der Vorrat.
  *
- * Beide Haelften stehen hier zusammen, weil sie dieselbe Frage beantworten --
+ * Alle drei stehen hier zusammen, weil sie dieselbe Frage beantworten --
  * getrennt waeren Kategorien in den Einstellungen und Produkte hier, obwohl
  * ein Produkt ohne seine Kategorie gar nichts aussagt.
  */
 export function KnowledgeManager({
   initialEntries,
   initialCategories,
+  places,
 }: {
   initialEntries: ProductKnowledge[];
   initialCategories: Category[];
+  places: PlaceWithCount[];
 }) {
-  const [tab, setTab] = useState<Tab>("produkte");
+  const [tab, setTab] = useState<Tabs>("produkte");
   const [entries, setEntries] = useState(initialEntries);
   const [categories, setCategories] = useState(initialCategories);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [categoryPickerFor, setCategoryPickerFor] = useState<ProductKnowledge | null>(null);
 
   // Beim Zurueckkehren auf die Seite liefert der Server frische Daten, der
   // State der versteckten Route ueberlebt aber (<Activity>) -- ohne diesen
@@ -101,22 +90,23 @@ export function KnowledgeManager({
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const payload = await res.json().catch(() => null);
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Konnte Eintrag nicht speichern.");
       }
       const updated = (await res.json()) as ProductKnowledge;
       setEntries((prev) => prev.map((entry) => (entry.id === id ? updated : entry)));
       return true;
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Konnte Eintrag nicht speichern.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Konnte Eintrag nicht speichern.");
       return false;
     } finally {
       setBusyId(null);
     }
   }
 
-  async function changeCategory(entry: ProductKnowledge, category: string | null) {
-    if (!category || category === entry.category) return;
+  async function changeCategory(entry: ProductKnowledge, category: string) {
+    setCategoryPickerFor(null);
+    if (category === entry.category) return;
     if (await patchEntry(entry.id, { category })) {
       toast.success(`${entry.name} → ${labelByKey.get(category) ?? category}`);
     }
@@ -148,179 +138,172 @@ export function KnowledgeManager({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pb-4">
-      <div className="flex rounded-lg bg-muted p-1" role="tablist">
+    <div className="flex flex-1 flex-col gap-4">
+      <TabBar>
         {TABS.map((entry) => (
-          <button
+          <Tab
             key={entry.value}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.value}
+            active={tab === entry.value}
             onClick={() => setTab(entry.value)}
-            className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              tab === entry.value
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground",
-            )}
           >
             {entry.label}
-          </button>
+          </Tab>
         ))}
-      </div>
+      </TabBar>
 
-      {tab === "kategorien" ? (
+      {tab === "kategorien" && (
         <CategoryManager categories={categories} onCategoriesChange={handleCategoriesChange} />
-      ) : (
+      )}
+
+      {tab === "orte" && <PlaceManager places={places} />}
+
+      {tab === "produkte" && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="px-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
             Jedes erfasste Produkt landet hier. Beim nächsten Scan wird die Kategorie von hier
             übernommen – stimmt sie nicht, ändere sie einfach.
           </p>
 
           {entries.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground">
+            <p className="rounded-[18px] border border-dashed border-border p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
               Noch nichts gelernt. Sobald du den ersten Artikel einer Kategorie zuordnest, merkt
               sich die App das hier.
             </p>
           ) : (
             <>
-              <div className="relative">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
+              <label className="flex h-11.5 items-center gap-2.5 rounded-[15px] border border-border bg-card px-3.5">
+                <Search className="size-4 shrink-0 text-faint" />
+                <input
+                  type="search"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(event) => setQuery(event.target.value)}
                   placeholder="Produkt suchen"
-                  className="pl-9"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-faint"
                 />
-              </div>
+              </label>
 
               {visible.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Kein Treffer für „{query}“.</p>
+                <p className="rounded-[18px] border border-dashed border-border p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
+                  Kein Treffer für „{query.trim()}“.
+                </p>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {visible.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex flex-col gap-2 rounded-lg border border-input p-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        {editingId === entry.id ? (
-                          <>
-                            <Input
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              className="flex-1"
-                              autoFocus
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              disabled={busyId === entry.id}
-                              onClick={() => saveName(entry)}
-                              aria-label="Speichern"
-                            >
-                              <Check className="size-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setEditingId(null)}
-                              aria-label="Abbrechen"
-                            >
-                              <X className="size-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{entry.name}</p>
-                              {entry.barcode && (
-                                <p className="flex items-center gap-1 font-mono text-xs text-muted-foreground">
-                                  <Barcode className="size-3" />
-                                  {entry.barcode}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingId(entry.id);
-                                setEditName(entry.name);
-                              }}
-                              aria-label={`${entry.name} umbenennen`}
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger
-                                render={
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    disabled={busyId === entry.id}
-                                    aria-label={`${entry.name} vergessen`}
-                                  />
-                                }
-                              >
-                                <Trash2 className="size-4" />
-                              </AlertDialogTrigger>
-                              <AlertDialogPortal>
-                                <AlertDialogBackdrop />
-                                <AlertDialogPopup>
-                                  <AlertDialogTitle>Produkt vergessen?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Beim nächsten Erfassen von &quot;{entry.name}&quot; wird keine
-                                    Kategorie mehr vorgeschlagen. Artikel im Vorrat und im Archiv
-                                    bleiben unberührt.
-                                  </AlertDialogDescription>
-                                  <AlertDialogActions>
-                                    <AlertDialogClose render={<Button variant="outline" />}>
-                                      Abbrechen
-                                    </AlertDialogClose>
-                                    <AlertDialogClose
-                                      render={<Button variant="destructive" />}
-                                      onClick={() => forget(entry)}
-                                    >
-                                      Vergessen
-                                    </AlertDialogClose>
-                                  </AlertDialogActions>
-                                </AlertDialogPopup>
-                              </AlertDialogPortal>
-                            </AlertDialog>
-                          </>
-                        )}
-                      </div>
-
-                      <Select
-                        value={entry.category}
-                        onValueChange={(value) => changeCategory(entry, value)}
-                        disabled={busyId === entry.id}
-                        items={categories.map((c) => ({ value: c.key, label: c.label }))}
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          aria-label={`Kategorie von ${entry.name}`}
-                        >
-                          <SelectValue placeholder="Kategorie wählen" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((c) => (
-                            <SelectItem key={c.key} value={c.key}>
-                              {c.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                visible.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-card p-3.5"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {editingId === entry.id ? (
+                        <>
+                          <input
+                            value={editName}
+                            onChange={(event) => setEditName(event.target.value)}
+                            autoFocus
+                            aria-label="Name des Produkts"
+                            className="h-10.5 min-w-0 flex-1 rounded-[13px] border border-primary bg-surface-2 px-3 text-[14.5px] font-bold outline-none"
+                          />
+                          <Button
+                            size="icon"
+                            className="size-10 shrink-0 rounded-[13px]"
+                            disabled={busyId === entry.id}
+                            onClick={() => saveName(entry)}
+                            aria-label="Speichern"
+                          >
+                            <Check className="size-4.5" strokeWidth={2.4} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="size-10 shrink-0 rounded-[13px]"
+                            onClick={() => setEditingId(null)}
+                            aria-label="Abbrechen"
+                          >
+                            <X className="size-4" strokeWidth={2.3} />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14.5px] leading-tight font-bold">
+                              {entry.name}
+                            </p>
+                            <p className="mt-1.5 font-mono text-[11.5px] leading-none text-faint">
+                              {entry.barcode ?? "ohne Barcode"}
+                            </p>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="size-10 shrink-0 rounded-[13px]"
+                            onClick={() => {
+                              setEditingId(entry.id);
+                              setEditName(entry.name);
+                            }}
+                            aria-label={`${entry.name} umbenennen`}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="size-10 shrink-0 rounded-[13px] text-danger"
+                            disabled={busyId === entry.id}
+                            onClick={() => forget(entry)}
+                            aria-label={`${entry.name} vergessen`}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
+
+                    <button
+                      type="button"
+                      disabled={busyId === entry.id}
+                      onClick={() => setCategoryPickerFor(entry)}
+                      className="flex h-11 items-center gap-2.5 rounded-[14px] border border-border bg-surface-2 px-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+                    >
+                      <span className="flex-1 truncate text-sm font-semibold">
+                        {labelByKey.get(entry.category) ?? entry.category}
+                      </span>
+                      <ChevronDown className="size-4 shrink-0 text-faint" strokeWidth={2.2} />
+                    </button>
+                  </div>
+                ))
               )}
             </>
           )}
         </div>
       )}
+
+      {/* Ein Blatt statt eines Dropdowns pro Zeile: bei zehn Kategorien und
+          fuenfzig gelernten Produkten waeren das fuenfzig Popups im Baum. */}
+      <Sheet
+        open={categoryPickerFor !== null}
+        onOpenChange={(open) => !open && setCategoryPickerFor(null)}
+        title={categoryPickerFor ? `„${categoryPickerFor.name}“ gehört zu` : "Kategorie wählen"}
+      >
+        <div className="flex flex-col gap-1.5">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => categoryPickerFor && changeCategory(categoryPickerFor, category.key)}
+              className={cn(
+                "flex h-13 items-center gap-3 rounded-[18px] border px-3.5 text-left text-[15px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                categoryPickerFor?.category === category.key
+                  ? "border-primary bg-primary-tint text-primary"
+                  : "border-border bg-surface-2",
+              )}
+            >
+              <span className="flex-1 truncate">{category.label}</span>
+              {categoryPickerFor?.category === category.key && (
+                <Check className="size-5 shrink-0" strokeWidth={2.4} />
+              )}
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </div>
   );
 }

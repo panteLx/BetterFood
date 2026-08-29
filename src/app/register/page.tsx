@@ -4,11 +4,12 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { BrandMark } from "@/components/brand-mark";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirect, withRedirect } from "@/lib/utils";
+
+const fieldClass =
+  "h-14 w-full rounded-[18px] border border-border bg-card px-4 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 
 function RegisterForm() {
   const router = useRouter();
@@ -19,8 +20,8 @@ function RegisterForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setLoading(true);
     try {
       const { error } = await authClient.signUp.email({ name, email, password });
@@ -38,64 +39,78 @@ function RegisterForm() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Name</Label>
-          <Input
-            id="name"
-            name="name"
-            autoComplete="name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">E-Mail</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            autoCapitalize="none"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Passwort</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <Button type="submit" disabled={loading}>
+    <div className="flex flex-1 flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        <input
+          name="name"
+          autoComplete="name"
+          required
+          placeholder="Dein Name"
+          aria-label="Name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={fieldClass}
+        />
+        <input
+          name="email"
+          type="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          required
+          placeholder="E-Mail"
+          aria-label="E-Mail"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className={fieldClass}
+        />
+        <input
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          placeholder="Passwort (mind. 8 Zeichen)"
+          aria-label="Passwort"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className={fieldClass}
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-1.5 h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+        >
           Konto erstellen
-        </Button>
+        </button>
       </form>
-      <p className="text-sm text-muted-foreground">
-        Bereits ein Konto?{" "}
-        <Link href={withRedirect("/login", redirect)} className="underline">
-          Anmelden
+
+      <div className="flex-1" />
+
+      <div className="flex justify-center">
+        <Link
+          href={withRedirect("/login", redirect)}
+          className="p-2 text-sm font-bold text-primary"
+        >
+          Ich habe schon ein Konto
         </Link>
-      </p>
+      </div>
     </div>
   );
 }
 
 export default function RegisterPage() {
   return (
-    <div className="flex flex-1 flex-col justify-center gap-6 p-4">
-      <h1 className="text-lg font-semibold">Registrieren</h1>
-      <Suspense fallback={<div className="h-52" />}>
+    <div className="flex flex-1 flex-col gap-6.5 px-6.5 pt-14 pb-8">
+      <div className="flex flex-col gap-3.5">
+        <BrandMark />
+        <div>
+          <h1 className="text-[26px] leading-snug">Konto erstellen</h1>
+          <p className="mt-1.5 text-sm leading-relaxed font-medium text-balance text-muted-foreground">
+            Ein Konto genügt für den ganzen Haushalt – Listen lassen sich später teilen.
+          </p>
+        </div>
+      </div>
+      <Suspense fallback={<div className="flex-1" />}>
         <RegisterForm />
       </Suspense>
     </div>

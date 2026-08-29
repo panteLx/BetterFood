@@ -4,13 +4,14 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { BrandMark } from "@/components/brand-mark";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirect, withRedirect } from "@/lib/utils";
 
 const oidcDisplayName = process.env.NEXT_PUBLIC_OIDC_DISPLAY_NAME;
+
+const fieldClass =
+  "h-14 w-full rounded-[18px] border border-border bg-card px-4 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 
 function LoginForm() {
   const router = useRouter();
@@ -21,8 +22,8 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setLoading(true);
     try {
       const { error } = await authClient.signIn.email({ email, password });
@@ -40,89 +41,102 @@ function LoginForm() {
   async function handleSso() {
     setSsoLoading(true);
     try {
-      await authClient.signIn.social({
-        provider: "oidc",
-        callbackURL: safeRedirect(redirect),
-      });
+      await authClient.signIn.social({ provider: "oidc", callbackURL: safeRedirect(redirect) });
     } finally {
       setSsoLoading(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">E-Mail</Label>
-          {/* name + autoComplete: ohne beides bietet iOS weder das Ausfuellen
-              aus dem Schluesselbund noch das Speichern eines Passworts an. */}
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            autoCapitalize="none"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Passwort</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <Button type="submit" disabled={loading}>
+    <div className="flex flex-1 flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        {/* name + autoComplete: ohne beides bietet iOS weder das Ausfuellen
+            aus dem Schluesselbund noch das Speichern eines Passworts an. */}
+        <input
+          name="email"
+          type="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          required
+          placeholder="E-Mail"
+          aria-label="E-Mail"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className={fieldClass}
+        />
+        <input
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          placeholder="Passwort"
+          aria-label="Passwort"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className={fieldClass}
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-1.5 h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+        >
           Anmelden
-        </Button>
+        </button>
       </form>
 
       {oidcDisplayName && (
         <>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            oder
-            <div className="h-px flex-1 bg-border" />
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold text-faint">oder</span>
+            <span className="h-px flex-1 bg-border" />
           </div>
-          <Button type="button" variant="outline" disabled={ssoLoading} onClick={handleSso}>
+          <button
+            type="button"
+            disabled={ssoLoading}
+            onClick={handleSso}
+            className="h-13.5 rounded-[18px] border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
+          >
             Mit {oidcDisplayName} anmelden
-          </Button>
+          </button>
         </>
       )}
+
+      <div className="flex-1" />
 
       {/* Der Redirect muss mit auf /register: wer erst scannt und dann ein
           Konto anlegt, verliert sonst genau das Produkt, das ihn hergefuehrt
           hat, und landet auf einer leeren Startseite. */}
-      <p className="text-sm text-muted-foreground">
-        Noch kein Konto?{" "}
-        <Link href={withRedirect("/register", redirect)} className="underline">
-          Registrieren
+      <div className="flex flex-col items-center gap-1">
+        <Link
+          href={withRedirect("/register", redirect)}
+          className="p-2 text-sm font-bold text-primary"
+        >
+          Noch kein Konto? Registrieren
         </Link>
-      </p>
+        <Link href="/scan" className="p-2 text-sm font-semibold text-muted-foreground">
+          Nur nachschlagen – ohne Anmeldung scannen
+        </Link>
+      </div>
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="flex flex-1 flex-col justify-center gap-6 p-4">
-      <h1 className="text-lg font-semibold">Anmelden</h1>
-      <Suspense fallback={<div className="h-40" />}>
+    <div className="flex flex-1 flex-col gap-6.5 px-6.5 pt-14 pb-8">
+      <div className="flex flex-col gap-3.5">
+        <BrandMark />
+        <div>
+          <h1 className="text-[26px] leading-snug">Willkommen zurück</h1>
+          <p className="mt-1.5 text-sm leading-relaxed font-medium text-balance text-muted-foreground">
+            Melde dich an, um deinen Vorrat auf allen Geräten zu sehen.
+          </p>
+        </div>
+      </div>
+      <Suspense fallback={<div className="flex-1" />}>
         <LoginForm />
       </Suspense>
-      <p className="text-sm text-muted-foreground">
-        Nur ein Produkt nachschlagen?{" "}
-        <Link href="/scan" className="underline">
-          Ohne Anmeldung scannen
-        </Link>
-      </p>
     </div>
   );
 }
