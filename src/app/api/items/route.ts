@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
+
+// "Milch", "milch " und "Milch  " sind derselbe Artikel.
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -63,32 +68,39 @@ export async function POST(req: NextRequest) {
 
   // Drei gleiche Joghurts aus einem Einkauf wurden bisher zu drei identischen
   // Zeilen, obwohl quantity genau dafuer existiert. Zusammengefasst wird nur
-  // bei gleichem Barcode UND gleichem MHD-Tag: eine frische Milch darf nicht
-  // stillschweigend mit einer aelteren verschmelzen.
-  if (barcode) {
-    const sameDay = await db
-      .select()
-      .from(items)
-      .where(
-        and(
-          eq(items.listId, listId),
-          eq(items.status, "active"),
-          eq(items.barcode, barcode),
-          eq(items.category, category),
-        ),
-      );
+  // bei gleichem MHD-Tag: eine frische Milch darf nicht stillschweigend mit
+  // einer aelteren verschmelzen.
+  //
+  // Ohne Barcode entscheidet der Name -- wer denselben Artikel zweimal von
+  // Hand eintraegt, meint dasselbe Produkt. Verglichen wird normalisiert
+  // (Gross-/Kleinschreibung, doppelte Leerzeichen), sonst trennt schon
+  // "Milch " von "Milch".
+  const sameProduct = await db
+    .select()
+    .from(items)
+    .where(
+      and(
+        eq(items.listId, listId),
+        eq(items.status, "active"),
+        eq(items.category, category),
+        barcode ? eq(items.barcode, barcode) : isNull(items.barcode),
+      ),
+    );
 
-    const existing = sameDay.find((item) => isSameDay(item.expiryDate, expiry));
+  const existing = sameProduct.find(
+    (item) =>
+      isSameDay(item.expiryDate, expiry) &&
+      (barcode ? true : normalizeName(item.name) === normalizeName(name)),
+  );
 
-    if (existing) {
-      const [merged] = await db
-        .update(items)
-        .set({ quantity: existing.quantity + qty })
-        .where(eq(items.id, existing.id))
-        .returning();
+  if (existing) {
+    const [merged] = await db
+      .update(items)
+      .set({ quantity: existing.quantity + qty })
+      .where(eq(items.id, existing.id))
+      .returning();
 
-      return NextResponse.json({ ...merged, merged: true }, { status: 200 });
-    }
+    return NextResponse.json({ ...merged, merged: true }, { status: 200 });
   }
 
   const [created] = await db

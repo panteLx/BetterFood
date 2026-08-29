@@ -32,7 +32,7 @@ export default async function ConfirmPage({
   }
 
   if (!session) {
-    const guessedKey = guessCategoryFromOffTags(offTags, [...DEFAULT_CATEGORIES]);
+    const guessedKey = guessCategoryFromOffTags(offTags, [...DEFAULT_CATEGORIES], initialName);
     const category = DEFAULT_CATEGORIES.find((c) => c.key === guessedKey);
     const redirect = `/confirm?barcode=${barcode ?? ""}`;
 
@@ -81,7 +81,9 @@ export default async function ConfirmPage({
   const listId = await requireActiveList(session.user.id);
   const allCategories = await getCategoriesForList(listId);
 
-  const initialCategory = guessCategoryFromOffTags(offTags, allCategories);
+  // Der Produktname ist der Rueckfall, wenn OFF gar keine Kategorien fuehrt --
+  // das ist bei deutschen Frischeprodukten eher die Regel als die Ausnahme.
+  const initialCategory = guessCategoryFromOffTags(offTags, allCategories, initialName);
 
   return (
     <div className="flex flex-1 flex-col">

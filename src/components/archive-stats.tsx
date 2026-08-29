@@ -57,10 +57,26 @@ function computeStats(items: Item[], now: Date): Stats {
     wastedWeeks.add(startOfWeek(item.resolvedAt).getTime());
   }
 
+  // Gezaehlt wird nur, was der Nutzer auch belegen kann: ohne einen einzigen
+  // abgehakten Artikel gab es keine Woche ohne Verschwendung, sondern gar
+  // keine Nutzung -- "52 Wochen ohne Verschwendung" auf einem leeren Archiv
+  // war schlicht falsch.
+  let firstActivity: number | null = null;
+  for (const item of items) {
+    if (!item.resolvedAt) continue;
+    const week = startOfWeek(item.resolvedAt).getTime();
+    if (firstActivity === null || week < firstActivity) firstActivity = week;
+  }
+
   let wasteFreeWeeks = 0;
   let cursor = startOfWeek(now).getTime();
   // Deckel bei einem Jahr: alles darueber sagt dem Nutzer nichts Neues mehr.
-  while (wasteFreeWeeks < 52 && !wastedWeeks.has(cursor)) {
+  while (
+    firstActivity !== null &&
+    cursor >= firstActivity &&
+    wasteFreeWeeks < 52 &&
+    !wastedWeeks.has(cursor)
+  ) {
     wasteFreeWeeks += 1;
     cursor -= WEEK_MS;
   }

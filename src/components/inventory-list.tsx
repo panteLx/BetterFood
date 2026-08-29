@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Check, ClipboardList, Search, Trash2 } from "lucide-react";
+import { Camera, Check, ClipboardList, Hash, Plus, Search, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/db/schema";
 
@@ -87,6 +87,57 @@ export function InventoryList({
         if (!res.ok) throw new Error();
       }
       toast.success("Wieder hergestellt");
+      router.refresh();
+    } catch {
+      toast.error("Rückgängig machen hat nicht geklappt.");
+      router.refresh();
+    }
+  }
+
+  /**
+   * Nachgekauft: bisher musste dafuer der komplette Erfassungsweg noch einmal
+   * durchlaufen werden (scannen oder tippen), obwohl der Artikel schon in der
+   * Liste steht und quantity genau dafuer da ist.
+   */
+  async function addOne(item: Item) {
+    const previousItems = items;
+    const next = item.quantity + 1;
+
+    setPendingId(item.id);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, quantity: next } : i)));
+
+    try {
+      const res = await fetch(`/api/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: next }),
+      });
+      if (!res.ok) throw new Error();
+
+      toast.success(`${item.name} – jetzt ${next}× im Vorrat`, {
+        action: {
+          label: "Rückgängig",
+          onClick: () => undoAddOne(item.id, item.quantity, previousItems),
+        },
+      });
+      router.refresh();
+    } catch {
+      toast.error("Konnte nicht aktualisiert werden.");
+      setItems(previousItems);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function undoAddOne(itemId: number, quantity: number, previousItems: Item[]) {
+    setItems(previousItems);
+    try {
+      const res = await fetch(`/api/items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity }),
+      });
+      if (!res.ok) throw new Error();
       router.refresh();
     } catch {
       toast.error("Rückgängig machen hat nicht geklappt.");
@@ -193,6 +244,14 @@ export function InventoryList({
               Barcode scannen
             </Button>
           </Link>
+          {/* Dritter Weg wie im Hinzufuegen-Sheet: eine unlesbare oder
+              fehlende Kamera darf hier nicht in eine Sackgasse fuehren. */}
+          <Link href="/scan-ean" className="w-full">
+            <Button size="lg" variant="outline" className="w-full">
+              <Hash className="size-4" />
+              EAN eingeben
+            </Button>
+          </Link>
           <Link href="/add" className="w-full">
             <Button size="lg" variant="outline" className="w-full">
               <ClipboardList className="size-4" />
@@ -271,7 +330,16 @@ export function InventoryList({
                     )}
                   </div>
                 </Link>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 gap-1.5">
+                  <Button
+                    size="icon-touch"
+                    variant="outline"
+                    disabled={pendingId === item.id}
+                    onClick={() => addOne(item)}
+                    aria-label={`Eine weitere Einheit ${item.name} hinzufügen`}
+                  >
+                    <Plus className="size-5" />
+                  </Button>
                   <Button
                     size="icon-touch"
                     variant="outline"

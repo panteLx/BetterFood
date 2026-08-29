@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
-import { BottomNav, BottomNavFallback } from "@/components/bottom-nav";
+import { BottomNavGate } from "@/components/bottom-nav-gate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -52,8 +52,8 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
         <Providers>
           <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
             {children}
-            <Suspense fallback={<BottomNavFallback />}>
-              <BottomNav />
+            <Suspense fallback={null}>
+              <BottomNavGate />
             </Suspense>
           </div>
           {modal}

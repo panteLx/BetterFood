@@ -66,27 +66,8 @@ function CenterAction() {
 // usePathname() liest die aktuelle URL und blockiert damit bei
 // cacheComponents:true das statische Prerendering des Layouts (siehe
 // node_modules/next/dist/docs Fehlermeldung "blocking-prerender-client-hook").
-// Deshalb steckt BottomNav selbst hinter einem <Suspense> im Layout, und
-// BottomNavFallback (ohne usePathname) liefert dafuer die statische Huelle,
-// die sofort mitgeliefert werden kann.
-export function BottomNavFallback() {
-  return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background pb-[env(safe-area-inset-bottom)]">
-      <div className="flex flex-1 justify-evenly">
-        {LEFT_ITEMS.map((item) => (
-          <NavLink key={item.href} {...item} active={false} />
-        ))}
-      </div>
-      <div className="flex flex-1 justify-evenly">
-        {RIGHT_ITEMS.map((item) => (
-          <NavLink key={item.href} {...item} active={false} />
-        ))}
-      </div>
-      <CenterAction />
-    </nav>
-  );
-}
-
+// Deshalb steckt BottomNav im Layout hinter einem <Suspense> -- gerendert wird
+// sie ohnehin nur fuer angemeldete Nutzer (siehe BottomNavGate).
 export function BottomNav() {
   const pathname = usePathname();
 
