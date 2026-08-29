@@ -15,7 +15,11 @@ export default async function KnowledgePage() {
   const [entries, allCategories, list] = await Promise.all([
     getKnowledgeForList(listId),
     getCategoriesForList(listId),
-    db.select({ name: lists.name }).from(lists).where(eq(lists.id, listId)).get(),
+    db
+      .select({ name: lists.name })
+      .from(lists)
+      .where(eq(lists.id, listId))
+      .get(),
   ]);
 
   return (
@@ -27,8 +31,8 @@ export default async function KnowledgePage() {
             Zurück
           </Button>
         </Link>
-        <h1 className="text-lg font-semibold">Wissen</h1>
-        {/* Wissen gehoert der Liste, nicht dem Nutzer -- in einer anderen
+        <h1 className="text-lg font-semibold">Datenbank</h1>
+        {/* Dankenbank gehoert der Liste, nicht dem Nutzer -- in einer anderen
             Liste kann dasselbe Produkt anders einsortiert sein. */}
         {list && (
           <span className="ml-auto truncate rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
@@ -36,7 +40,10 @@ export default async function KnowledgePage() {
           </span>
         )}
       </div>
-      <KnowledgeManager initialEntries={entries} initialCategories={allCategories} />
+      <KnowledgeManager
+        initialEntries={entries}
+        initialCategories={allCategories}
+      />
     </div>
   );
 }

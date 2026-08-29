@@ -8,7 +8,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { subscribeToPush, getNotificationPermissionState } from "@/lib/push-client";
+import {
+  subscribeToPush,
+  getNotificationPermissionState,
+} from "@/lib/push-client";
 import { ListManager } from "@/components/list-manager";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallHintSettings } from "@/components/install-hint";
@@ -100,7 +103,9 @@ export default function SettingsPage() {
 
       {session && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Angemeldet als {session.user.email}</p>
+          <p className="text-sm text-muted-foreground">
+            Angemeldet als {session.user.email}
+          </p>
           <Button variant="outline" size="sm" onClick={handleSignOut}>
             Abmelden
           </Button>
@@ -152,7 +157,8 @@ export default function SettingsPage() {
         )}
         {permission === "denied" && (
           <p className="text-sm text-destructive">
-            Berechtigung wurde verweigert – bitte in den Browser-/System-Einstellungen erlauben.
+            Berechtigung wurde verweigert – bitte in den
+            Browser-/System-Einstellungen erlauben.
           </p>
         )}
       </div>
@@ -167,7 +173,7 @@ export default function SettingsPage() {
       >
         <BookOpen className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Wissen</p>
+          <p className="text-sm font-medium">Datenbank</p>
           <p className="text-xs text-muted-foreground">
             Kategorien und gelernte Produktzuordnungen bearbeiten
           </p>
