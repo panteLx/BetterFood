@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ClipboardList, Hash, Plus } from "lucide-react";
-import { Dialog, DialogPortal, DialogBackdrop, DialogPopup, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Zentrale "Hinzufuegen"-Aktion in der Bottom-Nav: Scannen, EAN-Eingabe und
 // komplett manuelle Eingabe sind kein eigenstaendiges Nav-Ziel (Destination),
@@ -13,8 +19,8 @@ import { Dialog, DialogPortal, DialogBackdrop, DialogPopup, DialogTitle } from "
 // ein zentraler Button dieses kurze Auswahl-Sheet statt direkt zu navigieren.
 const OPTIONS = [
   { href: "/scan", label: "Barcode scannen", icon: Camera },
-  { href: "/scan-ean", label: "EAN manuell eingeben", icon: Hash },
-  { href: "/add", label: "Komplett manuell eingeben", icon: ClipboardList },
+  { href: "/scan-ean", label: "EAN eingeben", icon: Hash },
+  { href: "/add", label: "Artikeldetails eingeben", icon: ClipboardList },
 ] as const;
 
 export function AddActionSheet() {

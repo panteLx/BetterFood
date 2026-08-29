@@ -162,7 +162,11 @@ export default function ScanPage() {
         </Button>
       </div>
 
-      <div className="relative mx-4 flex-1 overflow-hidden rounded-xl bg-black">
+      {/* mb-10: der FAB der Bottom-Nav ragt ueber die Leiste hinaus und laege
+          sonst auf dem Kamerabild. Die Alternativen (EAN- bzw. rein manuelle
+          Eingabe) sind ueber genau diesen Button erreichbar und brauchen hier
+          keine eigenen Buttons mehr. */}
+      <div className="relative mx-4 mb-10 flex-1 overflow-hidden rounded-xl bg-black">
         {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
             iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
             object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
@@ -198,14 +202,6 @@ export default function ScanPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2 p-4">
-        <Button variant="outline" className="w-full" onClick={() => router.push("/scan-ean")}>
-          EAN manuell eingeben
-        </Button>
-        <Button variant="ghost" className="w-full" onClick={() => router.push("/add")}>
-          Stattdessen komplett manuell eingeben
-        </Button>
-      </div>
     </div>
   );
 }
