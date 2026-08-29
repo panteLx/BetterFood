@@ -108,7 +108,7 @@ const MATCHERS: Matcher[] = [
     key: "milchprodukte",
     tokens: [
       "dairy", "dairies", "milk", "milks", "yogurt", "yogurts", "yoghurt", "yoghurts",
-      "cheese", "cheeses", "cream", "creams", "butter", "quark", "kefir", "buttermilk",
+      "cheese", "cheeses", "cream", "creams", "butter", "butters", "quark", "kefir", "buttermilk",
       "curd", "curds", "mozzarella", "mascarpone", "feta",
     ],
     stems: ["milch", "joghurt", "jogurt", "kase", "sahne", "schmand"],
@@ -141,9 +141,21 @@ const MATCHERS: Matcher[] = [
     tokens: [
       "pasta", "pastas", "rice", "rices", "cereal", "cereals", "flour", "flours",
       "noodles", "muesli", "mueslis", "lentils", "couscous", "sugar", "salt",
-      "nut", "nuts", "peanut", "peanuts", "legumes",
+      "nut", "nuts", "peanut", "peanuts", "legumes", "oil", "oils",
     ],
-    stems: ["nudel", "teigwaren", "mehl", "hulsenfr", "haferflocken"],
+    stems: ["nudel", "teigwaren", "mehl", "hulsenfr", "haferflocken", "olivenol", "sonnenblumenol"],
+  },
+  {
+    // Streichfette trugen bei OFF das Tag "vegetable-fats" und landeten damit
+    // unter Obst & Gemuese -- "vegetable" ist dort nur die Herkunft des Fetts.
+    // Diese Regel steht deshalb ueber obst_gemuese und faengt sie vorher ab.
+    // Oele sind oben schon bei den Trockenwaren abgeraeumt.
+    key: "kuehlware_sonstig",
+    tokens: [
+      "fat", "fats", "margarine", "margarines", "spreadable", "egg", "eggs",
+      "tofu", "hummus", "dips", "mayonnaises", "pestos",
+    ],
+    stems: ["margarine", "streichfett", "halbfettbutter", "eier"],
   },
   {
     key: "obst_gemuese",
@@ -154,6 +166,41 @@ const MATCHERS: Matcher[] = [
     stems: ["obst", "gemuse", "salat", "kartoffel", "tomate", "apfel", "banane"],
   },
 ];
+
+// Woerter, die in fast jedem Kategorienamen stecken koennen und nichts ueber
+// ein Produkt aussagen.
+const LABEL_STOPWORDS = new Set([
+  "sonstiges", "sonstige", "sonstig", "andere", "anderes", "allgemein",
+  "produkte", "artikel", "kuhlware", "diverse",
+]);
+
+type LabelMatcher = { key: string; stems: string[] };
+
+/**
+ * Eingebaute Regeln kennen nur die Standardkategorien. Nutzer legen aber
+ * eigene an ("Katzenfutter", "Babybrei", "Süßes") -- und der Name, den sie
+ * dafür gewählt haben, IST die Beschreibung, nach der gesucht werden muss.
+ * Taucht eines seiner Wörter im Produktnamen oder in einem OFF-Tag auf, ist
+ * das ein mindestens so gutes Signal wie eine eingebaute Regel.
+ */
+function labelMatchers(categories: Pick<Category, "key" | "label">[]): LabelMatcher[] {
+  return categories
+    .map((category) => ({
+      key: category.key,
+      stems: normalizeTag(category.label)
+        .split("-")
+        // Unter vier Zeichen wird es schnell zufaellig ("eis" steckt in
+        // "Fleisch", "ol" in "Kohl").
+        .filter((word) => word.length >= 4 && !LABEL_STOPWORDS.has(word)),
+    }))
+    .filter((matcher) => matcher.stems.length > 0);
+}
+
+function matchByLabel(haystack: string, matchers: LabelMatcher[]): string | undefined {
+  return matchers.find((matcher) => matcher.stems.some((stem) => haystack.includes(stem)))?.key;
+}
+
+const MATCHER_ORDER = new Map(MATCHERS.map((matcher, index) => [matcher.key, index]));
 
 function normalizeTag(tag: string): string {
   return tag
@@ -178,7 +225,7 @@ function matchTag(tag: string): string | undefined {
 
 export function guessCategoryFromOffTags(
   tags: string[],
-  availableCategories: Pick<Category, "key">[],
+  availableCategories: Pick<Category, "key" | "label">[],
   productName?: string,
 ): string | undefined {
   const available = new Set(availableCategories.map((c) => c.key));
@@ -186,9 +233,11 @@ export function guessCategoryFromOffTags(
     .map(normalizeTag)
     .filter((tag) => tag.length > 0 && !GENERIC_TAGS.has(tag));
 
+  const labels = labelMatchers(availableCategories);
+
   const scores = new Map<string, number>();
   relevant.forEach((tag, index) => {
-    const key = matchTag(tag);
+    const key = matchTag(tag) ?? matchByLabel(tag, labels);
     if (!key) return;
     // Spätere Tags sind bei OFF die spezifischeren ("en:beverages" ->
     // "en:colas"), deshalb wiegen sie etwas schwerer.
@@ -201,17 +250,24 @@ export function guessCategoryFromOffTags(
   // liegt bewusst unter dem mehrerer uebereinstimmender Tags: der Name
   // entscheidet, wenn sonst nichts da ist, und ueberstimmt keine echten Daten.
   if (productName) {
-    for (const word of normalizeTag(productName).split("-")) {
-      const key = matchTag(word);
-      if (key) {
-        scores.set(key, (scores.get(key) ?? 0) + 1.5);
-        break;
-      }
-    }
+    const name = normalizeTag(productName);
+    // Der selbstgewaehlte Kategoriename geht vor: wer eine Kategorie
+    // "Katzenfutter" angelegt hat, meint damit genau das Produkt, das so
+    // heisst -- da braucht es keine eingebaute Regel.
+    const fromLabel = matchByLabel(name, labels);
+    const key = fromLabel ?? name.split("-").map(matchTag).find(Boolean);
+    if (key) scores.set(key, (scores.get(key) ?? 0) + (fromLabel ? 2.5 : 1.5));
   }
 
   // Kategorien lassen sich umbenennen und löschen: gibt es die beste Wahl in
   // dieser Liste nicht, greift die nächstbeste statt gar keiner.
-  const ranked = Array.from(scores.entries()).sort(([, a], [, b]) => b - a);
+  // Bei Gleichstand entscheidet die Reihenfolge der Regeln: Butter traegt bei
+  // OFF sowohl "dairies"/"butters" als auch "fats"/"spreadable-fats" -- und
+  // steht damit gleichauf zwischen Milchprodukt und Kuehlware. Die MATCHERS-
+  // Reihenfolge sagt bereits, welche der beiden Lesarten die speziellere ist.
+  const ranked = Array.from(scores.entries()).sort(
+    ([keyA, a], [keyB, b]) =>
+      b - a || (MATCHER_ORDER.get(keyA) ?? MATCHERS.length) - (MATCHER_ORDER.get(keyB) ?? MATCHERS.length),
+  );
   return ranked.find(([key]) => available.has(key))?.[0];
 }

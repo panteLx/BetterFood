@@ -1,8 +1,8 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { categories } from "@/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { categories, items } from "@/db/schema";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
 
 export function categoriesTag(listId: number) {
@@ -57,4 +57,26 @@ export async function listHasCategories(listId: number) {
     .where(eq(categories.listId, listId))
     .get();
   return Boolean(existing);
+}
+
+/**
+ * Wie dieselbe Liste diesen Barcode zuletzt eingeordnet hat -- inklusive
+ * bereits abgehakter Artikel.
+ *
+ * Das ist das mit Abstand verlaesslichste Signal fuer die Vorauswahl der
+ * Kategorie und das einzige, das auch mit selbst angelegten Kategorien
+ * funktioniert: eine Regel kann nicht wissen, dass eine Margarine in dieser
+ * Liste unter "Brotaufstriche" gehoert -- der Haushalt, der sie dort schon
+ * einmal einsortiert hat, weiss es. Eine Korrektur von Hand wirkt damit ab
+ * dem zweiten Scan dauerhaft.
+ */
+export async function lastCategoryForBarcode(listId: number, barcode: string) {
+  const previous = await db
+    .select({ category: items.category, name: items.name })
+    .from(items)
+    .where(and(eq(items.listId, listId), eq(items.barcode, barcode)))
+    .orderBy(desc(items.addedAt))
+    .get();
+
+  return previous ?? null;
 }

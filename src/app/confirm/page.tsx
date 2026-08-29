@@ -4,9 +4,10 @@ import { EstimatedExpiry } from "@/components/estimated-expiry";
 import { lookupProductByBarcode } from "@/lib/off";
 import { DEFAULT_CATEGORIES, guessCategoryFromOffTags } from "@/lib/categories";
 import { optionalSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList } from "@/lib/data";
+import { getCategoriesForList, lastCategoryForBarcode } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Camera, Hash } from "lucide-react";
 
 export default async function ConfirmPage({
   searchParams,
@@ -73,6 +74,24 @@ export default async function ConfirmPage({
               </Button>
             </Link>
           </div>
+          {/* Ohne diesen Weg war /confirm fuer Gaeste eine Sackgasse: wer sich
+              (noch) nicht anmelden will, kam von hier nur ueber den
+              Zurueck-Knopf des Browsers wieder weg -- und die
+              Navigationsleiste gibt es hier bewusst nicht. */}
+          <div className="flex flex-col gap-2 border-t border-input pt-4">
+            <Link href="/scan">
+              <Button variant="ghost" className="h-11 w-full">
+                <Camera className="size-4" />
+                Nächsten Artikel scannen
+              </Button>
+            </Link>
+            <Link href="/scan-ean">
+              <Button variant="ghost" className="h-11 w-full">
+                <Hash className="size-4" />
+                EAN eingeben
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -81,9 +100,22 @@ export default async function ConfirmPage({
   const listId = await requireActiveList(session.user.id);
   const allCategories = await getCategoriesForList(listId);
 
+  // Was dieser Haushalt selbst schon einmal entschieden hat, schlaegt jede
+  // Regel: wurde derselbe Barcode hier bereits einsortiert, wird das
+  // uebernommen -- auch in eine selbst angelegte Kategorie, von der keine
+  // Regel wissen kann. Nur wenn die Kategorie inzwischen geloescht wurde,
+  // greift wieder die Schaetzung.
+  const previous = barcode ? await lastCategoryForBarcode(listId, barcode) : null;
+  const knownCategory = allCategories.find((c) => c.key === previous?.category)?.key;
+
   // Der Produktname ist der Rueckfall, wenn OFF gar keine Kategorien fuehrt --
   // das ist bei deutschen Frischeprodukten eher die Regel als die Ausnahme.
-  const initialCategory = guessCategoryFromOffTags(offTags, allCategories, initialName);
+  const initialCategory =
+    knownCategory ?? guessCategoryFromOffTags(offTags, allCategories, initialName);
+
+  // Ebenso der Name: hat der Haushalt "Rama" zu "Margarine" korrigiert, ist
+  // das die bessere Bezeichnung als die aus der Datenbank.
+  const knownName = previous?.name ?? initialName;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -103,7 +135,7 @@ export default async function ConfirmPage({
       <ItemForm
         key={barcode}
         categories={allCategories}
-        initialName={initialName}
+        initialName={knownName}
         initialCategory={initialCategory}
         barcode={barcode}
         redirectTo="/"
