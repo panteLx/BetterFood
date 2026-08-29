@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
@@ -20,47 +20,85 @@ const EXPECTED_DECODE_ERRORS = new Set([
   "FormatException",
 ]);
 
+// Jeder Fehler, der NICHT in EXPECTED_DECODE_ERRORS steht, wird von
+// @zxing/browser intern als fatal behandelt: die Scan-Schleife bricht ab
+// UND der Kamera-Stream wird disposed (siehe BrowserCodeReader.scan/
+// decodeFromStream). Auf iPhones passiert das vor allem beim allerersten
+// Frame, wenn readyState schon "playing" meldet, videoWidth/-Height aber
+// noch 0 sind (canvas.getImageData wirft dann ein natives IndexSizeError,
+// keine ZXing-Exception) -- daher starten wir die Kamera hier automatisch
+// neu statt den Nutzer mit einer toten Kamera sitzen zu lassen.
+const MAX_SILENT_RESTARTS = 2;
+
 export default function ScanPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
+  const scannedRef = useRef(false);
+  const silentRestartsRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [scanned, setScanned] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
+  const [retrySession, setRetrySession] = useState(0);
+
+  useLayoutEffect(() => {
+    // Mit cacheComponents:true haelt Next.js diese Seite beim Navigieren via
+    // React <Activity> nur versteckt (display:none) statt sie zu unmounten -
+    // State ueberlebt das (siehe node_modules/next/dist/docs/01-app/
+    // 02-guides/preserving-ui-state.md). Reset beim Verstecken (statt
+    // synchron im Setup des Kamera-Effects) folgt dem dort empfohlenen
+    // Muster und vermeidet ein setState direkt im Effect-Body.
+    return () => {
+      setManualEntry(false);
+      setManualBarcode("");
+    };
+  }, []);
 
   useEffect(() => {
-    // React StrictMode (dev only) runs this effect's setup, then its cleanup,
-    // then the setup again, synchronously. Deferring the actual getUserMedia
-    // call by a tick means the first (throwaway) invocation's cleanup has
-    // already flipped `cancelled` by the time its timeout fires, so only the
-    // surviving invocation ever opens the camera - avoiding the "device busy"
-    // error from two concurrent getUserMedia calls against the same webcam.
-    const reader = new BrowserMultiFormatReader();
-    let cancelled = false;
+    // scannedRef/silentRestartsRef sind Refs und ueberleben das Verstecken
+    // via <Activity> ebenfalls (siehe oben) -- ohne diesen Reset bliebe
+    // scannedRef.current nach dem ersten erfolgreichen Scan fuer immer true,
+    // sobald man zu /scan zurueckkehrt, und jeder weitere erkannte Barcode
+    // wuerde stillschweigend ignoriert. Dieser Effect laeuft bei jedem
+    // Hidden->Visible-Wechsel erneut, also gibt jeder Besuch hier eine
+    // frische Scan-Session.
+    let active = true;
+    scannedRef.current = false;
+    silentRestartsRef.current = 0;
 
-    const timeoutId = setTimeout(() => {
-      if (cancelled) return;
+    function startScanning() {
+      if (!active) return;
+      setError(null);
+      const reader = new BrowserMultiFormatReader();
 
       reader
         .decodeFromConstraints(
           { video: { facingMode: "environment" } },
           videoRef.current ?? undefined,
           (result, err) => {
-            if (cancelled) return;
-            if (result && !scanned) {
-              setScanned(true);
+            if (!active) return;
+            if (result && !scannedRef.current) {
+              scannedRef.current = true;
               controlsRef.current?.stop();
               router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}`);
+              return;
             }
             if (err && !EXPECTED_DECODE_ERRORS.has(err.name)) {
               console.error("Barcode scan error:", err);
-              setError("Fehler beim Scannen. Bitte erneut versuchen.");
+              if (silentRestartsRef.current < MAX_SILENT_RESTARTS) {
+                silentRestartsRef.current += 1;
+                controlsRef.current?.stop();
+                setTimeout(() => {
+                  if (active) startScanning();
+                }, 250);
+              } else {
+                setError("Fehler beim Scannen. Bitte erneut versuchen.");
+              }
             }
           },
         )
         .then((controls) => {
-          if (cancelled) {
+          if (!active) {
             controls.stop();
           } else {
             controlsRef.current = controls;
@@ -68,7 +106,7 @@ export default function ScanPage() {
         })
         .catch((err: Error) => {
           console.error("Camera start error:", err);
-          if (!cancelled) {
+          if (active) {
             setError(
               err.name === "NotAllowedError"
                 ? "Kamera-Zugriff wurde verweigert. Bitte in den Browser-Einstellungen erlauben."
@@ -76,15 +114,24 @@ export default function ScanPage() {
             );
           }
         });
-    }, 0);
+    }
+
+    // React StrictMode (dev only) runs this effect's setup, then its cleanup,
+    // then the setup again, synchronously. Deferring den Start um einen Tick
+    // sorgt dafuer, dass nur der ueberlebende Durchlauf die Kamera oeffnet -
+    // sonst kollidieren zwei gleichzeitige getUserMedia-Aufrufe.
+    const timeoutId = setTimeout(startScanning, 0);
 
     return () => {
-      cancelled = true;
+      active = false;
       clearTimeout(timeoutId);
       controlsRef.current?.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router, retrySession]);
+
+  function handleRetry() {
+    setRetrySession((s) => s + 1);
+  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -100,7 +147,14 @@ export default function ScanPage() {
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
       </div>
 
-      {error && <p className="p-4 text-center text-sm text-destructive">{error}</p>}
+      {error && (
+        <div className="flex flex-col items-center gap-2 p-4">
+          <p className="text-center text-sm text-destructive">{error}</p>
+          <Button variant="outline" onClick={handleRetry}>
+            Kamera neu starten
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 p-4">
         {manualEntry ? (
