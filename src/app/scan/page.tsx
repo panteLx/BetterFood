@@ -176,7 +176,16 @@ export default function ScanPage() {
       </div>
 
       <div className="relative mx-4 flex-1 overflow-hidden rounded-xl bg-black">
-        <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+        {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
+            iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
+            object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
+            statt ueber explizite Positionierung bestimmt wird. */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 h-full w-full object-cover"
+          muted
+          playsInline
+        />
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
       </div>
 
