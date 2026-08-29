@@ -116,7 +116,15 @@ export default function ScanPage() {
                   if (active) startScanning();
                 }, 250);
               } else {
-                setError("Fehler beim Scannen. Bitte erneut versuchen.");
+                // TEMP-DIAGNOSE: err.name/message mit ausgeben, um den
+                // tatsaechlichen Fehler auf dem iPhone zu sehen -- die
+                // bisherige IndexSizeError-Annahme laesst sich anhand des
+                // sichtbar laufenden Kamerabilds nicht mehr halten. Sobald
+                // wir wissen, was hier wirklich geworfen wird, wieder auf
+                // die feste Meldung zurueckbauen.
+                setError(
+                  `Fehler beim Scannen (${err.name}: ${err.message || "keine Nachricht"}). Bitte erneut versuchen.`,
+                );
               }
             }
           },
