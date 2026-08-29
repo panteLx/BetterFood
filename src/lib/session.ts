@@ -8,10 +8,22 @@ import { listMembers, lists, user } from "@/db/schema";
 
 type Executor = Omit<typeof db, "$client">;
 
-export async function requireSession() {
+// Fuer Seiten, die auch Gaesten offenstehen (z.B. /confirm): liefert null
+// statt nach /login umzuleiten.
+//
+// Das "use cache: private" ist hier nicht nur Caching: better-auth liest beim
+// Pruefen der Session new Date(), und ein solcher "unstable value" laesst den
+// Prerender die ganze Route abbrechen ("Route /confirm: Next.js encountered
+// the unstable value `new Date()` while prerendering"). Innerhalb der
+// Cache-Grenze passiert das nicht mehr.
+export async function optionalSession() {
   "use cache: private";
 
-  const session = await auth.api.getSession({ headers: await headers() });
+  return auth.api.getSession({ headers: await headers() });
+}
+
+export async function requireSession() {
+  const session = await optionalSession();
   if (!session) redirect("/login");
   return session;
 }
