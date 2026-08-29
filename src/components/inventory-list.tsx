@@ -8,6 +8,7 @@ import { Package, Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
+import { AddItemButton } from "@/components/add-action-sheet";
 import {
   resolveItem,
   resolveVerb,
@@ -189,7 +190,7 @@ export function InventoryList({
           icon={Package}
           title="Dein Vorrat ist noch leer"
           body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
-          action={{ href: "/scan", label: "Ersten Artikel hinzufügen" }}
+          action={<AddItemButton label="Ersten Artikel hinzufügen" />}
         />
       </div>
     );

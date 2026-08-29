@@ -153,7 +153,7 @@ export function DateSheet({
       <button
         type="button"
         onClick={() => onOpenChange(false)}
-        className="mt-4 h-13.5 w-full rounded-2xl bg-primary text-base font-bold text-primary-foreground"
+        className="mt-4 h-13.5 w-full rounded-lg bg-primary text-base font-bold text-primary-foreground"
       >
         Auf {formatMedium(selected)} setzen
       </button>

@@ -44,14 +44,60 @@ const OPTIONS: {
   },
 ];
 
-export function AddActionSheet() {
-  const [open, setOpen] = useState(false);
+function AddOptionsSheet({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const router = useRouter();
 
   function go(href: string) {
-    setOpen(false);
+    onOpenChange(false);
     router.push(href);
   }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} title="Wie möchtest du hinzufügen?">
+      <div className="flex flex-col gap-2">
+        {OPTIONS.map((option) => (
+          <button
+            key={option.href}
+            type="button"
+            onClick={() => go(option.href)}
+            className={cn(
+              "flex items-center gap-3.5 rounded-[20px] p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              option.primary
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-surface-2",
+            )}
+          >
+            <option.icon
+              className={cn("size-6 shrink-0", !option.primary && "text-primary")}
+              strokeWidth={1.8}
+            />
+            <span>
+              <span className="block text-base font-bold">{option.label}</span>
+              <span
+                className={cn(
+                  "mt-0.5 block text-[13px] font-medium",
+                  option.primary ? "opacity-75" : "text-muted-foreground",
+                )}
+              >
+                {option.hint}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+/** Der zentrale Knopf der Navigationsleiste. */
+export function AddActionSheet() {
+  const [open, setOpen] = useState(false);
 
   return (
     <>
@@ -59,44 +105,38 @@ export function AddActionSheet() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Artikel hinzufügen"
-        className="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-[0_10px_24px_rgb(30_80_50/0.32)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-primary text-primary-foreground shadow-[0_10px_24px_rgb(30_80_50/0.32)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <Plus className="size-7.5" strokeWidth={2.3} />
       </button>
 
-      <Sheet open={open} onOpenChange={setOpen} title="Wie möchtest du hinzufügen?">
-        <div className="flex flex-col gap-2">
-          {OPTIONS.map((option) => (
-            <button
-              key={option.href}
-              type="button"
-              onClick={() => go(option.href)}
-              className={cn(
-                "flex items-center gap-3.5 rounded-[20px] p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                option.primary
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border bg-surface-2",
-              )}
-            >
-              <option.icon
-                className={cn("size-6 shrink-0", !option.primary && "text-primary")}
-                strokeWidth={1.8}
-              />
-              <span>
-                <span className="block text-base font-bold">{option.label}</span>
-                <span
-                  className={cn(
-                    "mt-0.5 block text-[13px] font-medium",
-                    option.primary ? "opacity-75" : "text-muted-foreground",
-                  )}
-                >
-                  {option.hint}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </Sheet>
+      <AddOptionsSheet open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+/**
+ * Derselbe Weg mit sichtbarer Beschriftung -- fuer den leeren Vorrat.
+ *
+ * Der Knopf dort fuehrte direkt in die Kamera. Das ist eine Antwort auf eine
+ * Frage, die er selbst stellt ("Scanne den ersten Barcode oder trag etwas von
+ * Hand ein"): wer von Hand eintragen wollte, stand trotzdem im Sucher. Er
+ * oeffnet deshalb dieselbe Auswahl wie der Knopf in der Leiste.
+ */
+export function AddItemButton({ label }: { label: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-1 flex h-12 items-center rounded-2xl bg-primary px-5.5 text-[15px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        {label}
+      </button>
+
+      <AddOptionsSheet open={open} onOpenChange={setOpen} />
     </>
   );
 }

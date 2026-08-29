@@ -61,7 +61,7 @@ export function EanEntryPage() {
       <button
         type="submit"
         disabled={!barcode.trim()}
-        className="h-14 rounded-2xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-50"
+        className="h-14 rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-50"
       >
         Weiter
       </button>

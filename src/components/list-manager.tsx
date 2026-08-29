@@ -411,14 +411,14 @@ export function ListManager() {
           value={newListName}
           onChange={(event) => setNewListName(event.target.value)}
           placeholder="Neue Liste"
-          className="h-12 min-w-0 flex-1 rounded-2xl border border-border bg-card px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
+          className="h-12 min-w-0 flex-1 rounded-lg border border-border bg-card px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
         />
         <button
           type="button"
           disabled={busy}
           onClick={createList}
           aria-label="Liste erstellen"
-          className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground disabled:opacity-60"
+          className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
         >
           <Plus className="size-5" strokeWidth={2.3} />
         </button>

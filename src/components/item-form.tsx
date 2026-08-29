@@ -559,7 +559,7 @@ export function ItemForm({
                 <Button
                   variant="ghost"
                   disabled={deleting}
-                  className="h-12 w-full rounded-2xl text-danger"
+                  className="h-12 w-full rounded-lg text-danger"
                 />
               }
             >
@@ -589,12 +589,12 @@ export function ItemForm({
         )}
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-4">
+      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="h-14 w-full rounded-2xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+          className="h-14 w-full rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
         >
           {saving ? "Speichern…" : "Speichern"}
         </button>
@@ -627,7 +627,7 @@ export function ItemForm({
                   onChange={(e) => setNewCategoryLabel(e.target.value)}
                   placeholder="z. B. Tiefkühl"
                   autoFocus
-                  className="h-11 rounded-2xl"
+                  className="h-11 rounded-lg"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -638,13 +638,13 @@ export function ItemForm({
                   min={1}
                   value={newCategoryShelfLife}
                   onChange={(e) => setNewCategoryShelfLife(e.target.value)}
-                  className="h-11 rounded-2xl"
+                  className="h-11 rounded-lg"
                 />
               </div>
               <Button
                 onClick={handleCreateCategory}
                 disabled={creatingCategory}
-                className="h-11 rounded-2xl"
+                className="h-11 rounded-lg"
               >
                 {creatingCategory ? "Erstellen…" : "Kategorie erstellen"}
               </Button>

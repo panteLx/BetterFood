@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ChevronRight, Check, Package } from "lucide-react";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
+import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
 import { InstallHintBanner } from "@/components/install-hint";
 import { useIsClient } from "@/lib/use-is-client";
@@ -238,11 +239,7 @@ export function HomeOverview({
                 ? "Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
                 : "Dein Vorrat sieht gut aus. Wir melden uns rechtzeitig."
             }
-            action={
-              items.length === 0
-                ? { href: "/scan", label: "Artikel hinzufügen" }
-                : undefined
-            }
+            action={items.length === 0 ? <AddItemButton label="Artikel hinzufügen" /> : undefined}
           />
         </div>
       )}

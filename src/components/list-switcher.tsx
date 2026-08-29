@@ -120,13 +120,13 @@ export function ListSwitcher({
             value={newListName}
             onChange={(event) => setNewListName(event.target.value)}
             placeholder="Neue Liste"
-            className="h-12.5 min-w-0 flex-1 rounded-2xl border border-border bg-surface-2 px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
+            className="h-12.5 min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
           />
           <button
             type="button"
             disabled={busy}
             onClick={createList}
-            className="h-12.5 shrink-0 rounded-2xl bg-primary px-4.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
+            className="h-12.5 shrink-0 rounded-lg bg-primary px-4.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
           >
             Erstellen
           </button>

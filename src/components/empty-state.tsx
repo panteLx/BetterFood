@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +8,9 @@ import { cn } from "@/lib/utils";
  *
  * Der Schritt ist der Punkt: die Startseite ohne Artikel bot vorher nur Text
  * an, waehrend die eigentliche Aktion im zentralen Knopf lag, den der Nutzer
- * auf dem allerersten Screen erst finden musste.
+ * auf dem allerersten Screen erst finden musste. Er kommt als fertiges
+ * Element herein (heute immer AddItemButton), weil er ein Blatt oeffnet statt
+ * zu navigieren -- ein Link kann das nicht.
  */
 export function EmptyState({
   icon: Icon,
@@ -22,7 +23,7 @@ export function EmptyState({
   icon: LucideIcon;
   title: string;
   body: string;
-  action?: { href: string; label: string };
+  action?: React.ReactNode;
   tone?: "muted" | "primary";
   className?: string;
 }) {
@@ -47,14 +48,7 @@ export function EmptyState({
           {body}
         </p>
       </div>
-      {action && (
-        <Link
-          href={action.href}
-          className="mt-1 flex h-12 items-center rounded-2xl bg-primary px-5.5 text-[15px] font-bold text-primary-foreground"
-        >
-          {action.label}
-        </Link>
-      )}
+      {action}
     </div>
   );
 }

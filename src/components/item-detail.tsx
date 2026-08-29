@@ -249,7 +249,7 @@ export function ItemDetail({
         )}
       </div>
 
-      <div className="sticky bottom-0 flex flex-col gap-2.5 border-t border-border bg-card px-5 pt-3.5 pb-4">
+      <div className="sticky bottom-0 flex flex-col gap-2.5 border-t border-border bg-card px-5 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <button
           type="button"
           disabled={busy}

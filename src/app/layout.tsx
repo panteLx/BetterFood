@@ -62,8 +62,12 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
           {/* Die Safe Area oben gehoert an genau eine Stelle: als
               installierte PWA laeuft der Inhalt sonst unter der Statusleiste
               des Geraets durch, und jede Seite muesste denselben Abstand
-              selbst noch einmal setzen. */}
-          <div className="mx-auto flex w-full max-w-md flex-1 flex-col pt-[env(safe-area-inset-top)]">
+              selbst noch einmal setzen.
+              max(...) statt des blossen Insets: im Browser ist
+              env(safe-area-inset-top) 0, und dann klebte die Ueberschrift
+              jeder Seite 8px unter der Fensterkante. Auf dem Geraet gewinnt
+              weiterhin der echte Inset. */}
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col pt-[max(env(safe-area-inset-top),1.75rem)]">
             {children}
             <Suspense fallback={null}>
               <BottomNavGate />
