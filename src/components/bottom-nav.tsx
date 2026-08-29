@@ -71,7 +71,7 @@ function CenterAction() {
 // die sofort mitgeliefert werden kann.
 export function BottomNavFallback() {
   return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background">
+    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background pb-[env(safe-area-inset-bottom)]">
       <div className="flex flex-1 justify-evenly">
         {LEFT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={false} />
@@ -97,7 +97,7 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background">
+    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background pb-[env(safe-area-inset-bottom)]">
       <div className="flex flex-1 justify-evenly">
         {LEFT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={isActive(item.href)} />

@@ -2,10 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
-import { ChecksumException, FormatException, NotFoundException } from "@zxing/library";
+import {
+  BarcodeFormat,
+  ChecksumException,
+  DecodeHintType,
+  FormatException,
+  NotFoundException,
+} from "@zxing/library";
+import { Flashlight, FlashlightOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// Ohne Hints probiert der MultiFormatReader pro Frame saemtliche Formate durch
+// -- QR, Micro-QR, Aztec, DataMatrix, PDF417 und alle 1D-Varianten. Auf
+// Lebensmitteln steht nichts davon: dort sind es EAN-13, EAN-8, UPC-A oder
+// UPC-E. Die Beschraenkung spart pro Bild ein Vielfaches an Rechenzeit, der
+// Code rastet schneller ein und das Telefon bleibt kuehler.
+const SCAN_HINTS = new Map<DecodeHintType, unknown>([
+  [
+    DecodeHintType.POSSIBLE_FORMATS,
+    [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E],
+  ],
+  [DecodeHintType.TRY_HARDER, true],
+]);
 
 // Waehrend der kontinuierlichen Live-Scan-Schleife feuert der Decoder bei
 // jedem Frame ohne vollstaendig lesbaren Code eine dieser drei Exceptions --
@@ -57,6 +78,8 @@ export default function ScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [retrySession, setRetrySession] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchAvailable, setTorchAvailable] = useState(false);
 
   useEffect(() => {
     // scannedRef/silentRestartsRef sind Refs und ueberleben das Verstecken
@@ -81,7 +104,11 @@ export default function ScanPage() {
       if (!active) return;
       setError(null);
       setVideoReady(false);
-      const reader = new BrowserMultiFormatReader();
+      // Jeder (Neu-)Start bekommt einen frischen Stream, also auch einen
+      // frischen Torch-Zustand.
+      setTorchOn(false);
+      setTorchAvailable(false);
+      const reader = new BrowserMultiFormatReader(SCAN_HINTS);
 
       reader
         .decodeFromConstraints(
@@ -122,6 +149,10 @@ export default function ScanPage() {
             controls.stop();
           } else {
             controlsRef.current = controls;
+            // Vorratsschrank und Kuehlschrank sind dunkel. switchTorch ist in
+            // @zxing/browser als experimentell markiert und fehlt auf vielen
+            // Geraeten -- deshalb erscheint der Schalter nur, wenn er da ist.
+            setTorchAvailable(typeof controls.switchTorch === "function");
           }
         })
         .catch((err: Error) => {
@@ -153,8 +184,19 @@ export default function ScanPage() {
     setRetrySession((s) => s + 1);
   }
 
+  async function toggleTorch() {
+    const next = !torchOn;
+    try {
+      await controlsRef.current?.switchTorch?.(next);
+      setTorchOn(next);
+    } catch {
+      // Manche Geraete melden die Faehigkeit und verweigern sie dann doch.
+      setTorchAvailable(false);
+    }
+  }
+
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col pb-14">
       <div className="flex items-center justify-between p-4">
         <h1 className="text-lg font-semibold">Barcode scannen</h1>
         <Button variant="ghost" onClick={() => router.push("/")}>
@@ -162,11 +204,10 @@ export default function ScanPage() {
         </Button>
       </div>
 
-      {/* mb-10: der FAB der Bottom-Nav ragt ueber die Leiste hinaus und laege
-          sonst auf dem Kamerabild. Die Alternativen (EAN- bzw. rein manuelle
-          Eingabe) sind ueber genau diesen Button erreichbar und brauchen hier
-          keine eigenen Buttons mehr. */}
-      <div className="relative mx-4 mb-10 flex-1 overflow-hidden rounded-xl bg-black">
+      {/* Unterhalb des Kamerabilds steht jetzt der EAN-Ausweg; die Polsterung
+          am Seitenende (pb-14, siehe aussen) haelt ihn frei vom FAB, der ueber
+          die Navigationsleiste hinausragt. */}
+      <div className="relative mx-4 mb-3 flex-1 overflow-hidden rounded-xl bg-black">
         {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
             iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
             object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
@@ -191,10 +232,27 @@ export default function ScanPage() {
           playsInline
         />
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
+
+        <p className="pointer-events-none absolute inset-x-6 top-[calc(50%+4rem)] text-center text-sm text-white/90 drop-shadow">
+          Barcode in den Rahmen halten
+        </p>
+
+        {torchAvailable && (
+          <Button
+            size="icon-touch"
+            variant="outline"
+            aria-label={torchOn ? "Licht ausschalten" : "Licht einschalten"}
+            aria-pressed={torchOn}
+            onClick={toggleTorch}
+            className="absolute top-3 right-3 border-white/40 bg-black/40 text-white hover:bg-black/60 hover:text-white"
+          >
+            {torchOn ? <Flashlight className="size-5" /> : <FlashlightOff className="size-5" />}
+          </Button>
+        )}
       </div>
 
       {error && (
-        <div className="flex flex-col items-center gap-2 p-4">
+        <div className="flex flex-col items-center gap-2 px-4 pt-4">
           <p className="text-center text-sm text-destructive">{error}</p>
           <Button variant="outline" onClick={handleRetry}>
             Kamera neu starten
@@ -202,6 +260,15 @@ export default function ScanPage() {
         </div>
       )}
 
+      {/* Der Ausweg gehoert auf diesen Screen: wer hier steht, hat einen Code
+          vor sich, den die Kamera nicht liest. Ihn ueber den zentralen
+          Hinzufuegen-Button suchen zu lassen, hilft in dem Moment niemandem. */}
+      <p className="px-4 text-center text-sm text-muted-foreground">
+        Code lässt sich nicht lesen?{" "}
+        <Link href="/scan-ean" className="underline">
+          EAN eintippen
+        </Link>
+      </p>
     </div>
   );
 }

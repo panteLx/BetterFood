@@ -6,5 +6,5 @@ export default async function EditPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <EditItemPage id={id} />;
+  return <EditItemPage id={id} standalone />;
 }

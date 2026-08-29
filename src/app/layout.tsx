@@ -29,7 +29,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Kein maximumScale: Pinch-Zoom bleibt erlaubt (WCAG 1.4.4) -- bei einer
+  // App, deren Kerninhalt kleingedruckte Haltbarkeitsangaben sind, trifft die
+  // Sperre genau die Nutzer, die sie am noetigsten brauchen.
+  //
+  // viewportFit "cover" ist die Voraussetzung dafuer, dass env(safe-area-
+  // inset-*) auf Geraeten mit Home-Indikator ueberhaupt einen Wert > 0
+  // liefert; ohne das war die Polsterung im Add-Sheet wirkungslos und die
+  // Navigationsleiste haette unter dem Indikator gelegen.
+  viewportFit: "cover",
   themeColor: "#16a34a",
 };
 

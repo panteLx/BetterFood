@@ -10,6 +10,7 @@ import { subscribeToPush, getNotificationPermissionState } from "@/lib/push-clie
 import { CategoryManager } from "@/components/category-manager";
 import { ListManager } from "@/components/list-manager";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { InstallHintSettings } from "@/components/install-hint";
 import { authClient, useSession } from "@/lib/auth-client";
 
 export default function SettingsPage() {
@@ -129,8 +130,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label>Push-Benachrichtigungen</Label>
+        <InstallHintSettings />
         {permission === "granted" ? (
           <div className="flex items-center gap-2">
             <p className="text-sm text-muted-foreground">Aktiviert.</p>

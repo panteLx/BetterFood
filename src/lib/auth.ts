@@ -5,6 +5,7 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { categories, items, listMembers, lists, pushSubscriptions, user } from "@/db/schema";
 import { count, eq, isNull } from "drizzle-orm";
+import { listHasCategories, seedDefaultCategories } from "@/lib/data";
 
 const oidcConfigured = Boolean(
   process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET,
@@ -28,6 +29,14 @@ async function claimLegacyData(newUser: { id: string }) {
       .update(pushSubscriptions)
       .set({ userId: newUser.id })
       .where(isNull(pushSubscriptions.userId));
+  }
+
+  // Erst NACH dem moeglichen Claim pruefen: hat der allererste Nutzer bereits
+  // Alt-Kategorien uebernommen, wuerde ein Seed sie hier verdoppeln. Alle
+  // anderen Nutzer starten sonst ohne eine einzige Kategorie und koennten
+  // keinen Artikel speichern, ohne sich vorher selbst eine auszudenken.
+  if (!(await listHasCategories(list.id))) {
+    await seedDefaultCategories(list.id);
   }
 
   await db.update(user).set({ activeListId: list.id }).where(eq(user.id, newUser.id));

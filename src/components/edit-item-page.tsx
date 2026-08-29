@@ -6,7 +6,8 @@ import { and, eq } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
 
-export async function EditItemPage({ id }: { id: string }) {
+/** standalone: siehe AddItemPage -- verhindert router.back() aus der App heraus. */
+export async function EditItemPage({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const session = await requireSession();
   const listId = await requireActiveList(session.user.id);
 
@@ -43,6 +44,7 @@ export async function EditItemPage({ id }: { id: string }) {
       <ItemForm
         key={item.id}
         itemId={item.id}
+        redirectTo={standalone ? "/" : undefined}
         categories={allCategories}
         initialName={item.name}
         initialCategory={item.category}

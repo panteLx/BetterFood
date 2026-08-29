@@ -103,7 +103,11 @@ export function ArchiveList({
                 </span>
               )}
             </p>
-            <div className="mt-1 flex items-center gap-2">
+            {/* flex-wrap: mit den groesseren Trefferflaechen rechts reicht
+                die Zeilenbreite auf schmalen Geraeten nicht mehr fuer Badges
+                und Datum nebeneinander -- ohne Umbruch verschwand das Datum
+                hinter den Buttons. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               <Badge variant="secondary">{categoryLabels[item.category] ?? item.category}</Badge>
               <Badge variant={item.status === "used" ? "default" : "outline"}>
                 {item.status === "used" ? "Aufgebraucht" : "Weggeworfen"}
@@ -111,28 +115,28 @@ export function ArchiveList({
               <span className="text-xs text-muted-foreground">{formatDate(item.resolvedAt)}</span>
             </div>
           </div>
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 gap-2">
             <Button
-              size="icon"
+              size="icon-touch"
               variant="outline"
               disabled={pendingId === item.id}
               onClick={() => restoreItem(item.id, item.name)}
               aria-label="Wiederherstellen"
             >
-              <RotateCcw className="size-4" />
+              <RotateCcw className="size-5" />
             </Button>
             <AlertDialog>
               <AlertDialogTrigger
                 render={
                   <Button
-                    size="icon"
+                    size="icon-touch"
                     variant="outline"
                     disabled={pendingId === item.id}
                     aria-label="Endgültig löschen"
                   />
                 }
               >
-                <Trash2 className="size-4" />
+                <Trash2 className="size-5" />
               </AlertDialogTrigger>
               <AlertDialogPortal>
                 <AlertDialogBackdrop />

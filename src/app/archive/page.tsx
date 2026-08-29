@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { ArchiveList } from "@/components/archive-list";
+import { ArchiveStats } from "@/components/archive-stats";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { requireSession, requireActiveList } from "@/lib/session";
@@ -32,6 +33,10 @@ export default async function ArchivePage() {
         </Link>
         <h1 className="text-lg font-semibold">Archiv</h1>
       </div>
+      {/* Die Rettungsquote steht ueber der Liste: sie ist der Grund, hier
+          ueberhaupt reinzuschauen, wenn gerade nichts ablaeuft. */}
+      <ArchiveStats items={resolvedItems} />
+
       <ArchiveList initialItems={resolvedItems} categories={allCategories} />
     </div>
   );

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ItemForm } from "@/components/item-form";
+import { EstimatedExpiry } from "@/components/estimated-expiry";
 import { lookupProductByBarcode } from "@/lib/off";
-import { DEFAULT_CATEGORIES, estimateExpiryDate, guessCategoryFromOffTags } from "@/lib/categories";
+import { DEFAULT_CATEGORIES, guessCategoryFromOffTags } from "@/lib/categories";
 import { optionalSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ export default async function ConfirmPage({
   if (!session) {
     const guessedKey = guessCategoryFromOffTags(offTags, [...DEFAULT_CATEGORIES]);
     const category = DEFAULT_CATEGORIES.find((c) => c.key === guessedKey);
-    const estimatedExpiry = estimateExpiryDate(category?.shelfLifeDays ?? 14);
+    const redirect = `/confirm?barcode=${barcode ?? ""}`;
 
     return (
       <div className="flex flex-1 flex-col">
@@ -52,23 +53,26 @@ export default async function ConfirmPage({
             </CardHeader>
             <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
               {barcode && <p>Barcode: {barcode}</p>}
-              <p>
-                Voraussichtlich haltbar bis ca.{" "}
-                {estimatedExpiry.toLocaleDateString("de-DE", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                })}
-              </p>
+              <EstimatedExpiry shelfLifeDays={category?.shelfLifeDays ?? 14} />
             </CardContent>
           </Card>
           <p className="text-sm text-muted-foreground">
-            Als Gast wird nichts gespeichert. Melde dich an, um diesen Artikel deinem Vorrat
-            hinzuzufügen.
+            Als Gast wird nichts gespeichert. Lege ein Konto an oder melde dich an – dieser
+            Artikel wartet dann hier auf dich.
           </p>
-          <Link href={`/login?redirect=${encodeURIComponent(`/confirm?barcode=${barcode ?? ""}`)}`}>
-            <Button className="w-full">Zum Speichern anmelden</Button>
-          </Link>
+          {/* Beide Wege behalten den Barcode: wer erst scannt und dann ein
+              Konto anlegt, soll genau hier weitermachen und nicht auf einer
+              leeren Startseite landen. */}
+          <div className="flex flex-col gap-2">
+            <Link href={`/register?redirect=${encodeURIComponent(redirect)}`}>
+              <Button className="h-11 w-full">Konto erstellen und speichern</Button>
+            </Link>
+            <Link href={`/login?redirect=${encodeURIComponent(redirect)}`}>
+              <Button variant="outline" className="h-11 w-full">
+                Ich habe schon ein Konto
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -101,6 +105,10 @@ export default async function ConfirmPage({
         initialCategory={initialCategory}
         barcode={barcode}
         redirectTo="/"
+        // Nach dem Einkauf ist der naechste Artikel der Normalfall: ohne diesen
+        // Weg kostete jeder weitere Scan erneut FAB, Auswahl-Sheet und einen
+        // kompletten Kamera-Start.
+        showScanNext
       />
     </div>
   );

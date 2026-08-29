@@ -50,7 +50,7 @@ export async function PATCH(
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
-  revalidateTag(categoriesTag(listId), "max");
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json(updated);
 }
@@ -99,7 +99,7 @@ export async function DELETE(
 
   await db.delete(categories).where(eq(categories.id, Number(id)));
 
-  revalidateTag(categoriesTag(listId), "max");
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json({ ok: true });
 }
