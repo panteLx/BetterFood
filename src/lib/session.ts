@@ -8,8 +8,9 @@ import { listMembers, lists, user } from "@/db/schema";
 
 type Executor = Omit<typeof db, "$client">;
 
-// Fuer Seiten, die auch Gaesten offenstehen (z.B. /confirm): liefert null
-// statt nach /login umzuleiten.
+// Liefert null statt nach /login umzuleiten -- fuer Stellen, die eine fehlende
+// Anmeldung selbst beantworten (die Navigationsleiste blendet sich aus, eine
+// API-Route antwortet mit 401).
 //
 // Das "use cache: private" ist hier nicht nur Caching: better-auth liest beim
 // Pruefen der Session new Date(), und ein solcher "unstable value" laesst den

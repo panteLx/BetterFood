@@ -104,18 +104,15 @@ function LoginForm() {
 
       <div className="flex-1" />
 
-      {/* Der Redirect muss mit auf /register: wer erst scannt und dann ein
-          Konto anlegt, verliert sonst genau das Produkt, das ihn hergefuehrt
-          hat, und landet auf einer leeren Startseite. */}
-      <div className="flex flex-col items-center gap-1">
+      {/* Der Redirect muss mit auf /register: wer aus einer Erinnerung oder
+          einem Lesezeichen kommt, landet sonst nach der Anmeldung nicht dort,
+          wo er hinwollte, sondern auf einer leeren Startseite. */}
+      <div className="flex justify-center">
         <Link
           href={withRedirect("/register", redirect)}
           className="p-2 text-sm font-bold text-primary"
         >
           Noch kein Konto? Registrieren
-        </Link>
-        <Link href="/scan" className="p-2 text-sm font-semibold text-muted-foreground">
-          Nur nachschlagen – ohne Anmeldung scannen
         </Link>
       </div>
     </div>

@@ -66,9 +66,9 @@ export function EanEntryPage() {
         Weiter
       </button>
 
-      {/* Rueckweg zur Kamera und Ausweg nach unten: als Gast gibt es hier
-          keine Navigationsleiste, und ohne Barcode waere die Seite sonst eine
-          Sackgasse. */}
+      {/* Rueckweg zur Kamera und Ausweg nach unten: die Erfassungsseiten
+          laufen ohne Navigationsleiste, und ohne Barcode waere die Seite
+          sonst eine Sackgasse. */}
       <div className="flex flex-col items-center gap-1 pt-1">
         <Link href="/scan" className="p-2 text-sm font-semibold text-primary">
           Stattdessen Barcode scannen
