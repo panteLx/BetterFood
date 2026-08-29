@@ -3,7 +3,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarDays, ChevronRight, Minus, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronRight,
+  Minus,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +32,8 @@ import {
   toDateInputValue,
 } from "@/lib/expiry";
 import { useIsClient } from "@/lib/use-is-client";
-import { cn } from "@/lib/utils";
+import { cn, normalizeProductName } from "@/lib/utils";
+import type { EntryMethod } from "@/lib/entry-method";
 import type { Category, Place, ProductKnowledge } from "@/db/schema";
 
 // Wie viele bereits gelernte Produkte als Vorschlag unter dem Namensfeld
@@ -49,6 +57,7 @@ export function ItemForm({
   barcode,
   title,
   redirectTo,
+  method = "manual",
 }: {
   categories: CategoryOption[];
   places: PlaceOption[];
@@ -67,9 +76,16 @@ export function ItemForm({
   // Kamera-Seite oder sogar ausserhalb der App. Wenn gesetzt, wird
   // stattdessen dorthin navigiert.
   redirectTo?: string;
+  /**
+   * Auf welchem Weg dieser Artikel erfasst wurde. Der Abschluss-Screen bietet
+   * danach genau diesen Weg wieder an -- wer von Hand eintraegt, will als
+   * naechstes von Hand eintragen und nicht in die Kamera geschickt werden.
+   */
+  method?: EntryMethod;
 }) {
   const router = useRouter();
-  const [categoryList, setCategoryList] = useState<CategoryOption[]>(categories);
+  const [categoryList, setCategoryList] =
+    useState<CategoryOption[]>(categories);
   // Kein Raten mehr: kennt die Liste dieses Produkt noch nicht, bleibt die
   // Kategorie leer und der Nutzer entscheidet einmal selbst. Ab dem zweiten
   // Mal kommt die Vorauswahl aus genau dieser Entscheidung (siehe
@@ -82,10 +98,14 @@ export function ItemForm({
   // abbrechen (siehe nextjs.org/docs/messages/blocking-prerender-current-time).
   function initialExpiryValue() {
     if (initialExpiryDate) return toDateInputValue(initialExpiryDate);
-    const shelfLife = categoryList.find((c) => c.key === fallbackCategory)?.shelfLifeDays;
+    const shelfLife = categoryList.find(
+      (c) => c.key === fallbackCategory,
+    )?.shelfLifeDays;
     // Ohne Kategorie gibt es nichts zu schaetzen -- das Feld fuellt sich,
     // sobald eine gewaehlt ist.
-    return shelfLife === undefined ? "" : toDateInputValue(estimateExpiryDate(shelfLife));
+    return shelfLife === undefined
+      ? ""
+      : toDateInputValue(estimateExpiryDate(shelfLife));
   }
 
   const [name, setName] = useState(initialName);
@@ -200,7 +220,8 @@ export function ItemForm({
         setLearnedPlace(known.placeId);
         setPlaceId(known.placeId);
       }
-      if (options.withName && known.name && !nameTouchedRef.current) setName(known.name);
+      if (options.withName && known.name && !nameTouchedRef.current)
+        setName(known.name);
     } catch {
       // Ohne Antwort bleibt es bei der leeren Vorauswahl -- kein Grund, dem
       // Nutzer etwas anzuzeigen.
@@ -234,12 +255,23 @@ export function ItemForm({
       .then((res) => (res.ok ? res.json() : []))
       .then((entries: ProductKnowledge[]) => {
         if (!active) return;
-        setSuggestions(
-          [...entries]
-            .sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)))
-            .slice(0, SUGGESTION_COUNT)
-            .map((entry) => entry.name),
-        );
+        // Nach Vergleichsnamen entdoppelt: dasselbe Produkt kann mehrere
+        // Zeilen in der Wissensdatenbank haben -- einmal gescannt (mit
+        // Barcode), einmal von Hand eingetippt (ohne). Als Vorschlag ist das
+        // trotzdem ein Artikel, und "Margarine" zweimal untereinander sieht
+        // aus wie ein Fehler. Der juengste Eintrag gewinnt, also der mit
+        // der Schreibweise, die zuletzt gespeichert wurde.
+        const byName = new Map<string, string>();
+        for (const entry of [...entries].sort(
+          (a, b) =>
+            Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)),
+        )) {
+          const key = normalizeProductName(entry.name);
+          if (!key || byName.has(key)) continue;
+          byName.set(key, entry.name);
+          if (byName.size === SUGGESTION_COUNT) break;
+        }
+        setSuggestions([...byName.values()]);
       })
       .catch(() => {
         // Ohne Vorschlaege tippt man eben -- kein Fehler, der jemanden interessiert.
@@ -258,7 +290,8 @@ export function ItemForm({
   function applyCategory(value: string, list: CategoryOption[] = categoryList) {
     setCategory(value);
     if (!dateTouched) {
-      const shelfLifeDays = list.find((c) => c.key === value)?.shelfLifeDays ?? 14;
+      const shelfLifeDays =
+        list.find((c) => c.key === value)?.shelfLifeDays ?? 14;
       setExpiryDate(toDateInputValue(estimateExpiryDate(shelfLifeDays)));
     }
   }
@@ -302,11 +335,16 @@ export function ItemForm({
       const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: newCategoryLabel.trim(), shelfLifeDays: Math.round(days) }),
+        body: JSON.stringify({
+          label: newCategoryLabel.trim(),
+          shelfLifeDays: Math.round(days),
+        }),
       });
       if (!res.ok) throw new Error();
       const created = (await res.json()) as Category;
-      const nextList = [...categoryList, created].sort((a, b) => a.label.localeCompare(b.label));
+      const nextList = [...categoryList, created].sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
       setCategoryList(nextList);
       categoryTouchedRef.current = true;
       applyCategory(created.key, nextList);
@@ -381,7 +419,10 @@ export function ItemForm({
         return;
       }
 
-      const saved = (await res.json()) as { merged?: boolean; quantity?: number };
+      const saved = (await res.json()) as {
+        merged?: boolean;
+        quantity?: number;
+      };
       // Reset erst beim Verstecken durch Activity, siehe shouldResetRef.
       shouldResetRef.current = true;
 
@@ -391,9 +432,10 @@ export function ItemForm({
       const params = new URLSearchParams({
         name: name.trim(),
         date: expiryDate,
-        method: barcode ? "scan" : "manual",
+        method,
       });
-      if (saved.merged && saved.quantity) params.set("merged", String(saved.quantity));
+      if (saved.merged && saved.quantity)
+        params.set("merged", String(saved.quantity));
       router.push(`/saved?${params}`);
       router.refresh();
     } catch {
@@ -404,8 +446,11 @@ export function ItemForm({
   }
 
   const placeLearned = learnedPlace !== null && learnedPlace === placeId;
-  const categoryLearned = learnedCategory !== null && learnedCategory === category && category !== "";
-  const shelfLifeDays = categoryList.find((c) => c.key === category)?.shelfLifeDays;
+  const categoryLearned =
+    learnedCategory !== null && learnedCategory === category && category !== "";
+  const shelfLifeDays = categoryList.find(
+    (c) => c.key === category,
+  )?.shelfLifeDays;
   const categoryLabel = categoryList.find((c) => c.key === category)?.label;
   const selectedDate = expiryDate ? fromDateInputValue(expiryDate) : null;
 
@@ -471,7 +516,9 @@ export function ItemForm({
                 Kategorie in einem Satz -- zweimal derselbe Satz untereinander
                 liest sich wie ein Fehler. */}
             {placeLearned && !categoryLearned && (
-              <LearnedHint>Der Ort stammt aus deinem letzten Eintrag zu diesem Artikel.</LearnedHint>
+              <LearnedHint>
+                Der Ort stammt aus deinem letzten Eintrag zu diesem Artikel.
+              </LearnedHint>
             )}
           </Field>
         )}
@@ -503,8 +550,10 @@ export function ItemForm({
           </div>
           {categoryLearned && (
             <LearnedHint>
-              {placeLearned ? "Ort und Kategorie stammen" : "Die Kategorie stammt"} aus deinem
-              letzten Eintrag zu diesem Artikel.
+              {placeLearned
+                ? "Ort und Kategorie stammen"
+                : "Die Kategorie stammt"}{" "}
+              aus deinem letzten Eintrag zu diesem Artikel.
             </LearnedHint>
           )}
         </Field>
@@ -521,7 +570,9 @@ export function ItemForm({
             >
               <Minus className="size-5" />
             </Button>
-            <span className="w-10 text-center text-lg font-bold tabular-nums">{quantity}</span>
+            <span className="w-10 text-center text-lg font-bold tabular-nums">
+              {quantity}
+            </span>
             <Button
               variant="ghost"
               size="icon-touch"
@@ -551,14 +602,19 @@ export function ItemForm({
                 <span className="mt-0.5 block text-[12.5px] font-medium text-muted-foreground">
                   {expiryLabel(
                     Math.round(
-                      (selectedDate.getTime() - startOfDay(new Date()).getTime()) / 86_400_000,
+                      (selectedDate.getTime() -
+                        startOfDay(new Date()).getTime()) /
+                        86_400_000,
                     ),
                     selectedDate,
                   )}
                 </span>
               )}
             </span>
-            <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
+            <ChevronRight
+              className="size-4 shrink-0 text-faint"
+              strokeWidth={2}
+            />
           </button>
           {shelfLifeDays !== undefined && categoryLabel && (
             <p className="pl-1 text-[12.5px] leading-relaxed font-medium text-balance text-faint">
@@ -588,7 +644,11 @@ export function ItemForm({
         {itemId && (
           <ConfirmDialog
             trigger={
-              <Button variant="ghost" disabled={deleting} className="h-12 w-full rounded-lg text-danger">
+              <Button
+                variant="ghost"
+                disabled={deleting}
+                className="h-12 w-full rounded-lg text-danger"
+              >
                 <Trash2 className="size-4" />
                 Artikel löschen
               </Button>
@@ -683,7 +743,11 @@ function startOfDay(date: Date) {
  * aussieht, die man nur uebersehen hat.
  */
 function LearnedHint({ children }: { children: React.ReactNode }) {
-  return <p className="pl-1 text-xs font-medium text-balance text-faint">{children}</p>;
+  return (
+    <p className="pl-1 text-xs font-medium text-balance text-faint">
+      {children}
+    </p>
+  );
 }
 
 function Field({

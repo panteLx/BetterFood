@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Package, Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
@@ -78,11 +77,17 @@ export function InventoryList({
     () => new Map(categories.map((c) => [c.key, c.label])),
     [categories],
   );
-  const placeNames = useMemo(() => new Map(places.map((p) => [p.id, p.name])), [places]);
+  const placeNames = useMemo(
+    () => new Map(places.map((p) => [p.id, p.name])),
+    [places],
+  );
 
-  const labelOf = (item: Item) => categoryLabels.get(item.category) ?? item.category;
+  const labelOf = (item: Item) =>
+    categoryLabels.get(item.category) ?? item.category;
   const placeOf = (item: Item) =>
-    item.placeId === null ? "Ohne Ort" : (placeNames.get(item.placeId) ?? "Ohne Ort");
+    item.placeId === null
+      ? "Ohne Ort"
+      : (placeNames.get(item.placeId) ?? "Ohne Ort");
 
   async function resolve(item: Item, nextStatus: ResolveStatus) {
     const previousItems = items;
@@ -92,7 +97,9 @@ export function InventoryList({
     // Einheit weniger stehen, statt komplett zu verschwinden.
     setItems((prev) =>
       remaining > 0
-        ? prev.map((i) => (i.id === item.id ? { ...i, quantity: remaining } : i))
+        ? prev.map((i) =>
+            i.id === item.id ? { ...i, quantity: remaining } : i,
+          )
         : prev.filter((i) => i.id !== item.id),
     );
 
@@ -100,7 +107,9 @@ export function InventoryList({
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
       toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb} – noch ${remaining} übrig` : `${item.name} ${verb}`,
+        remaining > 0
+          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
+          : `${item.name} ${verb}`,
         {
           action: {
             label: "Rückgängig",
@@ -159,9 +168,10 @@ export function InventoryList({
       const unplaced = pool.filter(
         (item) => item.placeId === null || !placeNames.has(item.placeId),
       );
-      return [...named, { title: "Ohne Ort", danger: false, items: unplaced }].filter(
-        (section) => section.items.length > 0,
-      );
+      return [
+        ...named,
+        { title: "Ohne Ort", danger: false, items: unplaced },
+      ].filter((section) => section.items.length > 0);
     }
 
     if (grouping === "kategorie") {
@@ -203,7 +213,7 @@ export function InventoryList({
       </div>
 
       <div className="px-5">
-        <label className="flex h-12 items-center gap-2.5 rounded-2xl border border-border bg-card px-3.5">
+        <label className="flex h-12 items-center gap-2.5 rounded-lg border border-border bg-card px-3.5">
           <Search className="size-4.5 shrink-0 text-faint" />
           <input
             type="search"
@@ -229,7 +239,9 @@ export function InventoryList({
       </div>
 
       <div className="flex items-center gap-2 px-5">
-        <span className="text-[11.5px] font-semibold whitespace-nowrap text-faint">Gruppiert</span>
+        <span className="text-[11.5px] font-semibold whitespace-nowrap text-faint">
+          Gruppiert
+        </span>
         {GROUPINGS.map((group) => (
           <Chip
             key={group.value}
@@ -292,10 +304,7 @@ function Header({ total, shown }: { total: number; shown: number }) {
           "Noch nichts erfasst"
         ) : (
           <>
-            {shown} von {total} Artikeln ·{" "}
-            <Link href="/archive" className="font-semibold text-primary">
-              Archiv
-            </Link>
+            {shown} von {total} Artikeln
           </>
         )}
       </p>

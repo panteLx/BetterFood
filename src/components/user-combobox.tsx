@@ -42,8 +42,10 @@ export function UserCombobox({
 
   function status() {
     if (pending) return "Suche…";
-    if (trimmed.length > 0 && trimmed.length < 2) return "Mindestens 2 Zeichen eingeben.";
-    if (trimmed.length >= 2 && results.length === 0) return `Keine Treffer für "${trimmed}".`;
+    if (trimmed.length > 0 && trimmed.length < 2)
+      return "Mindestens 2 Zeichen eingeben.";
+    if (trimmed.length >= 2 && results.length === 0)
+      return `Keine Treffer für "${trimmed}".`;
     return null;
   }
 
@@ -64,9 +66,12 @@ export function UserCombobox({
     abortRef.current = controller;
     setPending(true);
     try {
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(q.trim())}`, {
-        signal: controller.signal,
-      });
+      const res = await fetch(
+        `/api/users/search?q=${encodeURIComponent(q.trim())}`,
+        {
+          signal: controller.signal,
+        },
+      );
       const data = (await res.json()) as { users?: UserResult[] };
       if (controller.signal.aborted) return;
       setResults(data.users ?? []);
@@ -101,8 +106,11 @@ export function UserCombobox({
         setResults([]);
       }}
     >
-      <ComboboxInputGroup>
-        <ComboboxInput placeholder="Name oder E-Mail suchen…" disabled={disabled} />
+      <ComboboxInputGroup className="h-11 rounded-[10px]">
+        <ComboboxInput
+          placeholder="Name oder E-Mail suchen…"
+          disabled={disabled}
+        />
       </ComboboxInputGroup>
       <ComboboxPortal>
         <ComboboxPositioner>
@@ -114,7 +122,9 @@ export function UserCombobox({
                 <ComboboxItem key={u.id} value={u}>
                   <span className="flex flex-col gap-0.5">
                     <span className="font-medium">{u.name}</span>
-                    <span className="text-xs text-muted-foreground">{u.email}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {u.email}
+                    </span>
                   </span>
                 </ComboboxItem>
               )}

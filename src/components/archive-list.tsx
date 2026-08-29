@@ -4,9 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import { Archive as ArchiveIcon, EyeOff, RotateCcw } from "lucide-react";
+import {
+  Archive as ArchiveIcon,
+  EyeOff,
+  RotateCcw,
+  type LucideIcon,
+} from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hideItem, restoreItem } from "@/lib/item-actions";
 import { formatShort } from "@/lib/expiry";
@@ -27,6 +32,7 @@ export function ArchiveList({
 }) {
   const router = useRouter();
   const [pendingHide, setPendingHide] = useState<Item | null>(null);
+  const [pendingActions, setPendingActions] = useState<Item | null>(null);
   const categoryLabels = new Map(categories.map((c) => [c.key, c.label]));
 
   async function restore(item: Item) {
@@ -76,12 +82,49 @@ export function ArchiveList({
             categoryLabel={categoryLabels.get(item.category) ?? item.category}
             onRestore={() => restore(item)}
             onHide={() => setPendingHide(item)}
+            onOpenActions={() => setPendingActions(item)}
           />
         ))}
       </div>
 
-      {/* Ein Dialog fuer alle Zeilen statt einer je Zeile: bei 200 Eintraegen
-          im Archiv waeren das 200 Dialoge im Baum. */}
+      {/* Wie im Vorrat sind Wischen nach rechts (zurueckholen) und nach links
+          (ausblenden) der schnelle Weg. Beide sind mit Tastatur und
+          Screenreader nicht bedienbar, und anders als eine Vorratszeile hat
+          ein Archiv-Eintrag keine Detailseite, auf der dieselben Aktionen als
+          Buttons stuenden -- deshalb oeffnet das Antippen der Zeile sie hier.
+
+          Ein Blatt fuer alle Zeilen statt eines je Zeile: bei 200 Eintraegen
+          im Archiv waeren das 200 Dialoge im Baum. Dasselbe gilt fuer den
+          Rueckfrage-Dialog darunter. */}
+      <Sheet
+        open={pendingActions !== null}
+        onOpenChange={(open) => !open && setPendingActions(null)}
+        title={pendingActions?.name ?? ""}
+      >
+        <div className="flex flex-col gap-2">
+          <SheetAction
+            icon={RotateCcw}
+            label="Wiederherstellen"
+            hint="Zurück in den Vorrat"
+            onClick={() => {
+              const item = pendingActions;
+              setPendingActions(null);
+              if (item) restore(item);
+            }}
+          />
+          <SheetAction
+            icon={EyeOff}
+            label="Ausblenden"
+            hint="Verschwindet aus Archiv und Statistik"
+            onClick={() => {
+              const item = pendingActions;
+              setPendingActions(null);
+              if (item) setPendingHide(item);
+            }}
+          />
+        </div>
+      </Sheet>
+
       <ConfirmDialog
         open={pendingHide !== null}
         onOpenChange={(open) => !open && setPendingHide(null)}
@@ -100,13 +143,15 @@ function ArchiveCard({
   categoryLabel,
   onRestore,
   onHide,
+  onOpenActions,
 }: {
   item: Item;
   categoryLabel: string;
   onRestore: () => void;
   onHide: () => void;
+  onOpenActions: () => void;
 }) {
-  const { offset, dragging, handlers } = useSwipeActions({
+  const { offset, dragging, wasSwipe, handlers } = useSwipeActions({
     onSwipeRight: onRestore,
     onSwipeLeft: onHide,
   });
@@ -114,8 +159,9 @@ function ArchiveCard({
 
   return (
     <div
+      // overflow-x-clip statt overflow-hidden: siehe item-card.tsx.
       className={cn(
-        "relative overflow-hidden rounded-[20px] bg-surface-2 transition-colors",
+        "relative overflow-x-clip rounded-[20px] bg-surface-2 transition-colors",
         offset > 0 && "bg-primary-tint",
       )}
     >
@@ -143,60 +189,88 @@ function ArchiveCard({
 
       <div
         {...handlers}
-        style={{ transform: `translateX(${offset}px)` }}
+        // Nur waehrend der Geste ein Transform. Ein Element mit
+        // transform wird von den Browsern nicht mehr auf ganze
+        // Geraetepixel gerundet, und weil die Zeile bruchteilig hoch
+        // ist (72,75px), verblasste die 1px-Unterkante dabei bis zur
+        // Unsichtbarkeit -- je nach Position in der Liste mal mehr,
+        // mal weniger. Auf translateX(0px) zu verzichten kostet
+        // nichts: die Rueckfeder-Animation laeuft weiterhin, weil
+        // CSS gegen "none" wie gegen die Identitaet interpoliert.
+        style={
+          offset === 0 ? undefined : { transform: `translateX(${offset}px)` }
+        }
         className={cn(
-          "relative flex touch-pan-y items-center gap-3 rounded-[20px] border border-border bg-card px-3.5 py-3 select-none",
+          "relative flex touch-pan-y items-center rounded-[20px] border border-border bg-card select-none",
           dragging ? "transition-none" : "transition-transform duration-200",
         )}
       >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] leading-tight font-bold">
-            {item.name}
-            {item.quantity > 1 && (
-              <span className="ml-2 font-semibold text-muted-foreground">×{item.quantity}</span>
-            )}
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "inline-flex h-5.5 items-center rounded-lg px-2.5 text-[11.5px] font-bold whitespace-nowrap",
-                used ? "bg-primary-tint text-primary" : "bg-danger-tint text-danger",
+        <button
+          type="button"
+          onClick={() => {
+            // Nach einer Wischgeste darf das abschliessende Click-Event das
+            // Blatt nicht mit oeffnen.
+            if (wasSwipe()) return;
+            onOpenActions();
+          }}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] leading-tight font-bold">
+              {item.name}
+              {item.quantity > 1 && (
+                <span className="ml-2 font-semibold text-muted-foreground">
+                  ×{item.quantity}
+                </span>
               )}
-            >
-              {used ? "Aufgebraucht" : "Weggeworfen"}
             </span>
-            <span className="text-xs leading-snug font-semibold text-muted-foreground">
-              {categoryLabel}
-              {item.resolvedAt && ` · ${formatShort(item.resolvedAt)}`}
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex h-5.5 items-center rounded-[7px] px-2.5 text-[11.5px] font-bold whitespace-nowrap",
+                  used
+                    ? "bg-primary-tint text-primary"
+                    : "bg-danger-tint text-danger",
+                )}
+              >
+                {used ? "Aufgebraucht" : "Weggeworfen"}
+              </span>
+              <span className="text-xs leading-snug font-semibold text-muted-foreground">
+                {categoryLabel}
+                {item.resolvedAt && ` · ${formatShort(item.resolvedAt)}`}
+              </span>
             </span>
-          </div>
-        </div>
-
-        {/* Die Wischgeste ist auch hier nicht der einzige Weg: mit Tastatur
-            und Screenreader bleiben beide Aktionen als Buttons erreichbar.
-            Als Symbole, damit sie die Zeile nicht laenger machen als den
-            Artikelnamen darin. */}
-        <div className="flex shrink-0 gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onRestore}
-            aria-label={`${item.name} wiederherstellen`}
-            className="size-10 rounded-[13px]"
-          >
-            <RotateCcw className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onHide}
-            aria-label={`${item.name} ausblenden`}
-            className="size-10 rounded-[13px] text-muted-foreground"
-          >
-            <EyeOff className="size-4" />
-          </Button>
-        </div>
+          </span>
+        </button>
       </div>
     </div>
+  );
+}
+
+function SheetAction({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3.5 rounded-[20px] border border-border bg-surface-2 p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Icon className="size-6 shrink-0 text-primary" strokeWidth={1.8} />
+      <span>
+        <span className="block text-base font-bold">{label}</span>
+        <span className="mt-0.5 block text-[13px] font-medium text-muted-foreground">
+          {hint}
+        </span>
+      </span>
+    </button>
   );
 }

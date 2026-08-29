@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
-import { STATUS_CLASSES, daysUntil, expiryLabel, expiryStatus } from "@/lib/expiry";
+import {
+  STATUS_CLASSES,
+  daysUntil,
+  expiryLabel,
+  expiryStatus,
+} from "@/lib/expiry";
 import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
 import { useIsClient } from "@/lib/use-is-client";
 import { cn } from "@/lib/utils";
@@ -52,9 +57,17 @@ export function ItemCard({
 
   return (
     <div
+      // overflow-x-clip, nicht overflow-hidden: geschnitten werden muss nur
+      // waagerecht, damit die weggewischte Karte nicht ueber den Seitenrand
+      // laeuft. Ein senkrechter Clip hat hier nichts zu tun und schnitt bei
+      // bruchteiliger Zeilenhoehe die Unterkante der Karte an.
       className={cn(
-        "relative overflow-hidden rounded-[20px] transition-colors",
-        offset > 0 ? "bg-primary-tint" : offset < 0 ? "bg-danger-tint" : "bg-surface-2",
+        "relative overflow-x-clip rounded-[20px] transition-colors",
+        offset > 0
+          ? "bg-primary-tint"
+          : offset < 0
+            ? "bg-danger-tint"
+            : "bg-surface-2",
       )}
     >
       <div
@@ -81,7 +94,17 @@ export function ItemCard({
 
       <div
         {...handlers}
-        style={{ transform: `translateX(${offset}px)` }}
+        // Nur waehrend der Geste ein Transform. Ein Element mit
+        // transform wird von den Browsern nicht mehr auf ganze
+        // Geraetepixel gerundet, und weil die Zeile bruchteilig hoch
+        // ist (72,75px), verblasste die 1px-Unterkante dabei bis zur
+        // Unsichtbarkeit -- je nach Position in der Liste mal mehr,
+        // mal weniger. Auf translateX(0px) zu verzichten kostet
+        // nichts: die Rueckfeder-Animation laeuft weiterhin, weil
+        // CSS gegen "none" wie gegen die Identitaet interpoliert.
+        style={
+          offset === 0 ? undefined : { transform: `translateX(${offset}px)` }
+        }
         className={cn(
           "relative flex touch-pan-y items-center rounded-[20px] border border-l-3 border-border bg-card select-none",
           styles.border,
@@ -111,13 +134,18 @@ export function ItemCard({
             <span className="block truncate text-[15px] leading-tight font-bold">
               {item.name}
               {item.quantity > 1 && (
-                <span className="ml-2 text-muted-foreground">×{item.quantity}</span>
+                <span className="ml-2 text-muted-foreground">
+                  ×{item.quantity}
+                </span>
               )}
             </span>
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <span
                 className={cn(
-                  "inline-flex h-5.5 items-center rounded-lg px-2.5 text-[11.5px] font-bold whitespace-nowrap",
+                  // Derselbe Radius-Anteil wie beim Chip (10px auf 34px),
+                  // nur auf 22px Hoehe heruntergerechnet -- eine Pille
+                  // stuende sonst neben lauter eckigen Auswahl-Chips.
+                  "inline-flex h-5.5 items-center rounded-[7px] px-2.5 text-[11.5px] font-bold whitespace-nowrap",
                   styles.chip,
                   !isClient && "opacity-0",
                 )}

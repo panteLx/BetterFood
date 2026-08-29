@@ -12,7 +12,10 @@ import { normalizeProductName } from "@/lib/utils";
  * (kein Ort gewaehlt) oder "invalid", wenn der Ort einer anderen Liste
  * gehoert.
  */
-async function resolvePlace(placeId: number | null | undefined, listId: number) {
+async function resolvePlace(
+  placeId: number | null | undefined,
+  listId: number,
+) {
   if (placeId === undefined || placeId === null) return null;
 
   const row = await db
@@ -39,7 +42,13 @@ export async function GET() {
   const rows = await db
     .select()
     .from(items)
-    .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
+    .where(
+      and(
+        eq(items.status, "active"),
+        eq(items.listId, listId),
+        isNull(items.hiddenAt),
+      ),
+    )
     .orderBy(items.expiryDate);
 
   return NextResponse.json(rows);
@@ -50,18 +59,22 @@ export async function POST(req: NextRequest) {
   const listId = await requireActiveList(session.user.id);
 
   const body = await req.json();
-  const { name, category, barcode, expiryDate, quantity, placeId, note } = body as {
-    name: string;
-    category: string;
-    barcode?: string;
-    expiryDate?: string;
-    quantity?: number;
-    placeId?: number | null;
-    note?: string | null;
-  };
+  const { name, category, barcode, expiryDate, quantity, placeId, note } =
+    body as {
+      name: string;
+      category: string;
+      barcode?: string;
+      expiryDate?: string;
+      quantity?: number;
+      placeId?: number | null;
+      note?: string | null;
+    };
 
   if (!name || !category) {
-    return NextResponse.json({ error: "name und category sind erforderlich" }, { status: 400 });
+    return NextResponse.json(
+      { error: "name und category sind erforderlich" },
+      { status: 400 },
+    );
   }
 
   const categoryRow = await db
@@ -84,22 +97,29 @@ export async function POST(req: NextRequest) {
 
   const qty = quantity !== undefined ? Math.round(quantity) : 1;
   if (!Number.isFinite(qty) || qty < 1) {
-    return NextResponse.json({ error: "Menge muss mindestens 1 sein" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Menge muss mindestens 1 sein" },
+      { status: 400 },
+    );
   }
 
   const now = new Date();
-  const expiry = expiryDate ? new Date(expiryDate) : estimateExpiryDate(categoryRow.shelfLifeDays, now);
+  const expiry = expiryDate
+    ? new Date(expiryDate)
+    : estimateExpiryDate(categoryRow.shelfLifeDays, now);
 
   // Drei gleiche Joghurts aus einem Einkauf wurden bisher zu drei identischen
   // Zeilen, obwohl quantity genau dafuer existiert. Zusammengefasst wird nur
   // bei gleichem MHD-Tag: eine frische Milch darf nicht stillschweigend mit
   // einer aelteren verschmelzen.
   //
-  // Ohne Barcode entscheidet der Name -- wer denselben Artikel zweimal von
-  // Hand eintraegt, meint dasselbe Produkt. Verglichen wird normalisiert
-  // (Gross-/Kleinschreibung, doppelte Leerzeichen), sonst trennt schon
-  // "Milch " von "Milch".
-  const sameProduct = await db
+  // Der Barcode ist dabei nur das genauere von zwei Erkennungsmerkmalen, kein
+  // Trennzeichen: zweimal gescannte Margarine und dieselbe Margarine von Hand
+  // nachgetragen sind derselbe Artikel, standen aber in getrennten Zeilen,
+  // weil die eine Seite einen Barcode hatte und die andere nicht. Verglichen
+  // wird der Name normalisiert (Gross-/Kleinschreibung, doppelte
+  // Leerzeichen), sonst trennt schon "Milch " von "Milch".
+  const sameCategory = await db
     .select()
     .from(items)
     .where(
@@ -108,20 +128,27 @@ export async function POST(req: NextRequest) {
         eq(items.status, "active"),
         isNull(items.hiddenAt),
         eq(items.category, category),
-        barcode ? eq(items.barcode, barcode) : isNull(items.barcode),
       ),
     );
 
-  const existing = sameProduct.find(
-    (item) =>
-      isSameDay(item.expiryDate, expiry) &&
-      (barcode ? true : normalizeProductName(item.name) === normalizeProductName(name)),
+  const nameKey = normalizeProductName(name);
+  const sameDay = sameCategory.filter((item) =>
+    isSameDay(item.expiryDate, expiry),
   );
+  const existing =
+    (barcode ? sameDay.find((item) => item.barcode === barcode) : undefined) ??
+    sameDay.find((item) => normalizeProductName(item.name) === nameKey);
 
   if (existing) {
     const [merged] = await db
       .update(items)
-      .set({ quantity: existing.quantity + qty })
+      .set({
+        quantity: existing.quantity + qty,
+        // Faellt ein gescannter Artikel mit einer von Hand angelegten Zeile
+        // zusammen, erbt sie den Barcode -- ab dem naechsten Scan trifft die
+        // genauere Erkennung wieder zuerst.
+        ...(barcode && !existing.barcode ? { barcode } : {}),
+      })
       .where(eq(items.id, existing.id))
       .returning();
 

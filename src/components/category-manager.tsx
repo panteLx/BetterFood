@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CategoryIcon } from "@/components/category-icon";
 import type { Category } from "@/db/schema";
 
@@ -28,6 +29,7 @@ export function CategoryManager({
   const [newLabel, setNewLabel] = useState("");
   const [newShelfLife, setNewShelfLife] = useState("14");
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
 
   function sorted(list: Category[]) {
     return [...list].sort((a, b) => a.label.localeCompare(b.label));
@@ -60,7 +62,9 @@ export function CategoryManager({
       const updated = (await res.json()) as Category;
       toast.success("Kategorie aktualisiert");
       setEditingId(null);
-      onCategoriesChange(sorted([...categories.filter((c) => c.id !== updated.id), updated]));
+      onCategoriesChange(
+        sorted([...categories.filter((c) => c.id !== updated.id), updated]),
+      );
     } catch {
       toast.error("Konnte Kategorie nicht aktualisieren.");
     } finally {
@@ -69,17 +73,24 @@ export function CategoryManager({
   }
 
   async function deleteCategory(id: number) {
+    setPendingDelete(null);
     setSaving(true);
     try {
       const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(body?.error ?? "Konnte Kategorie nicht löschen.");
       }
       toast.success("Kategorie gelöscht");
       onCategoriesChange(categories.filter((c) => c.id !== id));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Konnte Kategorie nicht löschen.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Konnte Kategorie nicht löschen.",
+      );
     } finally {
       setSaving(false);
     }
@@ -111,7 +122,8 @@ export function CategoryManager({
   return (
     <div className="flex flex-col gap-2.5">
       <p className="px-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
-        Die Haltbarkeit einer Kategorie bestimmt, welches MHD beim Erfassen vorgeschlagen wird.
+        Die Haltbarkeit einer Kategorie bestimmt, welches MHD beim Erfassen
+        vorgeschlagen wird.
       </p>
 
       {categories.map((category) => (
@@ -162,7 +174,9 @@ export function CategoryManager({
           ) : (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[14.5px] leading-tight font-bold">{category.label}</p>
+                <p className="truncate text-[14.5px] leading-tight font-bold">
+                  {category.label}
+                </p>
                 <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
                   Haltbarkeit: {category.shelfLifeDays} Tage
                 </p>
@@ -186,7 +200,7 @@ export function CategoryManager({
                 variant="outline"
                 className="size-10 shrink-0 rounded-[13px] text-danger"
                 disabled={saving}
-                onClick={() => deleteCategory(category.id)}
+                onClick={() => setPendingDelete(category)}
                 aria-label={`${category.label} löschen`}
               >
                 <Trash2 className="size-4" />
@@ -222,6 +236,19 @@ export function CategoryManager({
           <Plus className="size-5" strokeWidth={2.3} />
         </button>
       </div>
+
+      {/* Eine Kategorie zu loeschen nimmt alles mit, was die Liste ueber die
+          Produkte darin gelernt hat -- das darf kein einzelner Fehlgriff auf
+          ein Muelltonnen-Symbol ausloesen. Dieselbe Rueckfrage wie bei den
+          Orten, und eine fuer alle Zeilen statt einer je Zeile. */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={<>„{pendingDelete?.label}“ löschen?</>}
+        description="Artikel in dieser Kategorie bleiben im Vorrat. Was die App über die Produkte darin gelernt hat, geht verloren – beim nächsten Erfassen fragt sie erneut."
+        confirmLabel="Löschen"
+        onConfirm={() => pendingDelete && deleteCategory(pendingDelete.id)}
+      />
     </div>
   );
 }

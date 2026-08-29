@@ -16,8 +16,20 @@ import { cn } from "@/lib/utils";
  * ueberlassen.
  */
 const THEMES = [
-  { value: "light", label: "Hell", surface: "#f2f4f0", accent: "#37714c", card: "#ffffff" },
-  { value: "dark", label: "Dunkel", surface: "#0e1310", accent: "#74c48d", card: "#1e2721" },
+  {
+    value: "light",
+    label: "Hell",
+    surface: "#f2f4f0",
+    accent: "#37714c",
+    card: "#ffffff",
+  },
+  {
+    value: "dark",
+    label: "Dunkel",
+    surface: "#0e1310",
+    accent: "#74c48d",
+    card: "#1e2721",
+  },
 ] as const;
 
 export function ThemeToggle() {
@@ -39,17 +51,26 @@ export function ThemeToggle() {
               aria-pressed={selected}
               onClick={() => setTheme(option.value)}
               className={cn(
-                "flex flex-1 flex-col items-center gap-3 rounded-3xl border-2 bg-card p-3.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                "flex flex-1 flex-col items-center gap-3 rounded-2xl border-2 bg-card p-3.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                 selected ? "border-primary" : "border-border",
               )}
             >
               <span
-                className="flex h-26 w-full flex-col gap-1.5 rounded-2xl border border-border p-2.5"
+                className="flex h-26 w-full flex-col gap-1.5 rounded-[15px] border border-border p-2.5"
                 style={{ background: option.surface }}
               >
-                <span className="h-6 rounded-[7px]" style={{ background: option.accent }} />
-                <span className="h-3.5 rounded-[5px]" style={{ background: option.card }} />
-                <span className="h-3.5 w-[70%] rounded-[5px]" style={{ background: option.card }} />
+                <span
+                  className="h-6 rounded-[7px]"
+                  style={{ background: option.accent }}
+                />
+                <span
+                  className="h-3.5 rounded-[5px]"
+                  style={{ background: option.card }}
+                />
+                <span
+                  className="h-3.5 w-[70%] rounded-[5px]"
+                  style={{ background: option.card }}
+                />
               </span>
               <span className="text-sm font-bold">{option.label}</span>
             </button>
@@ -57,7 +78,7 @@ export function ThemeToggle() {
         })}
       </div>
 
-      <div className="flex items-center gap-3 rounded-3xl border border-border bg-card px-4 py-3.5">
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5">
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold">Systemeinstellung folgen</p>
           <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
@@ -66,7 +87,9 @@ export function ThemeToggle() {
         </div>
         <Switch
           checked={mounted ? followsSystem : false}
-          onCheckedChange={(value) => setTheme(value ? "system" : (resolvedTheme ?? "light"))}
+          onCheckedChange={(value) =>
+            setTheme(value ? "system" : (resolvedTheme ?? "light"))
+          }
           aria-label="Systemeinstellung folgen"
         />
       </div>

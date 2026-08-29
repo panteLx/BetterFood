@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
 import { InstallHintBanner } from "@/components/install-hint";
+import { ReminderHintBanner } from "@/components/reminder-hint";
 import { useIsClient } from "@/lib/use-is-client";
 import { computeArchiveStats, type ResolvedEntry } from "@/lib/stats";
 import { URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
@@ -45,7 +46,10 @@ export function HomeOverview({
   places: Pick<Place, "id" | "name">[];
   /** Nur Status, Menge und Zeitpunkt -- mehr braucht die Quote nicht. */
   resolvedEntries: ResolvedEntry[];
-  lists: (Pick<List, "id" | "name"> & { itemCount: number; memberCount: number })[];
+  lists: (Pick<List, "id" | "name"> & {
+    itemCount: number;
+    memberCount: number;
+  })[];
   activeListId: number;
   userName: string;
 }) {
@@ -63,7 +67,10 @@ export function HomeOverview({
   const isClient = useIsClient();
   const today = useMemo(() => (isClient ? new Date() : null), [isClient]);
 
-  const placeNames = useMemo(() => new Map(places.map((p) => [p.id, p.name])), [places]);
+  const placeNames = useMemo(
+    () => new Map(places.map((p) => [p.id, p.name])),
+    [places],
+  );
   const categoryLabels = useMemo(
     () => new Map(categories.map((c) => [c.key, c.label])),
     [categories],
@@ -71,9 +78,14 @@ export function HomeOverview({
 
   const buckets = useMemo(() => {
     if (!today) return null;
-    const withDays = items.map((item) => ({ item, days: daysUntil(item.expiryDate, today) }));
+    const withDays = items.map((item) => ({
+      item,
+      days: daysUntil(item.expiryDate, today),
+    }));
     const expired = withDays.filter((entry) => entry.days < 0);
-    const soon = withDays.filter((entry) => entry.days >= 0 && entry.days <= URGENT_WITHIN_DAYS);
+    const soon = withDays.filter(
+      (entry) => entry.days >= 0 && entry.days <= URGENT_WITHIN_DAYS,
+    );
     return {
       expired,
       soon,
@@ -97,7 +109,9 @@ export function HomeOverview({
 
     setItems((prev) =>
       remaining > 0
-        ? prev.map((i) => (i.id === item.id ? { ...i, quantity: remaining } : i))
+        ? prev.map((i) =>
+            i.id === item.id ? { ...i, quantity: remaining } : i,
+          )
         : prev.filter((i) => i.id !== item.id),
     );
 
@@ -105,7 +119,9 @@ export function HomeOverview({
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
       toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb} – noch ${remaining} übrig` : `${item.name} ${verb}`,
+        remaining > 0
+          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
+          : `${item.name} ${verb}`,
         {
           action: {
             label: "Rückgängig",
@@ -130,9 +146,11 @@ export function HomeOverview({
   }
 
   const dateLine = today
-    ? new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long" }).format(
-        today,
-      )
+    ? new Intl.DateTimeFormat("de-DE", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+      }).format(today)
     : "";
 
   return (
@@ -142,12 +160,18 @@ export function HomeOverview({
           <h1 className="text-[26px] leading-tight">
             {today ? `${greetingFor(today.getHours())}, ${userName}` : userName}
           </h1>
-          <p className="mt-1.5 h-4.5 text-[13px] font-medium text-muted-foreground">{dateLine}</p>
+          <p className="mt-1.5 h-4.5 text-[13px] font-medium text-muted-foreground">
+            {dateLine}
+          </p>
         </div>
         <ListSwitcher activeListId={activeListId} lists={lists} />
       </div>
 
+      {/* Genau einer von beiden: auf iOS im Browser-Tab die Installation,
+          sonst -- und nur solange es etwas einzuschalten gibt -- das
+          Angebot der Erinnerungen. */}
       <InstallHintBanner />
+      <ReminderHintBanner />
 
       {buckets && (
         <div className="flex flex-col gap-3.5 rounded-3xl border border-border bg-card px-4 pt-4 pb-4.5 shadow-card">
@@ -166,7 +190,11 @@ export function HomeOverview({
               tone="text-danger"
             />
             <span className="w-px bg-border" />
-            <Counter href="/inventory" value={buckets.total} label="im Vorrat" />
+            <Counter
+              href="/inventory"
+              value={buckets.total}
+              label="im Vorrat"
+            />
           </div>
 
           {/* Der Balken macht das Verhaeltnis lesbar, das drei nebeneinander
@@ -176,14 +204,19 @@ export function HomeOverview({
             role="img"
             aria-label={`${buckets.fresh} frisch, ${buckets.soon.length} bald fällig, ${buckets.expired.length} abgelaufen`}
           >
-            <span className="bg-primary" style={{ width: `${share(buckets.fresh, items.length)}%` }} />
+            <span
+              className="bg-primary"
+              style={{ width: `${share(buckets.fresh, items.length)}%` }}
+            />
             <span
               className="bg-warning"
               style={{ width: `${share(buckets.soon.length, items.length)}%` }}
             />
             <span
               className="bg-danger"
-              style={{ width: `${share(buckets.expired.length, items.length)}%` }}
+              style={{
+                width: `${share(buckets.expired.length, items.length)}%`,
+              }}
             />
           </div>
 
@@ -195,8 +228,10 @@ export function HomeOverview({
               "Noch nichts abgehakt – deine Quote entsteht hier"
             ) : (
               <>
-                <span className="font-extrabold text-primary">{stats.quota} %</span> diesen Monat
-                gerettet
+                <span className="font-extrabold text-primary">
+                  {stats.quota} %
+                </span>{" "}
+                diesen Monat gerettet
               </>
             )}
             <ChevronRight className="size-3.5" strokeWidth={2.2} />
@@ -208,7 +243,10 @@ export function HomeOverview({
         <section className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between">
             <h2 className="text-[15px] font-bold">Bald aufbrauchen</h2>
-            <Link href="/inventory?filter=bald" className="text-[13px] font-semibold text-primary">
+            <Link
+              href="/inventory?filter=bald"
+              className="text-[13px] font-semibold text-primary"
+            >
               Alle ansehen
             </Link>
           </div>
@@ -233,13 +271,21 @@ export function HomeOverview({
           <EmptyState
             icon={items.length === 0 ? Package : Check}
             tone={items.length === 0 ? "muted" : "primary"}
-            title={items.length === 0 ? "Dein Vorrat ist noch leer" : "Nichts läuft bald ab"}
+            title={
+              items.length === 0
+                ? "Dein Vorrat ist noch leer"
+                : "Nichts läuft bald ab"
+            }
             body={
               items.length === 0
                 ? "Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
                 : "Dein Vorrat sieht gut aus. Wir melden uns rechtzeitig."
             }
-            action={items.length === 0 ? <AddItemButton label="Artikel hinzufügen" /> : undefined}
+            action={
+              items.length === 0 ? (
+                <AddItemButton label="Artikel hinzufügen" />
+              ) : undefined
+            }
           />
         </div>
       )}
@@ -264,7 +310,9 @@ function Counter({
 }) {
   return (
     <Link href={href} className="flex flex-1 flex-col items-center gap-1.5">
-      <span className={`text-[26px] leading-none font-extrabold tabular-nums ${tone ?? ""}`}>
+      <span
+        className={`text-[26px] leading-none font-extrabold tabular-nums ${tone ?? ""}`}
+      >
         {value}
       </span>
       <span className="text-[11.5px] leading-tight font-semibold text-muted-foreground">

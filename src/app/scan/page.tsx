@@ -118,7 +118,7 @@ export default function ScanPage() {
             if (result) {
               scannedRef.current = true;
               controlsRef.current?.stop();
-              router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}`);
+              router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}&via=scan`);
               return;
             }
             if (err && !isExpectedDecodeError(err)) {

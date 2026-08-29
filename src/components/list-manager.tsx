@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, ChevronDown, Plus, RotateCcw, Trash2, UserPlus, X } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  Plus,
+  RotateCcw,
+  Trash2,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserCombobox } from "@/components/user-combobox";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -40,11 +48,17 @@ export function ListManager() {
   function load() {
     fetch("/api/lists")
       .then((res) => res.json())
-      .then((data: { lists: List[]; archivedLists: List[]; activeListId: number }) => {
-        setLists(data.lists);
-        setArchivedLists(data.archivedLists);
-        setActiveListId(data.activeListId);
-      })
+      .then(
+        (data: {
+          lists: List[];
+          archivedLists: List[];
+          activeListId: number;
+        }) => {
+          setLists(data.lists);
+          setArchivedLists(data.archivedLists);
+          setActiveListId(data.activeListId);
+        },
+      )
       .finally(() => setLoading(false));
   }
 
@@ -74,7 +88,9 @@ export function ListManager() {
     try {
       const res = await fetch(input, init);
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(body?.error ?? fallbackError);
       }
       if (onSuccess) toast.success(onSuccess);
@@ -185,14 +201,17 @@ export function ListManager() {
   return (
     <div className="flex flex-col gap-4">
       <p className="px-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
-        Jede Liste ist ein eigener Vorrat. Teile eine Liste, damit alle im Haushalt denselben Stand
-        sehen.
+        Jede Liste ist ein eigener Vorrat. Teile eine Liste, damit alle im
+        Haushalt denselben Stand sehen.
       </p>
 
       {loading ? (
         <div className="flex flex-col gap-2.5">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="h-[70px] animate-pulse rounded-[20px] bg-muted" />
+            <div
+              key={index}
+              className="h-[70px] animate-pulse rounded-[20px] bg-muted"
+            />
           ))}
         </div>
       ) : (
@@ -225,7 +244,9 @@ export function ListManager() {
                       )}
                     />
                     <span className="min-w-0">
-                      <span className="block truncate text-[15px] font-bold">{list.name}</span>
+                      <span className="block truncate text-[15px] font-bold">
+                        {list.name}
+                      </span>
                       <span className="mt-1 block text-[12.5px] font-medium text-muted-foreground">
                         {isOwner ? "Deine Liste" : "Geteilte Liste"}
                         {listMembers &&
@@ -252,17 +273,25 @@ export function ListManager() {
                 {expanded && (
                   <div className="flex flex-col gap-3 border-t border-border p-3.5">
                     {!listMembers ? (
-                      <p className="text-xs font-medium text-muted-foreground">Lädt…</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Lädt…
+                      </p>
                     ) : (
                       <div className="flex flex-col gap-2.5">
                         {listMembers.map((member) => {
-                          const isSelf = session ? member.userId === session.user.id : false;
-                          const canRemove = !member.isOwner && (isOwner || isSelf);
+                          const isSelf = session
+                            ? member.userId === session.user.id
+                            : false;
+                          const canRemove =
+                            !member.isOwner && (isOwner || isSelf);
                           return (
-                            <div key={member.userId} className="flex items-center gap-3">
+                            <div
+                              key={member.userId}
+                              className="flex items-center gap-3"
+                            >
                               <span
                                 className={cn(
-                                  "flex size-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-extrabold",
+                                  "flex size-9 shrink-0 items-center justify-center rounded-[12px] text-[13px] font-extrabold",
                                   member.isOwner
                                     ? "bg-primary-tint text-primary"
                                     : "bg-surface-2 text-muted-foreground",
@@ -275,16 +304,24 @@ export function ListManager() {
                                   {member.name}
                                 </span>
                                 <span className="mt-0.5 block truncate text-xs font-medium text-muted-foreground">
-                                  {member.isOwner ? "Besitzer:in" : member.email}
+                                  {member.isOwner
+                                    ? "Besitzer:in"
+                                    : member.email}
                                 </span>
                               </span>
                               {canRemove && (
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="shrink-0 rounded-xl"
-                                  aria-label={isSelf ? "Liste verlassen" : "Mitglied entfernen"}
-                                  onClick={() => removeMember(list.id, member.userId, isSelf)}
+                                  className="shrink-0 rounded-[12px]"
+                                  aria-label={
+                                    isSelf
+                                      ? "Liste verlassen"
+                                      : "Mitglied entfernen"
+                                  }
+                                  onClick={() =>
+                                    removeMember(list.id, member.userId, isSelf)
+                                  }
                                 >
                                   <X className="size-4" />
                                 </Button>
@@ -298,7 +335,9 @@ export function ListManager() {
                     <div className="flex items-center gap-2.5">
                       <UserPlus className="size-4 shrink-0 text-faint" />
                       <div className="min-w-0 flex-1">
-                        <UserCombobox onSelect={(user) => addMember(list.id, user.id)} />
+                        <UserCombobox
+                          onSelect={(user) => addMember(list.id, user.id)}
+                        />
                       </div>
                     </div>
 
@@ -307,7 +346,7 @@ export function ListManager() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="rounded-xl"
+                          className="rounded-[10px]"
                           disabled={busy}
                           onClick={() => setArchived(list.id, true)}
                         >
@@ -319,7 +358,7 @@ export function ListManager() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              className="rounded-lg"
+                              className="rounded-[10px]"
                               disabled={busy}
                             >
                               <Trash2 className="size-4" />
@@ -349,7 +388,10 @@ export function ListManager() {
             onClick={() => setShowArchived((value) => !value)}
           >
             <ChevronDown
-              className={cn("size-3.5 transition-transform", showArchived && "rotate-180")}
+              className={cn(
+                "size-3.5 transition-transform",
+                showArchived && "rotate-180",
+              )}
             />
             Archivierte Listen ({archivedLists.length})
           </button>
@@ -365,7 +407,7 @@ export function ListManager() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-xl"
+                  className="rounded-[10px]"
                   disabled={busy}
                   onClick={() => setArchived(list.id, false)}
                 >

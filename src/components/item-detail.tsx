@@ -52,6 +52,20 @@ export function ItemDetail({
 
   const isClient = useIsClient();
   const days = isClient ? daysUntil(item.expiryDate) : 0;
+
+  /**
+   * Nach der letzten Einheit hat diese Seite nichts mehr zu zeigen -- der
+   * Weg zurueck ist der, ueber den man hergekommen ist: Vorrat, Startseite
+   * oder ein Suchergebnis. Vorher landete jeder hier auf der Startseite und
+   * musste sich seinen Filter neu zusammensuchen.
+   *
+   * Nur wenn es keine Historie gibt (Deep-Link aus einer Benachrichtigung,
+   * Neuladen der Seite), bleibt die Startseite der einzige Ausweg.
+   */
+  function leave() {
+    if (window.history.length > 1) router.back();
+    else router.push("/");
+  }
   const status = expiryStatus(days);
   const styles = STATUS_CLASSES[status];
 
@@ -63,7 +77,9 @@ export function ItemDetail({
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
       toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb} – noch ${remaining} übrig` : `${item.name} ${verb}`,
+        remaining > 0
+          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
+          : `${item.name} ${verb}`,
         {
           action: {
             label: "Rückgängig",
@@ -85,7 +101,7 @@ export function ItemDetail({
         setLocalQuantity(remaining);
         router.refresh();
       } else {
-        router.push("/");
+        leave();
         router.refresh();
       }
     } catch {
@@ -129,7 +145,7 @@ export function ItemDetail({
     try {
       await hideItem(item.id);
       toast.success(`${item.name} gelöscht`);
-      router.push("/");
+      leave();
       router.refresh();
     } catch {
       toast.error("Konnte Artikel nicht löschen.");
@@ -145,7 +161,7 @@ export function ItemDetail({
             variant="ghost"
             size="icon-touch"
             aria-label="Zurück"
-            onClick={() => router.back()}
+            onClick={leave}
             className="-ml-1.5 rounded-2xl"
           >
             <ArrowLeft className="size-5.5" />
@@ -189,7 +205,11 @@ export function ItemDetail({
               styles.text,
             )}
           >
-            <CategoryIcon categoryKey={item.category} className="size-11.5" strokeWidth={1.5} />
+            <CategoryIcon
+              categoryKey={item.category}
+              className="size-11.5"
+              strokeWidth={1.5}
+            />
           </span>
           <div className="text-center">
             <h1 className="text-2xl leading-snug text-balance">{item.name}</h1>
@@ -209,11 +229,18 @@ export function ItemDetail({
         </div>
 
         <dl className="overflow-hidden rounded-3xl border border-border bg-card">
-          <DetailRow label="Haltbar bis" value={formatMedium(item.expiryDate)} />
+          <DetailRow
+            label="Haltbar bis"
+            value={formatMedium(item.expiryDate)}
+          />
           <DetailRow label="Ort" value={placeName ?? "Nicht zugeordnet"} />
           <DetailRow label="Menge" value={`${quantity}×`} />
           <DetailRow label="Hinzugefügt" value={formatMedium(item.addedAt)} />
-          <DetailRow label="Eingetragen von" value={addedBy?.name ?? "Unbekannt"} last />
+          <DetailRow
+            label="Eingetragen von"
+            value={addedBy?.name ?? "Unbekannt"}
+            last
+          />
         </dl>
 
         {item.note && (
@@ -272,7 +299,9 @@ function DetailRow({
         !last && "border-b border-border",
       )}
     >
-      <dt className="flex-1 text-sm font-medium text-muted-foreground">{label}</dt>
+      <dt className="flex-1 text-sm font-medium text-muted-foreground">
+        {label}
+      </dt>
       <dd className="text-right text-sm font-bold">{value}</dd>
     </div>
   );

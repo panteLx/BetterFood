@@ -21,7 +21,9 @@ import {
 } from "@/lib/notification-settings";
 
 export default function RemindersPage() {
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [settings, setSettings] = useState<NotificationSettings>(
+    DEFAULT_NOTIFICATION_SETTINGS,
+  );
   const [loading, setLoading] = useState(true);
   const [permission, setPermission] = useState<string>("default");
   const [subscribed, setSubscribed] = useState(false);
@@ -74,7 +76,8 @@ export default function RemindersPage() {
         const ok = await subscribeToPush();
         setPermission(getNotificationPermissionState());
         setSubscribed(await hasPushSubscription());
-        if (!ok) toast.error("Benachrichtigungen konnten nicht aktiviert werden.");
+        if (!ok)
+          toast.error("Benachrichtigungen konnten nicht aktiviert werden.");
       } else {
         const ok = await unsubscribeFromPush();
         setSubscribed(await hasPushSubscription());
@@ -89,15 +92,18 @@ export default function RemindersPage() {
     setBusy(true);
     try {
       const res = await fetch("/api/push/test", { method: "POST" });
-      const data = (await res.json().catch(() => null)) as
-        | { sent?: number; error?: string }
-        | null;
+      const data = (await res.json().catch(() => null)) as {
+        sent?: number;
+        error?: string;
+      } | null;
 
       // Den Grund vom Server durchreichen: "konnte nicht gesendet werden" war
       // die einzige Rückmeldung, egal ob die Subscription fehlte, die
       // VAPID-Schlüssel oder der Push-Dienst.
       if (!res.ok || !data?.sent) {
-        toast.error(data?.error ?? "Testbenachrichtigung konnte nicht gesendet werden.");
+        toast.error(
+          data?.error ?? "Testbenachrichtigung konnte nicht gesendet werden.",
+        );
         setSubscribed(await hasPushSubscription());
         return;
       }
@@ -113,7 +119,7 @@ export default function RemindersPage() {
     <div className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-4">
       <SubPageHeader title="Erinnerungen" />
 
-      <div className="overflow-hidden rounded-3xl border border-border bg-card">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold">Erinnerungen an</p>
@@ -145,9 +151,9 @@ export default function RemindersPage() {
       </div>
 
       {permission === "denied" && (
-        <p className="rounded-2xl bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-medium text-danger">
-          Die Berechtigung wurde verweigert – bitte in den Browser- oder Systemeinstellungen
-          erlauben, dann hier erneut einschalten.
+        <p className="rounded-lg bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-medium text-danger">
+          Die Berechtigung wurde verweigert – bitte in den Browser- oder
+          Systemeinstellungen erlauben, dann hier erneut einschalten.
         </p>
       )}
 
@@ -206,7 +212,9 @@ export default function RemindersPage() {
               <span>BetterFood</span>
               <span className="font-medium text-muted-foreground">jetzt</span>
             </div>
-            <p className="mt-1.5 text-sm leading-snug font-bold">Vollmilch läuft heute ab</p>
+            <p className="mt-1.5 text-sm leading-snug font-bold">
+              Vollmilch läuft heute ab
+            </p>
             <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
               Noch 2 im Kühlschrank. Tippen, um als aufgebraucht zu markieren.
             </p>
@@ -216,7 +224,7 @@ export default function RemindersPage() {
           type="button"
           onClick={sendTest}
           disabled={busy || !subscribed}
-          className="h-12 rounded-2xl border border-border bg-card text-sm font-semibold disabled:opacity-50"
+          className="h-12 rounded-lg border border-border bg-card text-sm font-semibold disabled:opacity-50"
         >
           Testbenachrichtigung senden
         </button>

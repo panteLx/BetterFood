@@ -18,7 +18,8 @@ function readNeedsInstall() {
 
   const standalone =
     window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+      true;
 
   return isIOS && !standalone;
 }
@@ -30,7 +31,7 @@ function readNeedsInstall() {
  * die gesamte Rueckkehr-Mechanik der App traegt, ist dieser Hinweis faktisch
  * der wichtigste Teil davon.
  */
-function useNeedsInstall() {
+export function useNeedsInstall() {
   // Server-Snapshot false: waehrend des Prerenders ist weder das Geraet noch
   // der Anzeigemodus bekannt, und ein faelschlich sichtbarer Hinweis waere
   // schlimmer als einer, der einen Tick spaeter erscheint.
@@ -38,9 +39,15 @@ function useNeedsInstall() {
 }
 
 /**
- * Ausführliche Variante für die Einstellungsseite -- inklusive Abschnitts-
+ * Ausführliche Variante fuer die Erinnerungs-Seite -- inklusive Abschnitts-
  * ueberschrift, damit auf einem Geraet ohne diesen Fall keine leere
  * Ueberschrift ohne Inhalt stehen bleibt.
+ *
+ * Sie steht bewusst nur dort und nicht mehr zusaetzlich auf der Verteiler-
+ * seite: derselbe Kasten zweimal untereinander in denselben Einstellungen
+ * las sich wie ein Fehler, und er gehoert an die Stelle, an der der Nutzer
+ * die Erinnerungen einschalten will -- dort ist die Installation die
+ * Bedingung dafuer, nicht eine allgemeine Empfehlung.
  */
 export function InstallHintSettings() {
   const needsInstall = useNeedsInstall();
@@ -51,14 +58,20 @@ export function InstallHintSettings() {
       <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
         Auf dem Gerät
       </h2>
-      <div className="flex items-start gap-3 rounded-3xl border border-border bg-card px-4 py-3.5">
-        <Upload className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.8} />
+      <div className="bg-warning-tint flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3.5">
+        <Upload
+          className="mt-0.5 size-5 shrink-0 text-primary"
+          strokeWidth={1.8}
+        />
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold">Zum Home-Bildschirm</p>
+          <p className="text-[15px] font-semibold">
+            Zum Home-Bildschirm hinzufügen
+          </p>
           <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
-            BetterFood läuft im Browser. Einmal über{" "}
-            <span className="font-semibold">Teilen › Zum Home-Bildschirm</span> installiert,
-            startet es wie eine App – und darf Erinnerungen schicken.
+            BetterFood läuft gerade im Browser, und iOS liefert
+            Benachrichtigungen nur an installierte Apps. Teilen-Symbol antippen,
+            dann <span className="font-semibold">„Zum Home-Bildschirm“</span>{" "}
+            zum Installieren. Nur so kommen Erinnerungen an.
           </p>
         </div>
       </div>
@@ -108,7 +121,8 @@ export function InstallHintBanner() {
           Zum Home-Bildschirm hinzufügen
         </p>
         <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-accent-foreground/80">
-          Teilen-Symbol antippen, dann „Zum Home-Bildschirm“. Nur so kommen Erinnerungen an.
+          Teilen-Symbol antippen, dann „Zum Home-Bildschirm“ zum Installieren.
+          Nur so kommen Erinnerungen an.
         </p>
       </div>
       <button

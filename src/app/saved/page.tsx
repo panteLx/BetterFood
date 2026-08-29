@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { formatMedium, fromDateInputValue } from "@/lib/expiry";
+import { ENTRY_METHODS, parseEntryMethod } from "@/lib/entry-method";
 
 type SavedParams = Promise<{
   name?: string;
@@ -24,7 +25,11 @@ type SavedParams = Promise<{
  * Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
  * instant-navigation.md, Abschnitt "Fixing a navigation that blocks").
  */
-export default function SavedPage({ searchParams }: { searchParams: SavedParams }) {
+export default function SavedPage({
+  searchParams,
+}: {
+  searchParams: SavedParams;
+}) {
   return (
     <Suspense fallback={<div className="flex-1" />}>
       <Saved searchParams={searchParams} />
@@ -36,7 +41,7 @@ async function Saved({ searchParams }: { searchParams: SavedParams }) {
   const { name, date, method, merged } = await searchParams;
 
   const expiry = date ? fromDateInputValue(date) : null;
-  const scanned = method === "scan";
+  const next = ENTRY_METHODS[parseEntryMethod(method)];
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5.5 px-7 py-10">
@@ -54,11 +59,13 @@ async function Saved({ searchParams }: { searchParams: SavedParams }) {
       </div>
 
       <div className="mt-3 flex w-full animate-rise flex-col gap-2.5">
+        {/* Derselbe Weg wie eben, nicht irgendeiner: nach dem Einkauf haengt
+            der naechste Artikel meist am selben Verfahren. */}
         <Link
-          href={scanned ? "/scan" : "/add"}
-          className="flex h-13.5 items-center justify-center rounded-2xl border border-border bg-card text-[15px] font-bold"
+          href={next.href}
+          className="flex h-13.5 items-center justify-center rounded-2xl border border-border bg-card text-center text-[15px] font-bold text-balance"
         >
-          {scanned ? "Nächsten Barcode scannen" : "Noch etwas eintragen"}
+          {next.nextLabel}
         </Link>
         <Link
           href="/"

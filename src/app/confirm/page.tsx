@@ -3,6 +3,7 @@ import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getPlacesForList } from "@/lib/data";
+import { parseEntryMethod } from "@/lib/entry-method";
 
 // "await searchParams" muss unterhalb einer <Suspense>-Grenze passieren, sonst
 // blockiert die Navigation komplett den Server-Render (Next 16 "Instant
@@ -11,7 +12,7 @@ import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 export default function ConfirmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ barcode?: string }>;
+  searchParams: Promise<{ barcode?: string; via?: string }>;
 }) {
   return (
     <Suspense fallback={<div className="flex-1" />}>
@@ -20,8 +21,12 @@ export default function ConfirmPage({
   );
 }
 
-async function Confirm({ searchParams }: { searchParams: Promise<{ barcode?: string }> }) {
-  const { barcode } = await searchParams;
+async function Confirm({
+  searchParams,
+}: {
+  searchParams: Promise<{ barcode?: string; via?: string }>;
+}) {
+  const { barcode, via } = await searchParams;
   const session = await requireSession();
 
   let initialName = "";
@@ -45,8 +50,8 @@ async function Confirm({ searchParams }: { searchParams: Promise<{ barcode?: str
     <div className="flex flex-1 flex-col">
       {barcode && !initialName && (
         <p className="px-5 pt-3 text-[13px] font-medium text-muted-foreground">
-          Zu Barcode <span className="font-mono">{barcode}</span> ist nichts hinterlegt – bitte
-          Details ergänzen.
+          Zu Barcode <span className="font-mono">{barcode}</span> ist nichts
+          hinterlegt – bitte Details ergänzen.
         </p>
       )}
       {/* key=barcode erzwingt einen frischen ItemForm-Mount pro Barcode: unter
@@ -61,6 +66,10 @@ async function Confirm({ searchParams }: { searchParams: Promise<{ barcode?: str
         places={allPlaces}
         initialName={initialName}
         barcode={barcode}
+        // Ohne via kam der Aufruf noch aus einer Version, die den Weg nicht
+        // mitschickte -- ein Barcode auf /confirm entstand dort immer am
+        // Scanner.
+        method={parseEntryMethod(via ?? "scan")}
         redirectTo="/"
       />
     </div>

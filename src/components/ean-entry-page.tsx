@@ -24,11 +24,17 @@ export function EanEntryPage() {
     // preserving-ui-state.md, "Resetting form state on submit") - sonst
     // steht beim naechsten Oeffnen noch die zuletzt gesuchte EAN im Feld.
     setBarcode("");
-    router.push(`/confirm?barcode=${encodeURIComponent(trimmed)}`);
+    // via=ean, damit der Abschluss-Screen danach wieder die
+    // EAN-Eingabe anbietet und nicht die Kamera, die der Nutzer
+    // hier gerade bewusst umgangen hat.
+    router.push(`/confirm?barcode=${encodeURIComponent(trimmed)}&via=ean`);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-6">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-6"
+    >
       <div className="flex items-center gap-2.5">
         <Button
           variant="ghost"
@@ -43,7 +49,8 @@ export function EanEntryPage() {
       </div>
 
       <p className="text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
-        Wenn die Kamera den Code nicht liest: die Ziffernfolge unter dem Barcode eintippen.
+        Wenn die Kamera den Code nicht liest: die Ziffernfolge unter dem Barcode
+        eintippen.
       </p>
 
       <label className="flex h-16.5 items-center gap-3 rounded-[20px] border border-border bg-card px-4">
@@ -73,7 +80,10 @@ export function EanEntryPage() {
         <Link href="/scan" className="p-2 text-sm font-semibold text-primary">
           Stattdessen Barcode scannen
         </Link>
-        <Link href="/add" className="p-2 text-sm font-semibold text-muted-foreground">
+        <Link
+          href="/add"
+          className="p-2 text-sm font-semibold text-muted-foreground"
+        >
           Kein Barcode vorhanden
         </Link>
       </div>
