@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import {
@@ -9,7 +10,6 @@ import {
   StockIllustration,
   SwipeIllustration,
 } from "@/components/onboarding-illustrations";
-import { WELCOME_COOKIE } from "@/lib/welcome";
 import { cn, withRedirect } from "@/lib/utils";
 
 const SLIDES = [
@@ -36,12 +36,16 @@ const SLIDES = [
 ] as const;
 
 /**
- * Splash und Onboarding, einmal vor der ersten Anmeldung.
+ * Splash und Onboarding vor der ersten Anmeldung.
  *
- * Das Setzen des Cookies ist der eigentliche Punkt: die Route wird vom Proxy
- * nur so lange angesteuert, wie niemand sie gesehen hat. Sie liegt bewusst
- * nicht hinter der Anmeldung -- wer erklaert bekommen soll, wofuer er ein
- * Konto anlegt, muss das vorher lesen koennen.
+ * Beide Wege hier heraus fuehren auf die Registrierung: die Einfuehrung
+ * erklaert, wofuer man ein Konto anlegt, und endet deshalb genau dort. Wer
+ * schon eins hat, findet den Weg zum Anmelden darunter.
+ *
+ * Der Merker dafuer, dass das erledigt ist, wird nicht hier gesetzt, sondern
+ * mit der ersten erfolgreichen Anmeldung im Proxy -- siehe WELCOME_COOKIE.
+ * Ohne Konto bleibt die App fuer diesen Besucher ein leeres Versprechen, und
+ * dann ist die Erklaerung beim naechsten Oeffnen genau das, was fehlt.
  */
 function Welcome() {
   const router = useRouter();
@@ -49,11 +53,8 @@ function Welcome() {
   const redirect = searchParams.get("redirect");
   const [step, setStep] = useState(-1);
 
-  function finish(target: "/login" | "/register") {
-    // Ein Jahr: laenger als jede Sitzung, kuerzer als "nie wieder" -- wer die
-    // App nach einem Jahr neu installiert, darf die Einfuehrung erneut sehen.
-    document.cookie = `${WELCOME_COOKIE}=1; path=/; max-age=31536000; samesite=lax`;
-    router.replace(withRedirect(target, redirect));
+  function finish() {
+    router.replace(withRedirect("/register", redirect));
   }
 
   if (step < 0) {
@@ -88,7 +89,7 @@ function Welcome() {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => finish("/login")}
+          onClick={finish}
           className="p-2 text-sm font-semibold text-muted-foreground"
         >
           Überspringen
@@ -121,11 +122,21 @@ function Welcome() {
 
       <button
         type="button"
-        onClick={() => (isLast ? finish("/register") : setStep(step + 1))}
+        onClick={() => (isLast ? finish() : setStep(step + 1))}
         className="h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground"
       >
-        {isLast ? "Los geht’s" : "Weiter"}
+        {isLast ? "Konto erstellen" : "Weiter"}
       </button>
+
+      {/* Wer schon ein Konto hat, ist auf einem neuen Geraet trotzdem hier
+          gelandet -- ohne diesen Weg fuehrte der einzige Knopf ihn zur
+          Registrierung mit einer bereits vergebenen E-Mail. */}
+      <Link
+        href={withRedirect("/login", redirect)}
+        className="mt-1 flex h-11 items-center justify-center text-sm font-semibold text-muted-foreground"
+      >
+        Ich habe schon ein Konto
+      </Link>
     </div>
   );
 }
