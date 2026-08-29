@@ -8,6 +8,8 @@ import { BrandMark } from "@/components/brand-mark";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirect, withRedirect } from "@/lib/utils";
 
+type SignUpPayload = Parameters<typeof authClient.signUp.email>[0];
+
 const fieldClass =
   "h-14 w-full rounded-[18px] border border-border bg-card px-4 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -16,6 +18,7 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
   const [name, setName] = useState("");
+  const [householdName, setHouseholdName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,7 +27,16 @@ function RegisterForm() {
     event.preventDefault();
     setLoading(true);
     try {
-      const { error } = await authClient.signUp.email({ name, email, password });
+      // householdName steht in keiner Nutzerspalte, deshalb kennen die
+      // Client-Typen das Feld nicht. Der Endpunkt reicht unbekannte Felder
+      // aber an den create-Hook durch, der daraus die erste Liste benennt
+      // (siehe readHouseholdName in lib/auth.ts).
+      const { error } = await authClient.signUp.email({
+        name,
+        email,
+        password,
+        householdName,
+      } as SignUpPayload);
       if (error) {
         toast.error(error.message ?? "Registrierung fehlgeschlagen.");
         return;
@@ -49,6 +61,19 @@ function RegisterForm() {
           aria-label="Name"
           value={name}
           onChange={(event) => setName(event.target.value)}
+          className={fieldClass}
+        />
+        {/* Der Haushalt ist die erste Liste. Bisher hiess sie fuer alle
+            "Zuhause" -- ein Name, den man erst in den Einstellungen finden
+            und aendern musste, um zu merken, dass er aenderbar ist. */}
+        <input
+          name="household"
+          autoComplete="off"
+          required
+          placeholder="Haushalt, z. B. Zuhause"
+          aria-label="Name des Haushalts"
+          value={householdName}
+          onChange={(event) => setHouseholdName(event.target.value)}
           className={fieldClass}
         />
         <input
@@ -106,7 +131,8 @@ export default function RegisterPage() {
         <div>
           <h1 className="text-[26px] leading-snug">Konto erstellen</h1>
           <p className="mt-1.5 text-sm leading-relaxed font-medium text-balance text-muted-foreground">
-            Ein Konto genügt für den ganzen Haushalt – Listen lassen sich später teilen.
+            Dein Haushalt wird die erste Vorratsliste – teilen und umbenennen geht später
+            jederzeit.
           </p>
         </div>
       </div>

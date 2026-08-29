@@ -16,13 +16,40 @@ const oidcConfigured = Boolean(
   process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET,
 );
 
-async function claimLegacyData(newUser: { id: string }) {
+const DEFAULT_HOUSEHOLD_NAME = "Zuhause";
+
+/**
+ * Der Name des Haushalts, den die Registrierung mitschickt.
+ *
+ * Er kommt aus dem Anfragekoerper und nicht aus einem eigenen Feld an der
+ * Nutzertabelle: gebraucht wird er genau einmal, naemlich fuer die erste
+ * Liste. Eine Spalte dafuer waere eine zweite Wahrheit neben lists.name --
+ * und wuerde beim Umbenennen der Liste sofort falsch.
+ *
+ * Fehlt er (SSO-Anmeldung, aelterer Client), bleibt es beim Standardnamen.
+ * Die Laengenbegrenzung, weil die Registrierung ohne Anmeldung erreichbar
+ * ist.
+ */
+function readHouseholdName(context: { body?: unknown } | null): string {
+  const body = context?.body;
+  if (!body || typeof body !== "object") return DEFAULT_HOUSEHOLD_NAME;
+
+  const value = (body as { householdName?: unknown }).householdName;
+  if (typeof value !== "string") return DEFAULT_HOUSEHOLD_NAME;
+
+  return value.trim().slice(0, 60) || DEFAULT_HOUSEHOLD_NAME;
+}
+
+async function claimLegacyData(
+  newUser: { id: string },
+  context: { body?: unknown } | null,
+) {
   const [{ value: userCount }] = await db.select({ value: count() }).from(user);
 
   const now = new Date();
   const [list] = await db
     .insert(lists)
-    .values({ name: "Zuhause", ownerId: newUser.id, createdAt: now })
+    .values({ name: readHouseholdName(context), ownerId: newUser.id, createdAt: now })
     .returning();
 
   await db.insert(listMembers).values({ listId: list.id, userId: newUser.id, addedAt: now });
