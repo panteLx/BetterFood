@@ -21,3 +21,12 @@ export function withRedirect(path: string, redirect: string | null | undefined) 
   if (!redirect) return path;
   return `${path}?redirect=${encodeURIComponent(safeRedirect(redirect))}`;
 }
+
+/**
+ * Vergleichsform eines Produktnamens: "Milch", "milch " und "Milch  " sind
+ * derselbe Artikel. Wird sowohl beim Zusammenfassen gleicher Eintraege als
+ * auch beim Wiedererkennen bereits einsortierter Produkte verwendet.
+ */
+export function normalizeProductName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}

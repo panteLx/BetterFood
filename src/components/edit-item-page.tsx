@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ItemForm } from "@/components/item-form";
 import { db } from "@/db";
 import { items, user } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
 
@@ -24,7 +24,7 @@ export async function EditItemPage({ id, standalone = false }: { id: string; sta
       })
       .from(items)
       .leftJoin(user, eq(user.id, items.addedById))
-      .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+      .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
       .get(),
     getCategoriesForList(listId),
   ]);

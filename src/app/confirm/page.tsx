@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { ItemForm } from "@/components/item-form";
-import { EstimatedExpiry } from "@/components/estimated-expiry";
 import { lookupProductByBarcode } from "@/lib/off";
-import { DEFAULT_CATEGORIES, guessCategoryFromOffTags } from "@/lib/categories";
 import { optionalSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, lastCategoryForBarcode } from "@/lib/data";
+import { getCategoriesForList } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Camera, Hash } from "lucide-react";
@@ -18,23 +16,17 @@ export default async function ConfirmPage({
   const session = await optionalSession();
 
   let initialName = "";
-  let offTags: string[] = [];
 
   if (barcode) {
     try {
       const result = await lookupProductByBarcode(barcode);
-      if (result.found) {
-        initialName = result.name ?? "";
-        offTags = result.categoryTags ?? [];
-      }
+      if (result.found) initialName = result.name ?? "";
     } catch {
       // Lookup fehlgeschlagen -- Nutzer füllt Felder manuell aus.
     }
   }
 
   if (!session) {
-    const guessedKey = guessCategoryFromOffTags(offTags, [...DEFAULT_CATEGORIES], initialName);
-    const category = DEFAULT_CATEGORIES.find((c) => c.key === guessedKey);
     const redirect = `/confirm?barcode=${barcode ?? ""}`;
 
     return (
@@ -54,7 +46,6 @@ export default async function ConfirmPage({
             </CardHeader>
             <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
               {barcode && <p>Barcode: {barcode}</p>}
-              <EstimatedExpiry shelfLifeDays={category?.shelfLifeDays ?? 14} />
             </CardContent>
           </Card>
           <p className="text-sm text-muted-foreground">
@@ -100,23 +91,6 @@ export default async function ConfirmPage({
   const listId = await requireActiveList(session.user.id);
   const allCategories = await getCategoriesForList(listId);
 
-  // Was dieser Haushalt selbst schon einmal entschieden hat, schlaegt jede
-  // Regel: wurde derselbe Barcode hier bereits einsortiert, wird das
-  // uebernommen -- auch in eine selbst angelegte Kategorie, von der keine
-  // Regel wissen kann. Nur wenn die Kategorie inzwischen geloescht wurde,
-  // greift wieder die Schaetzung.
-  const previous = barcode ? await lastCategoryForBarcode(listId, barcode) : null;
-  const knownCategory = allCategories.find((c) => c.key === previous?.category)?.key;
-
-  // Der Produktname ist der Rueckfall, wenn OFF gar keine Kategorien fuehrt --
-  // das ist bei deutschen Frischeprodukten eher die Regel als die Ausnahme.
-  const initialCategory =
-    knownCategory ?? guessCategoryFromOffTags(offTags, allCategories, initialName);
-
-  // Ebenso der Name: hat der Haushalt "Rama" zu "Margarine" korrigiert, ist
-  // das die bessere Bezeichnung als die aus der Datenbank.
-  const knownName = previous?.name ?? initialName;
-
   return (
     <div className="flex flex-1 flex-col">
       <div className="p-4">
@@ -135,8 +109,7 @@ export default async function ConfirmPage({
       <ItemForm
         key={barcode}
         categories={allCategories}
-        initialName={knownName}
-        initialCategory={initialCategory}
+        initialName={initialName}
         barcode={barcode}
         redirectTo="/"
         // Nach dem Einkauf ist der naechste Artikel der Normalfall: ohne diesen

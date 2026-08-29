@@ -4,11 +4,7 @@ import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
-
-// "Milch", "milch " und "Milch  " sind derselbe Artikel.
-function normalizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+import { normalizeProductName } from "@/lib/utils";
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -25,7 +21,7 @@ export async function GET() {
   const rows = await db
     .select()
     .from(items)
-    .where(and(eq(items.status, "active"), eq(items.listId, listId)))
+    .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
     .orderBy(items.expiryDate);
 
   return NextResponse.json(rows);
@@ -82,6 +78,7 @@ export async function POST(req: NextRequest) {
       and(
         eq(items.listId, listId),
         eq(items.status, "active"),
+        isNull(items.hiddenAt),
         eq(items.category, category),
         barcode ? eq(items.barcode, barcode) : isNull(items.barcode),
       ),
@@ -90,7 +87,7 @@ export async function POST(req: NextRequest) {
   const existing = sameProduct.find(
     (item) =>
       isSameDay(item.expiryDate, expiry) &&
-      (barcode ? true : normalizeName(item.name) === normalizeName(name)),
+      (barcode ? true : normalizeProductName(item.name) === normalizeProductName(name)),
   );
 
   if (existing) {

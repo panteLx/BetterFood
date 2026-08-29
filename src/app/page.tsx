@@ -15,7 +15,7 @@ export default async function HomePage() {
     db
       .select()
       .from(items)
-      .where(and(eq(items.status, "active"), eq(items.listId, listId)))
+      .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
       .orderBy(items.expiryDate),
     getCategoriesForList(listId),
     db

@@ -85,26 +85,22 @@ export function ItemForm({
 }) {
   const router = useRouter();
   const [categoryList, setCategoryList] = useState<CategoryOption[]>(categories);
-  // Ohne Treffer aus den Open-Food-Facts-Tags war die Vorauswahl bisher
-  // schlicht die alphabetisch erste Kategorie -- mit den Standardkategorien
-  // also "Brot & Backwaren" samt 4 Tagen Haltbarkeit, auch fuer ein Glas
-  // Nutella. "Sonstiges" ist der dafuer vorgesehene neutrale Sammelpunkt;
-  // haben Nutzer ihn geloescht oder umbenannt, bleibt es beim bisherigen
-  // Verhalten.
-  const fallbackCategory =
-    initialCategory ??
-    categoryList.find((c) => c.key === "sonstiges")?.key ??
-    categoryList[0]?.key ??
-    "";
+  // Kein Raten mehr: kennt die Liste dieses Produkt noch nicht, bleibt die
+  // Kategorie leer und der Nutzer entscheidet einmal selbst. Ab dem zweiten
+  // Mal kommt die Vorauswahl aus genau dieser Entscheidung (siehe
+  // applyKnownProduct). Eine geratene Kategorie war teurer als gar keine:
+  // sie sah richtig aus und brachte eine falsche Haltbarkeit gleich mit.
+  const fallbackCategory = initialCategory ?? "";
 
   // Lazy, nicht als Render-Ausdruck: estimateExpiryDate ruft new Date() auf,
   // und ein "unstable value" waehrend des Prerenders laesst Next die Route
   // abbrechen (siehe nextjs.org/docs/messages/blocking-prerender-current-time).
   function initialExpiryValue() {
     if (initialExpiryDate) return toDateInputValue(initialExpiryDate);
-    const shelfLifeDays =
-      categoryList.find((c) => c.key === fallbackCategory)?.shelfLifeDays ?? 14;
-    return toDateInputValue(estimateExpiryDate(shelfLifeDays));
+    const shelfLife = categoryList.find((c) => c.key === fallbackCategory)?.shelfLifeDays;
+    // Ohne Kategorie gibt es nichts zu schaetzen -- das Feld fuellt sich,
+    // sobald eine gewaehlt ist.
+    return shelfLife === undefined ? "" : toDateInputValue(estimateExpiryDate(shelfLife));
   }
 
   const [name, setName] = useState(initialName);
@@ -113,6 +109,11 @@ export function ItemForm({
   const [dateTouched, setDateTouched] = useState(Boolean(initialExpiryDate));
   const [expiryDate, setExpiryDate] = useState(initialExpiryValue);
   const [saving, setSaving] = useState(false);
+  // Sobald der Nutzer selbst gewaehlt hat, wird nichts mehr ueberschrieben.
+  const categoryTouchedRef = useRef(false);
+  const nameTouchedRef = useRef(false);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [learnedCategory, setLearnedCategory] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
@@ -148,6 +149,9 @@ export function ItemForm({
       setQuantity(String(initialQuantity));
       setDateTouched(Boolean(initialExpiryDate));
       setExpiryDate(initialExpiryValue());
+      categoryTouchedRef.current = false;
+      nameTouchedRef.current = false;
+      setLearnedCategory(null);
     };
   });
 
@@ -158,6 +162,72 @@ export function ItemForm({
       resetToInitialRef.current?.();
     };
   }, []);
+
+  /**
+   * Fragt nach, ob diese Liste das Produkt schon kennt, und uebernimmt die
+   * damalige Entscheidung. Das ersetzt das frühere Raten aus den
+   * Open-Food-Facts-Kategorien vollstaendig.
+   */
+  async function applyKnownProduct(
+    lookup: { barcode?: string; name?: string },
+    options: { withName: boolean },
+  ) {
+    if (itemId || categoryTouchedRef.current) return;
+
+    const params = new URLSearchParams();
+    if (lookup.barcode) params.set("barcode", lookup.barcode);
+    if (lookup.name?.trim()) params.set("name", lookup.name.trim());
+    if (params.size === 0) return;
+
+    try {
+      const res = await fetch(`/api/items/known?${params}`);
+      if (!res.ok) return;
+      const known = (await res.json()) as {
+        found: boolean;
+        category?: string;
+        name?: string;
+      };
+      // In der Zwischenzeit koennte der Nutzer selbst gewaehlt haben.
+      if (!known.found || !known.category || categoryTouchedRef.current) return;
+
+      setLearnedCategory(known.category);
+      applyCategory(known.category);
+      if (options.withName && known.name && !nameTouchedRef.current) setName(known.name);
+    } catch {
+      // Ohne Antwort bleibt es bei der leeren Vorauswahl -- kein Grund, dem
+      // Nutzer etwas anzuzeigen.
+    }
+  }
+
+  // Laeuft nicht nur beim ersten Rendern, sondern bei jedem erneuten Anzeigen:
+  // <Activity> baut die Effekte einer versteckten Seite ab und beim
+  // Wiederanzeigen neu auf, waehrend der State erhalten bleibt. Genau das
+  // fehlte vorher -- nach dem Speichern eines Artikels zeigte derselbe
+  // Barcode beim naechsten Scan noch den Stand von davor.
+  const showLookupRef = useRef<() => void>(undefined);
+  useEffect(() => {
+    showLookupRef.current = () => {
+      void applyKnownProduct({ barcode, name }, { withName: true });
+    };
+  });
+  useEffect(() => {
+    showLookupRef.current?.();
+    return () => {
+      if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    };
+  }, []);
+
+  function handleNameChange(value: string) {
+    nameTouchedRef.current = true;
+    setName(value);
+    if (itemId) return;
+    // Auch von Hand eingetragene Artikel sollen wiedererkannt werden -- dort
+    // gibt es keinen Barcode, nur den Namen.
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    nameDebounceRef.current = setTimeout(() => {
+      void applyKnownProduct({ barcode, name: value }, { withName: false });
+    }, 500);
+  }
 
   function leave(target?: string) {
     const destination = target ?? redirectTo;
@@ -186,6 +256,8 @@ export function ItemForm({
 
   function handleCategoryChange(value: string | null) {
     if (!value) return;
+    categoryTouchedRef.current = true;
+    setLearnedCategory(null);
     if (value === NEW_CATEGORY_VALUE) {
       openNewCategoryDialog();
       return;
@@ -249,6 +321,10 @@ export function ItemForm({
       toast.error("Bitte eine Kategorie wählen.");
       return;
     }
+    if (!expiryDate) {
+      toast.error("Bitte ein Haltbarkeitsdatum wählen.");
+      return;
+    }
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty < 1) {
       toast.error("Bitte eine gültige Menge eingeben.");
@@ -309,7 +385,7 @@ export function ItemForm({
         <Input
           id="name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => handleNameChange(e.target.value)}
           placeholder="z.B. Vollmilch 3,5%"
           autoFocus
         />
@@ -352,6 +428,11 @@ export function ItemForm({
               </SelectItem>
             </SelectContent>
           </Select>
+        )}
+        {learnedCategory === category && category !== "" && (
+          <p className="text-xs text-muted-foreground">
+            Übernommen aus deinem letzten Eintrag zu diesem Artikel.
+          </p>
         )}
       </div>
 
@@ -431,10 +512,10 @@ export function ItemForm({
             <AlertDialogPortal>
               <AlertDialogBackdrop />
               <AlertDialogPopup>
-                <AlertDialogTitle>Artikel löschen?</AlertDialogTitle>
+                <AlertDialogTitle>Artikel entfernen?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  &quot;{name}&quot; wird vollständig entfernt und taucht auch nicht im Archiv
-                  auf. Das kann nicht rückgängig gemacht werden.
+                  &quot;{name}&quot; verschwindet aus dem Vorrat und taucht auch nicht im Archiv
+                  auf. Die App merkt sich weiterhin, in welche Kategorie dieser Artikel gehört.
                 </AlertDialogDescription>
                 <AlertDialogActions>
                   <AlertDialogClose render={<Button variant="outline" />}>

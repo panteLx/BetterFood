@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { and, desc, eq, ne } from "drizzle-orm";
-import { ArchiveList } from "@/components/archive-list";
-import { ArchiveStats } from "@/components/archive-stats";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { ArchiveView } from "@/components/archive-view";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { requireSession, requireActiveList } from "@/lib/session";
@@ -17,7 +16,7 @@ export default async function ArchivePage() {
     db
       .select()
       .from(items)
-      .where(and(ne(items.status, "active"), eq(items.listId, listId)))
+      .where(and(ne(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
       .orderBy(desc(items.resolvedAt)),
     getCategoriesForList(listId),
   ]);
@@ -35,9 +34,7 @@ export default async function ArchivePage() {
       </div>
       {/* Die Rettungsquote steht ueber der Liste: sie ist der Grund, hier
           ueberhaupt reinzuschauen, wenn gerade nichts ablaeuft. */}
-      <ArchiveStats items={resolvedItems} />
-
-      <ArchiveList initialItems={resolvedItems} categories={allCategories} />
+      <ArchiveView initialItems={resolvedItems} categories={allCategories} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { categories, items } from "@/db/schema";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
+import { normalizeProductName } from "@/lib/utils";
 
 export function categoriesTag(listId: number) {
   return `categories:${listId}`;
@@ -60,23 +61,46 @@ export async function listHasCategories(listId: number) {
 }
 
 /**
- * Wie dieselbe Liste diesen Barcode zuletzt eingeordnet hat -- inklusive
- * bereits abgehakter Artikel.
+ * Wie dieselbe Liste dieses Produkt zuletzt eingeordnet hat -- ueber den
+ * Barcode oder, wenn keiner vorliegt, ueber den Namen. Abgehakte und
+ * ausgeblendete Artikel zaehlen mit.
  *
- * Das ist das mit Abstand verlaesslichste Signal fuer die Vorauswahl der
- * Kategorie und das einzige, das auch mit selbst angelegten Kategorien
- * funktioniert: eine Regel kann nicht wissen, dass eine Margarine in dieser
- * Liste unter "Brotaufstriche" gehoert -- der Haushalt, der sie dort schon
- * einmal einsortiert hat, weiss es. Eine Korrektur von Hand wirkt damit ab
- * dem zweiten Scan dauerhaft.
+ * Das ist die einzige Quelle fuer die Vorauswahl der Kategorie. Vorher wurde
+ * aus den Open-Food-Facts-Kategorien geraten, was bei einem grossen Teil der
+ * Produkte danebenlag -- und was bei selbst angelegten Kategorien gar nicht
+ * funktionieren kann. Ein Produkt, das dieser Haushalt noch nie erfasst hat,
+ * bekommt jetzt bewusst keine Vorauswahl: die eine Entscheidung beim ersten
+ * Mal ist billiger als das Korrigieren einer falschen Vorgabe bei jedem
+ * weiteren Mal.
  */
-export async function lastCategoryForBarcode(listId: number, barcode: string) {
-  const previous = await db
-    .select({ category: items.category, name: items.name })
-    .from(items)
-    .where(and(eq(items.listId, listId), eq(items.barcode, barcode)))
-    .orderBy(desc(items.addedAt))
-    .get();
+export async function lookupKnownProduct(
+  listId: number,
+  lookup: { barcode?: string; name?: string },
+) {
+  if (lookup.barcode) {
+    const byBarcode = await db
+      .select({ category: items.category, name: items.name })
+      .from(items)
+      .where(and(eq(items.listId, listId), eq(items.barcode, lookup.barcode)))
+      .orderBy(desc(items.addedAt))
+      .get();
+    if (byBarcode) return byBarcode;
+  }
 
-  return previous ?? null;
+  if (lookup.name?.trim()) {
+    const wanted = normalizeProductName(lookup.name);
+    // Der Vergleich laeuft in JS statt in SQL: SQLites LIKE ignoriert nur bei
+    // ASCII die Gross-/Kleinschreibung, "Hähnchen" und "hähnchen" waeren dort
+    // also verschiedene Namen.
+    const recent = await db
+      .select({ category: items.category, name: items.name })
+      .from(items)
+      .where(eq(items.listId, listId))
+      .orderBy(desc(items.addedAt))
+      .limit(500);
+    const byName = recent.find((item) => normalizeProductName(item.name) === wanted);
+    if (byName) return byName;
+  }
+
+  return null;
 }

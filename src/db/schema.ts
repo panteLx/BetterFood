@@ -40,6 +40,11 @@ export const items = sqliteTable("items", {
     .notNull()
     .default("active"),
   resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  // Ausgeblendet statt geloescht: der Artikel verschwindet ueberall aus der
+  // Oberflaeche, bleibt aber als Beleg dafuer erhalten, in welche Kategorie
+  // dieser Haushalt dieses Produkt einsortiert -- genau davon lebt die
+  // Vorauswahl beim naechsten Scan.
+  hiddenAt: integer("hidden_at", { mode: "timestamp" }),
   lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
   listId: integer("list_id").references(() => lists.id),
   addedById: text("added_by_id").references(() => user.id),

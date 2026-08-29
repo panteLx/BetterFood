@@ -3,7 +3,6 @@ import { cacheLife } from "next/cache";
 export type ProductLookupResult = {
   found: boolean;
   name?: string;
-  categoryTags?: string[];
 };
 
 // Ohne Timeout haengt /confirm unbegrenzt, wenn Open Food Facts langsam ist --
@@ -11,9 +10,12 @@ export type ProductLookupResult = {
 // weiterzutippen.
 const LOOKUP_TIMEOUT_MS = 6000;
 
-// Nur die vier tatsaechlich verwendeten Felder anfordern. Die vollstaendige
-// Produktantwort von OFF ist ein Vielfaches davon gross.
-const FIELDS = "product_name,product_name_de,brands,categories_tags";
+// Nur die drei tatsaechlich verwendeten Felder anfordern. Die vollstaendige
+// Produktantwort von OFF ist ein Vielfaches davon gross. Die
+// "categories_tags" sind bewusst nicht mehr dabei: aus ihnen wurde frueher
+// die Kategorie geraten, was zu oft danebenlag -- die Vorauswahl kommt
+// jetzt aus der Historie der Liste (siehe lookupKnownProduct).
+const FIELDS = "product_name,product_name_de,brands";
 
 /**
  * Produktabfrage bei Open Food Facts.
@@ -51,11 +53,5 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
   // keinen Produktnamen -- "Ferrero" ist immer noch besser als ein leeres Feld.
   const name: string | undefined =
     product.product_name_de || product.product_name || product.brands || undefined;
-  const tags: string[] = product.categories_tags ?? [];
-
-  return {
-    found: Boolean(name),
-    name,
-    categoryTags: tags,
-  };
+  return { found: Boolean(name), name };
 }

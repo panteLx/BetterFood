@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,22 +28,19 @@ function formatDate(date: Date | null): string {
   );
 }
 
+// Die Artikel liegen eine Ebene hoeher (ArchiveView), damit die Statistik
+// ueber der Liste denselben Stand sieht.
 export function ArchiveList({
-  initialItems,
+  items,
+  setItems,
   categories,
 }: {
-  initialItems: Item[];
+  items: Item[];
+  setItems: Dispatch<SetStateAction<Item[]>>;
   categories: Pick<Category, "key" | "label">[];
 }) {
   const router = useRouter();
-  const [items, setItems] = useState(initialItems);
-  const [prevInitialItems, setPrevInitialItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<number | null>(null);
-
-  if (initialItems !== prevInitialItems) {
-    setPrevInitialItems(initialItems);
-    setItems(initialItems);
-  }
 
   const categoryLabels = Object.fromEntries(categories.map((c) => [c.key, c.label]));
 
@@ -61,21 +59,24 @@ export function ArchiveList({
       router.refresh();
     } catch {
       toast.error("Konnte nicht wiederhergestellt werden.");
-      setItems(initialItems);
+      router.refresh();
     } finally {
       setPendingId(null);
     }
   }
 
-  async function deleteItem(id: number, name: string) {
+  async function removeItem(id: number, name: string) {
     setPendingId(id);
     try {
       const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       setItems((prev) => prev.filter((item) => item.id !== id));
-      toast.success(`${name} endgültig gelöscht`);
+      toast.success(`${name} aus dem Archiv entfernt`);
+      // Ohne das blieb der Serverstand hinter der Anzeige zurueck und der
+      // Eintrag kam beim naechsten Seitenaufbau wieder.
+      router.refresh();
     } catch {
-      toast.error("Konnte nicht gelöscht werden.");
+      toast.error("Konnte nicht entfernt werden.");
     } finally {
       setPendingId(null);
     }
@@ -132,7 +133,7 @@ export function ArchiveList({
                     size="icon-touch"
                     variant="outline"
                     disabled={pendingId === item.id}
-                    aria-label="Endgültig löschen"
+                    aria-label="Aus dem Archiv entfernen"
                   />
                 }
               >
@@ -141,10 +142,11 @@ export function ArchiveList({
               <AlertDialogPortal>
                 <AlertDialogBackdrop />
                 <AlertDialogPopup>
-                  <AlertDialogTitle>Endgültig löschen?</AlertDialogTitle>
+                  <AlertDialogTitle>Aus dem Archiv entfernen?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    &quot;{item.name}&quot; wird unwiderruflich gelöscht. Das kann nicht rückgängig
-                    gemacht werden.
+                    &quot;{item.name}&quot; verschwindet aus dem Archiv und aus der Statistik. Die
+                    App merkt sich weiterhin, in welche Kategorie dieser Artikel gehört, damit
+                    sie ihn beim nächsten Scan wiedererkennt.
                   </AlertDialogDescription>
                   <AlertDialogActions>
                     <AlertDialogClose render={<Button variant="outline" />}>
@@ -152,9 +154,9 @@ export function ArchiveList({
                     </AlertDialogClose>
                     <AlertDialogClose
                       render={<Button variant="destructive" />}
-                      onClick={() => deleteItem(item.id, item.name)}
+                      onClick={() => removeItem(item.id, item.name)}
                     >
-                      Löschen
+                      Entfernen
                     </AlertDialogClose>
                   </AlertDialogActions>
                 </AlertDialogPopup>

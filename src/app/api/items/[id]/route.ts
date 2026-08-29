@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 
 export async function PATCH(
@@ -69,7 +69,7 @@ export async function PATCH(
   const [updated] = await db
     .update(items)
     .set(update)
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
     .returning();
 
   if (!updated) {
@@ -79,6 +79,15 @@ export async function PATCH(
   return NextResponse.json(updated);
 }
 
+/**
+ * Blendet einen Artikel aus, statt ihn zu loeschen.
+ *
+ * Die Zeile bleibt in der Datenbank, taucht aber in keiner Ansicht mehr auf
+ * (alle Abfragen filtern auf hiddenAt IS NULL). Grund: erst die Historie
+ * dieser Liste weiss, dass ein Haehnchenbrustfilet hier unter "Fleisch &
+ * Fisch" gehoert -- wuerde das Aufraeumen des Archivs dieses Wissen mit
+ * loeschen, faenge die Vorauswahl bei jedem Grossputz wieder bei null an.
+ */
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -87,12 +96,13 @@ export async function DELETE(
   const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
-  const deleted = await db
-    .delete(items)
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId)))
+  const hidden = await db
+    .update(items)
+    .set({ hiddenAt: new Date() })
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
     .returning();
 
-  if (deleted.length === 0) {
+  if (hidden.length === 0) {
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 

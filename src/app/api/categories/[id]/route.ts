@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { categories, items } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { categoriesTag } from "@/lib/data";
 
@@ -87,7 +87,11 @@ export async function DELETE(
   const usingItems = await db
     .select({ id: items.id })
     .from(items)
-    .where(and(eq(items.category, target.key), eq(items.listId, listId)))
+    // Ausgeblendete Artikel zaehlen hier nicht: sie sind fuer den Nutzer
+    // nicht mehr da und duerfen das Loeschen einer Kategorie nicht auf ewig
+    // blockieren. Die Vorauswahl prueft ohnehin, ob die gelernte Kategorie
+    // noch existiert.
+    .where(and(eq(items.category, target.key), eq(items.listId, listId), isNull(items.hiddenAt)))
     .limit(1);
 
   if (usingItems.length > 0) {

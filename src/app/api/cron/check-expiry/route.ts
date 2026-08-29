@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items, listMembers, lists, pushSubscriptions, settings } from "@/db/schema";
-import { and, eq, inArray, isNotNull, lte } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { getWebPush } from "@/lib/push";
 import type { Item } from "@/db/schema";
 
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
         and(
           eq(items.status, "active"),
           eq(items.listId, list.id),
+          isNull(items.hiddenAt),
           lte(items.expiryDate, thresholdFor(maxLead)),
         ),
       );
