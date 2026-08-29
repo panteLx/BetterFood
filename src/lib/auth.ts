@@ -6,6 +6,11 @@ import * as schema from "@/db/schema";
 import { categories, items, listMembers, lists, pushSubscriptions, user } from "@/db/schema";
 import { count, eq, isNull } from "drizzle-orm";
 import {
+  DEFAULT_HOUSEHOLD_NAME,
+  HOUSEHOLD_COOKIE,
+  normalizeHouseholdName,
+} from "@/lib/household";
+import {
   listHasCategories,
   listHasPlaces,
   seedDefaultCategories,
@@ -16,34 +21,57 @@ const oidcConfigured = Boolean(
   process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET,
 );
 
-const DEFAULT_HOUSEHOLD_NAME = "Zuhause";
+type Headerish = { get(name: string): string | null };
+
+type SignUpContext = {
+  body?: unknown;
+  headers?: Headerish | null;
+  request?: { headers: Headerish } | null;
+} | null;
 
 /**
- * Der Name des Haushalts, den die Registrierung mitschickt.
+ * Der Name des Haushalts aus der Registrierung -- siehe lib/household.ts.
  *
- * Er kommt aus dem Anfragekoerper und nicht aus einem eigenen Feld an der
- * Nutzertabelle: gebraucht wird er genau einmal, naemlich fuer die erste
- * Liste. Eine Spalte dafuer waere eine zweite Wahrheit neben lists.name --
- * und wuerde beim Umbenennen der Liste sofort falsch.
- *
- * Fehlt er (SSO-Anmeldung, aelterer Client), bleibt es beim Standardnamen.
- * Die Laengenbegrenzung, weil die Registrierung ohne Anmeldung erreichbar
- * ist.
+ * Zwei Wege, weil es zwei Arten gibt, ein Konto anzulegen: bei E-Mail und
+ * Passwort steht der Name im Anfragekoerper, bei SSO wartet er im Cookie,
+ * weil der Koerper die Runde ueber den Anbieter nicht ueberlebt. Ist beides
+ * leer (aelterer Client, direkt an der API angelegt), bleibt es beim
+ * Standardnamen.
  */
-function readHouseholdName(context: { body?: unknown } | null): string {
+function readHouseholdName(context: SignUpContext): string {
   const body = context?.body;
-  if (!body || typeof body !== "object") return DEFAULT_HOUSEHOLD_NAME;
+  if (body && typeof body === "object") {
+    const fromBody = normalizeHouseholdName((body as { householdName?: unknown }).householdName);
+    if (fromBody) return fromBody;
+  }
 
-  const value = (body as { householdName?: unknown }).householdName;
-  if (typeof value !== "string") return DEFAULT_HOUSEHOLD_NAME;
+  const cookieHeader =
+    context?.headers?.get("cookie") ?? context?.request?.headers.get("cookie") ?? null;
+  const fromCookie = normalizeHouseholdName(readCookie(cookieHeader, HOUSEHOLD_COOKIE));
+  if (fromCookie) return fromCookie;
 
-  return value.trim().slice(0, 60) || DEFAULT_HOUSEHOLD_NAME;
+  return DEFAULT_HOUSEHOLD_NAME;
 }
 
-async function claimLegacyData(
-  newUser: { id: string },
-  context: { body?: unknown } | null,
-) {
+function readCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+
+  for (const part of header.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(rest.join("="));
+    } catch {
+      // Ein kaputt kodiertes Cookie ist kein Grund, die Registrierung
+      // scheitern zu lassen -- dann eben der Standardname.
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function claimLegacyData(newUser: { id: string }, context: SignUpContext) {
   const [{ value: userCount }] = await db.select({ value: count() }).from(user);
 
   const now = new Date();
