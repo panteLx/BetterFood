@@ -3,33 +3,139 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  subscribeToPush,
-  unsubscribeFromPush,
-  getNotificationPermissionState,
-  hasPushSubscription,
-} from "@/lib/push-client";
-import { ListManager } from "@/components/list-manager";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { InstallHintSettings } from "@/components/install-hint";
+  Bell,
+  ChevronRight,
+  Database,
+  ListChecks,
+  Moon,
+  type LucideIcon,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { LEAD_DAY_OPTIONS } from "@/lib/notification-settings";
+import { useIsClient } from "@/lib/use-is-client";
+import { unsubscribeFromPush } from "@/lib/push-client";
 import { authClient, useSession } from "@/lib/auth-client";
+
+/**
+ * "Mehr" ist eine Verteilerseite, keine Sammelseite.
+ *
+ * Vorher standen Erinnerungen, Darstellung und die komplette Listen-
+ * verwaltung untereinander auf einem einzigen langen Screen -- inklusive
+ * ausklappbarer Mitgliederlisten. Jede dieser Aufgaben hat jetzt ihre eigene
+ * Seite, und hier steht nur noch, welche es gibt und wie sie gerade
+ * eingestellt sind.
+ *
+ * "Wie sie eingestellt sind" heisst woertlich der aktuelle Wert am rechten
+ * Rand: "2 Tage vorher", "Dunkel", "Zuhause". Eine feste Beschreibung
+ * ("Wann und wie früh wir uns melden") wiederholte nur, was die Zeile schon
+ * heisst -- den Grund, die Seite zu oeffnen, liefert erst der Wert. Wo es
+ * keinen einzelnen Wert gibt, steht weiterhin ein Hinweis darunter.
+ */
+const ROWS: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+  value?: (state: SettingsSummary) => string | undefined;
+}[] = [
+  {
+    href: "/settings/reminders",
+    icon: Bell,
+    label: "Erinnerungen",
+    value: (state) => state.leadDaysLabel,
+  },
+  {
+    href: "/settings/appearance",
+    icon: Moon,
+    label: "Darstellung",
+    value: (state) => state.themeLabel,
+  },
+  {
+    href: "/knowledge",
+    icon: Database,
+    label: "Datenbank",
+    hint: "Kategorien und gelernte Produkte",
+  },
+  {
+    href: "/settings/lists",
+    icon: ListChecks,
+    label: "Listen",
+    value: (state) => state.activeListName,
+  },
+];
+
+type SettingsSummary = {
+  leadDaysLabel?: string;
+  themeLabel?: string;
+  activeListName?: string;
+};
 
 export default function SettingsPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const [leadDays, setLeadDays] = useState(2);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [permission, setPermission] = useState<string>("default");
-  const [subscribed, setSubscribed] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [enabling, setEnabling] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [leadDaysLabel, setLeadDaysLabel] = useState<string>();
+  const [activeListName, setActiveListName] = useState<string>();
+
+  // Erst im Client: theme steht vor der Hydration nicht fest, und ein
+  // vorschnelles "Hell" waere schlimmer als ein Wert, der einen Tick spaeter
+  // erscheint.
+  const isClient = useIsClient();
+  const { theme, resolvedTheme } = useTheme();
+  const themeLabel = !isClient
+    ? undefined
+    : theme === "system"
+      ? "System"
+      : resolvedTheme === "dark"
+        ? "Dunkel"
+        : "Hell";
+
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { leadDays?: number } | null) => {
+        if (!active || !data) return;
+        const option = LEAD_DAY_OPTIONS.find(
+          (entry) => entry.days === data.leadDays,
+        );
+        setLeadDaysLabel(option?.label ?? `${data.leadDays} Tage vorher`);
+      })
+      .catch(() => {
+        // Ohne Wert steht die Zeile eben nur mit ihrem Namen da -- ein
+        // Fehlertext waere hier lauter als die Information wert ist.
+      });
+
+    fetch("/api/lists")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            lists?: { id: number; name: string }[];
+            activeListId?: number;
+          } | null,
+        ) => {
+          if (!active || !data) return;
+          setActiveListName(
+            data.lists?.find((list) => list.id === data.activeListId)?.name,
+          );
+        },
+      )
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const summary: SettingsSummary = {
+    leadDaysLabel,
+    themeLabel,
+    activeListName,
+  };
 
   async function handleSignOut() {
     // Vor dem Abmelden, solange die Session den Löschaufruf noch autorisiert:
@@ -37,188 +143,99 @@ export default function SettingsPage() {
     setSigningOut(true);
     const pushRemoved = await unsubscribeFromPush();
     if (!pushRemoved) {
-      toast.warning("Benachrichtigungen konnten nicht vollständig abgemeldet werden.");
+      toast.warning(
+        "Benachrichtigungen konnten nicht vollständig abgemeldet werden.",
+      );
     }
     await authClient.signOut();
     router.push("/login");
     router.refresh();
   }
 
-  useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        setLeadDays(data.leadDays);
-        setPermission(getNotificationPermissionState());
-      })
-      .finally(() => setLoading(false));
-
-    // Nicht an der Berechtigung allein festmachen: die bleibt erteilt, auch
-    // wenn dieses Gerät gar keine Subscription (mehr) hat. Sonst bot die
-    // Seite eine Testbenachrichtigung an, die serverseitig ins Leere lief.
-    void hasPushSubscription().then(setSubscribed);
-    // Den stillen Abgleich einer bereits erteilten Berechtigung übernimmt
-    // jetzt <PushSync /> im Root-Layout -- er muss auf jeder Seite laufen,
-    // nicht nur hier, weil das Abmelden die Subscription löscht.
-  }, []);
-
-  async function handleSaveLeadDays() {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadDays }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success("Gespeichert");
-    } catch {
-      toast.error("Konnte Einstellung nicht speichern.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleEnablePush() {
-    setEnabling(true);
-    try {
-      const ok = await subscribeToPush();
-      setPermission(getNotificationPermissionState());
-      setSubscribed(await hasPushSubscription());
-      if (ok) {
-        toast.success("Benachrichtigungen aktiviert");
-      } else {
-        toast.error("Benachrichtigungen konnten nicht aktiviert werden.");
-      }
-    } finally {
-      setEnabling(false);
-    }
-  }
-
-  async function handleTestNotification() {
-    setTesting(true);
-    try {
-      const res = await fetch("/api/push/test", { method: "POST" });
-      const data = (await res.json().catch(() => null)) as
-        | { sent?: number; error?: string }
-        | null;
-
-      // Den Grund vom Server durchreichen: "konnte nicht gesendet werden" war
-      // die einzige Rückmeldung, egal ob die Subscription fehlte, die
-      // VAPID-Schlüssel oder der Push-Dienst.
-      if (!res.ok || !data?.sent) {
-        toast.error(data?.error ?? "Testbenachrichtigung konnte nicht gesendet werden.");
-        setSubscribed(await hasPushSubscription());
-        return;
-      }
-
-      toast.success("Testbenachrichtigung gesendet");
-    } catch {
-      toast.error("Testbenachrichtigung konnte nicht gesendet werden.");
-    } finally {
-      setTesting(false);
-    }
-  }
+  const name = session?.user.name ?? "";
+  const initials =
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "?";
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
-          ← Zurück
-        </Button>
-        <h1 className="text-lg font-semibold">Einstellungen</h1>
-      </div>
+    <div className="flex flex-1 flex-col gap-5 px-5 pt-2 pb-4">
+      <h1 className="text-[26px] leading-tight">Einstellungen</h1>
 
       {session && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Angemeldet als {session.user.email}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
+        <div className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5">
+          <span className="flex size-11.5 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-[17px] font-extrabold text-primary">
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] leading-tight font-bold">
+              {name}
+            </p>
+            <p className="mt-1 truncate text-[12.5px] leading-tight font-medium text-muted-foreground">
+              {session.user.email}
+            </p>
+          </div>
+          <button
+            type="button"
             onClick={handleSignOut}
             disabled={signingOut}
+            className="h-9 shrink-0 rounded-[10px] border border-border bg-surface-2 px-3.5 text-[13px] font-semibold disabled:opacity-60"
           >
             Abmelden
-          </Button>
+          </button>
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label>Darstellung</Label>
-        <ThemeToggle />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="leadDays">Erinnerung wie viele Tage vorher?</Label>
-        <div className="flex gap-2">
-          <Input
-            id="leadDays"
-            type="number"
-            min={0}
-            max={30}
-            value={leadDays}
-            disabled={loading}
-            onChange={(e) => setLeadDays(Number(e.target.value))}
-          />
-          <Button onClick={handleSaveLeadDays} disabled={saving || loading}>
-            Speichern
-          </Button>
+      <section className="flex flex-col gap-2">
+        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          App
+        </h2>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          {ROWS.map((row, index) => {
+            const value = row.value?.(summary);
+            return (
+              <Link
+                key={row.href}
+                href={row.href}
+                className={`flex items-center gap-3 px-4 py-3.5 ${
+                  index < ROWS.length - 1 ? "border-b border-border" : ""
+                }`}
+              >
+                <row.icon
+                  className="size-5 shrink-0 text-primary"
+                  strokeWidth={1.8}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">
+                    {row.label}
+                  </span>
+                  {row.hint && (
+                    <span className="mt-0.5 block text-[12.5px] leading-snug font-medium text-muted-foreground">
+                      {row.hint}
+                    </span>
+                  )}
+                </span>
+                {value && (
+                  <span className="max-w-[9.5rem] shrink-0 truncate text-[13px] font-medium text-muted-foreground">
+                    {value}
+                  </span>
+                )}
+                <ChevronRight
+                  className="size-4 shrink-0 text-faint"
+                  strokeWidth={2}
+                />
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-2">
-        <Label>Push-Benachrichtigungen</Label>
-        <InstallHintSettings />
-        {subscribed ? (
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-muted-foreground">Aktiviert.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestNotification}
-              disabled={testing}
-            >
-              Testbenachrichtigung senden
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" onClick={handleEnablePush} disabled={enabling}>
-            {permission === "granted"
-              ? "Benachrichtigungen erneut einrichten"
-              : "Benachrichtigungen aktivieren"}
-          </Button>
-        )}
-        {permission === "denied" && (
-          <p className="text-sm text-destructive">
-            Berechtigung wurde verweigert – bitte in den
-            Browser-/System-Einstellungen erlauben.
-          </p>
-        )}
-      </div>
-
-      {/* Kategorien wurden frueher direkt hier gepflegt. Sie sind aber nur die
-          eine Haelfte dessen, was die App ueber die Vorraete weiss -- die
-          andere sind die Produkte selbst. Beides steht jetzt zusammen unter
-          /knowledge, statt sich auf zwei Seiten zu verteilen. */}
-      <Link
-        href="/knowledge"
-        className="flex items-center gap-3 rounded-xl border border-input p-3 text-left hover:bg-muted"
-      >
-        <BookOpen className="size-5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Datenbank</p>
-          <p className="text-xs text-muted-foreground">
-            Kategorien und gelernte Produktzuordnungen bearbeiten
-          </p>
-        </div>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-      </Link>
-
-      <div className="flex flex-col gap-4 rounded-xl border border-input p-3">
-        <ListManager />
-      </div>
+      <p className="pt-1 pb-1 text-center text-[11px] leading-relaxed font-medium text-faint">
+        BetterFood · v1.0.0 (stable)
+      </p>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { AddItemPage } from "@/components/add-item-page";
 
 export default function InterceptedAddPage() {
   return (
-    <RouteModal>
+    <RouteModal variant="fullscreen">
       <AddItemPage />
     </RouteModal>
   );

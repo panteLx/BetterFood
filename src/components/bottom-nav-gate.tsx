@@ -2,10 +2,10 @@ import { optionalSession } from "@/lib/session";
 import { BottomNav } from "@/components/bottom-nav";
 
 /**
- * Die Navigationsleiste hat für Gäste keinen Sinn: Start, Archiv und
- * Einstellungen sind allesamt geschützt und führen nur zurück auf /login.
- * Auf /scan und /confirm -- den beiden Seiten, die Gästen offenstehen --
- * stand sie damit als reine Sackgasse im Weg und nahm dem Kamerabild Platz.
+ * Die Navigationsleiste hat ohne Anmeldung keinen Sinn: Start, Archiv und
+ * Einstellungen sind allesamt geschützt und führen nur zurück auf /login --
+ * auf Splash, Onboarding und den Anmeldeseiten stünde sie als reine
+ * Sackgasse im Weg.
  *
  * Die Prüfung gehört auf den Server: der Client kann die Session nicht sehen,
  * und ein kurz eingeblendetes und wieder verschwindendes Menü wäre schlechter

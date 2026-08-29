@@ -64,6 +64,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       name: item.name,
       category: item.category,
       barcode: item.barcode,
+      placeId: item.placeId,
+      note: item.note,
       quantity: 1,
       addedAt: item.addedAt,
       expiryDate: item.expiryDate,

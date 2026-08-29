@@ -1,18 +1,24 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { JetBrains_Mono, Manrope } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { BottomNavGate } from "@/components/bottom-nav-gate";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Manrope traegt die gesamte Typografie: die Oberflaeche setzt Ueberschriften
+// in 800 gegen halbfette Labels in 600/700, und genau diese Spanne hat Geist
+// nicht. JetBrains Mono steht ausschliesslich fuer Ziffernfolgen, bei denen
+// die Stellen untereinander stehen muessen (EAN, Kalenderwochen).
+const manrope = Manrope({
+  variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -38,19 +44,30 @@ export const viewport: Viewport = {
   // liefert; ohne das war die Polsterung im Add-Sheet wirkungslos und die
   // Navigationsleiste haette unter dem Indikator gelegen.
   viewportFit: "cover",
-  themeColor: "#16a34a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f4f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1310" },
+  ],
 };
 
 export default function RootLayout({ children, modal }: LayoutProps<"/">) {
   return (
     <html
       lang="de"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>
-          <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+          {/* Die Safe Area oben gehoert an genau eine Stelle: als
+              installierte PWA laeuft der Inhalt sonst unter der Statusleiste
+              des Geraets durch, und jede Seite muesste denselben Abstand
+              selbst noch einmal setzen.
+              max(...) statt des blossen Insets: im Browser ist
+              env(safe-area-inset-top) 0, und dann klebte die Ueberschrift
+              jeder Seite 8px unter der Fensterkante. Auf dem Geraet gewinnt
+              weiterhin der echte Inset. */}
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col pt-[max(env(safe-area-inset-top),1.75rem)]">
             {children}
             <Suspense fallback={null}>
               <BottomNavGate />

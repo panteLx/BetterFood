@@ -4,29 +4,20 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogPortal,
-  AlertDialogBackdrop,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogActions,
-  AlertDialogClose,
-} from "@/components/ui/alert-dialog";
-import { RotateCcw, Trash2 } from "lucide-react";
+  Archive as ArchiveIcon,
+  EyeOff,
+  RotateCcw,
+  type LucideIcon,
+} from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
+import { Sheet } from "@/components/ui/sheet";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { hideItem, restoreItem } from "@/lib/item-actions";
+import { formatShort } from "@/lib/expiry";
+import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
+import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/db/schema";
-
-function formatDate(date: Date | null): string {
-  if (!date) return "";
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(
-    date,
-  );
-}
 
 // Die Artikel liegen eine Ebene hoeher (ArchiveView), damit die Statistik
 // ueber der Liste denselben Stand sieht.
@@ -40,131 +31,246 @@ export function ArchiveList({
   categories: Pick<Category, "key" | "label">[];
 }) {
   const router = useRouter();
-  const [pendingId, setPendingId] = useState<number | null>(null);
+  const [pendingHide, setPendingHide] = useState<Item | null>(null);
+  const [pendingActions, setPendingActions] = useState<Item | null>(null);
+  const categoryLabels = new Map(categories.map((c) => [c.key, c.label]));
 
-  const categoryLabels = Object.fromEntries(categories.map((c) => [c.key, c.label]));
-
-  async function restoreItem(id: number, name: string) {
-    setPendingId(id);
-    setItems((prev) => prev.filter((item) => item.id !== id));
-
+  async function restore(item: Item) {
+    const previous = items;
+    setItems((prev) => prev.filter((entry) => entry.id !== item.id));
     try {
-      const res = await fetch(`/api/items/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "active" }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success(`${name} wiederhergestellt`);
+      await restoreItem(item.id);
+      toast.success(`${item.name} wiederhergestellt`);
       router.refresh();
     } catch {
       toast.error("Konnte nicht wiederhergestellt werden.");
-      router.refresh();
-    } finally {
-      setPendingId(null);
+      setItems(previous);
     }
   }
 
-  async function removeItem(id: number, name: string) {
-    setPendingId(id);
+  async function hide(item: Item) {
+    const previous = items;
+    setItems((prev) => prev.filter((entry) => entry.id !== item.id));
+    setPendingHide(null);
     try {
-      const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      toast.success(`${name} aus dem Archiv entfernt`);
-      // Ohne das blieb der Serverstand hinter der Anzeige zurueck und der
-      // Eintrag kam beim naechsten Seitenaufbau wieder.
+      await hideItem(item.id);
+      toast.success(`${item.name} ausgeblendet`);
       router.refresh();
     } catch {
-      toast.error("Konnte nicht entfernt werden.");
-    } finally {
-      setPendingId(null);
+      toast.error("Konnte nicht ausgeblendet werden.");
+      setItems(previous);
     }
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-1 p-8 text-center text-muted-foreground">
-        <p className="font-medium">Das Archiv ist leer.</p>
-        <p className="text-sm">Aufgebrauchte oder entsorgte Artikel erscheinen hier.</p>
-      </div>
+      <EmptyState
+        icon={ArchiveIcon}
+        title="Das Archiv ist leer"
+        body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
+      />
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
-      {items.map((item) => (
-        <Card key={item.id} className="flex-row items-center justify-between gap-2 p-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">
+    <>
+      <div className="flex flex-col gap-2.5">
+        {items.map((item) => (
+          <ArchiveCard
+            key={item.id}
+            item={item}
+            categoryLabel={categoryLabels.get(item.category) ?? item.category}
+            onRestore={() => restore(item)}
+            onHide={() => setPendingHide(item)}
+            onOpenActions={() => setPendingActions(item)}
+          />
+        ))}
+      </div>
+
+      {/* Wie im Vorrat sind Wischen nach rechts (zurueckholen) und nach links
+          (ausblenden) der schnelle Weg. Beide sind mit Tastatur und
+          Screenreader nicht bedienbar, und anders als eine Vorratszeile hat
+          ein Archiv-Eintrag keine Detailseite, auf der dieselben Aktionen als
+          Buttons stuenden -- deshalb oeffnet das Antippen der Zeile sie hier.
+
+          Ein Blatt fuer alle Zeilen statt eines je Zeile: bei 200 Eintraegen
+          im Archiv waeren das 200 Dialoge im Baum. Dasselbe gilt fuer den
+          Rueckfrage-Dialog darunter. */}
+      <Sheet
+        open={pendingActions !== null}
+        onOpenChange={(open) => !open && setPendingActions(null)}
+        title={pendingActions?.name ?? ""}
+      >
+        <div className="flex flex-col gap-2">
+          <SheetAction
+            icon={RotateCcw}
+            label="Wiederherstellen"
+            hint="Zurück in den Vorrat"
+            onClick={() => {
+              const item = pendingActions;
+              setPendingActions(null);
+              if (item) restore(item);
+            }}
+          />
+          <SheetAction
+            icon={EyeOff}
+            label="Ausblenden"
+            hint="Verschwindet aus Archiv und Statistik"
+            onClick={() => {
+              const item = pendingActions;
+              setPendingActions(null);
+              if (item) setPendingHide(item);
+            }}
+          />
+        </div>
+      </Sheet>
+
+      <ConfirmDialog
+        open={pendingHide !== null}
+        onOpenChange={(open) => !open && setPendingHide(null)}
+        icon={EyeOff}
+        title={<>„{pendingHide?.name}“ ausblenden?</>}
+        description="Der Eintrag verschwindet aus dem Archiv und aus der Statistik. Was die App über dieses Produkt gelernt hat, bleibt erhalten."
+        confirmLabel="Ausblenden"
+        onConfirm={() => pendingHide && hide(pendingHide)}
+      />
+    </>
+  );
+}
+
+function ArchiveCard({
+  item,
+  categoryLabel,
+  onRestore,
+  onHide,
+  onOpenActions,
+}: {
+  item: Item;
+  categoryLabel: string;
+  onRestore: () => void;
+  onHide: () => void;
+  onOpenActions: () => void;
+}) {
+  const { offset, dragging, wasSwipe, handlers } = useSwipeActions({
+    onSwipeRight: onRestore,
+    onSwipeLeft: onHide,
+  });
+  const used = item.status === "used";
+
+  return (
+    <div
+      // overflow-x-clip statt overflow-hidden: siehe item-card.tsx.
+      className={cn(
+        "relative overflow-x-clip rounded-[20px] bg-surface-2 transition-colors",
+        offset > 0 && "bg-primary-tint",
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-between px-5 text-[13px] font-bold"
+      >
+        <span
+          className={cn(
+            "text-primary transition-opacity",
+            offset > REVEAL_DISTANCE ? "opacity-100" : "opacity-0",
+          )}
+        >
+          Wiederherstellen
+        </span>
+        <span
+          className={cn(
+            "text-muted-foreground transition-opacity",
+            offset < -REVEAL_DISTANCE ? "opacity-100" : "opacity-0",
+          )}
+        >
+          Ausblenden
+        </span>
+      </div>
+
+      <div
+        {...handlers}
+        // Nur waehrend der Geste ein Transform. Ein Element mit
+        // transform wird von den Browsern nicht mehr auf ganze
+        // Geraetepixel gerundet, und weil die Zeile bruchteilig hoch
+        // ist (72,75px), verblasste die 1px-Unterkante dabei bis zur
+        // Unsichtbarkeit -- je nach Position in der Liste mal mehr,
+        // mal weniger. Auf translateX(0px) zu verzichten kostet
+        // nichts: die Rueckfeder-Animation laeuft weiterhin, weil
+        // CSS gegen "none" wie gegen die Identitaet interpoliert.
+        style={
+          offset === 0 ? undefined : { transform: `translateX(${offset}px)` }
+        }
+        className={cn(
+          "relative flex touch-pan-y items-center rounded-[20px] border border-border bg-card select-none",
+          dragging ? "transition-none" : "transition-transform duration-200",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            // Nach einer Wischgeste darf das abschliessende Click-Event das
+            // Blatt nicht mit oeffnen.
+            if (wasSwipe()) return;
+            onOpenActions();
+          }}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] leading-tight font-bold">
               {item.name}
               {item.quantity > 1 && (
-                <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                <span className="ml-2 font-semibold text-muted-foreground">
                   ×{item.quantity}
                 </span>
               )}
-            </p>
-            {/* flex-wrap: mit den groesseren Trefferflaechen rechts reicht
-                die Zeilenbreite auf schmalen Geraeten nicht mehr fuer Badges
-                und Datum nebeneinander -- ohne Umbruch verschwand das Datum
-                hinter den Buttons. */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <Badge variant="secondary">{categoryLabels[item.category] ?? item.category}</Badge>
-              <Badge variant={item.status === "used" ? "default" : "outline"}>
-                {item.status === "used" ? "Aufgebraucht" : "Weggeworfen"}
-              </Badge>
-              <span className="text-xs text-muted-foreground">{formatDate(item.resolvedAt)}</span>
-            </div>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Button
-              size="icon-touch"
-              variant="outline"
-              disabled={pendingId === item.id}
-              onClick={() => restoreItem(item.id, item.name)}
-              aria-label="Wiederherstellen"
-            >
-              <RotateCcw className="size-5" />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    size="icon-touch"
-                    variant="outline"
-                    disabled={pendingId === item.id}
-                    aria-label="Aus dem Archiv entfernen"
-                  />
-                }
+            </span>
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex h-5.5 items-center rounded-[7px] px-2.5 text-[11.5px] font-bold whitespace-nowrap",
+                  used
+                    ? "bg-primary-tint text-primary"
+                    : "bg-danger-tint text-danger",
+                )}
               >
-                <Trash2 className="size-5" />
-              </AlertDialogTrigger>
-              <AlertDialogPortal>
-                <AlertDialogBackdrop />
-                <AlertDialogPopup>
-                  <AlertDialogTitle>Aus dem Archiv entfernen?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    &quot;{item.name}&quot; verschwindet aus dem Archiv und aus der Statistik. Die
-                    App merkt sich weiterhin, in welche Kategorie dieser Artikel gehört, damit
-                    sie ihn beim nächsten Scan wiedererkennt.
-                  </AlertDialogDescription>
-                  <AlertDialogActions>
-                    <AlertDialogClose render={<Button variant="outline" />}>
-                      Abbrechen
-                    </AlertDialogClose>
-                    <AlertDialogClose
-                      render={<Button variant="destructive" />}
-                      onClick={() => removeItem(item.id, item.name)}
-                    >
-                      Entfernen
-                    </AlertDialogClose>
-                  </AlertDialogActions>
-                </AlertDialogPopup>
-              </AlertDialogPortal>
-            </AlertDialog>
-          </div>
-        </Card>
-      ))}
+                {used ? "Aufgebraucht" : "Weggeworfen"}
+              </span>
+              <span className="text-xs leading-snug font-semibold text-muted-foreground">
+                {categoryLabel}
+                {item.resolvedAt && ` · ${formatShort(item.resolvedAt)}`}
+              </span>
+            </span>
+          </span>
+        </button>
+      </div>
     </div>
+  );
+}
+
+function SheetAction({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3.5 rounded-[20px] border border-border bg-surface-2 p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Icon className="size-6 shrink-0 text-primary" strokeWidth={1.8} />
+      <span>
+        <span className="block text-base font-bold">{label}</span>
+        <span className="mt-0.5 block text-[13px] font-medium text-muted-foreground">
+          {hint}
+        </span>
+      </span>
+    </button>
   );
 }

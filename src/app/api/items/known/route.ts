@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, lookupKnownProduct } from "@/lib/data";
+import { getCategoriesForList, getPlacesForList, lookupKnownProduct } from "@/lib/data";
 
 /**
  * "Kennen wir dieses Produkt schon?" -- beantwortet aus der Historie der
@@ -32,10 +32,17 @@ export async function GET(req: NextRequest) {
   const category = categories.find((c) => c.key === known.category);
   if (!category) return NextResponse.json({ found: false });
 
+  // Fuer den Ort gilt dasselbe. Er faellt einzeln weg, ohne die Kategorie
+  // mitzunehmen: ein aufgeloestes Fach macht die Einordnung des Produkts
+  // nicht falsch.
+  const places = await getPlacesForList(listId);
+  const place = known.placeId === null ? null : places.find((p) => p.id === known.placeId);
+
   return NextResponse.json({
     found: true,
     category: category.key,
     shelfLifeDays: category.shelfLifeDays,
     name: known.name,
+    placeId: place?.id ?? null,
   });
 }

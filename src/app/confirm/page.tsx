@@ -1,19 +1,33 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
-import { optionalSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList } from "@/lib/data";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Camera, Hash } from "lucide-react";
+import { requireSession, requireActiveList } from "@/lib/session";
+import { getCategoriesForList, getPlacesForList } from "@/lib/data";
+import { parseEntryMethod } from "@/lib/entry-method";
 
-export default async function ConfirmPage({
+// "await searchParams" muss unterhalb einer <Suspense>-Grenze passieren, sonst
+// blockiert die Navigation komplett den Server-Render (Next 16 "Instant
+// Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
+// instant-navigation.md).
+export default function ConfirmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ barcode?: string }>;
+  searchParams: Promise<{ barcode?: string; via?: string }>;
 }) {
-  const { barcode } = await searchParams;
-  const session = await optionalSession();
+  return (
+    <Suspense fallback={<div className="flex-1" />}>
+      <Confirm searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Confirm({
+  searchParams,
+}: {
+  searchParams: Promise<{ barcode?: string; via?: string }>;
+}) {
+  const { barcode, via } = await searchParams;
+  const session = await requireSession();
 
   let initialName = "";
 
@@ -26,81 +40,20 @@ export default async function ConfirmPage({
     }
   }
 
-  if (!session) {
-    const redirect = `/confirm?barcode=${barcode ?? ""}`;
-
-    return (
-      <div className="flex flex-1 flex-col">
-        <div className="p-4">
-          <h1 className="text-lg font-semibold">Artikel bestätigen</h1>
-        </div>
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {barcode && !initialName && (
-            <p className="text-sm text-muted-foreground">
-              Produkt zu Barcode {barcode} nicht gefunden.
-            </p>
-          )}
-          <Card>
-            <CardHeader>
-              <CardTitle>{initialName || "Unbekanntes Produkt"}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
-              {barcode && <p>Barcode: {barcode}</p>}
-            </CardContent>
-          </Card>
-          <p className="text-sm text-muted-foreground">
-            Als Gast wird nichts gespeichert. Lege ein Konto an oder melde dich an – dieser
-            Artikel wartet dann hier auf dich.
-          </p>
-          {/* Beide Wege behalten den Barcode: wer erst scannt und dann ein
-              Konto anlegt, soll genau hier weitermachen und nicht auf einer
-              leeren Startseite landen. */}
-          <div className="flex flex-col gap-2">
-            <Link href={`/register?redirect=${encodeURIComponent(redirect)}`}>
-              <Button className="h-11 w-full">Konto erstellen und speichern</Button>
-            </Link>
-            <Link href={`/login?redirect=${encodeURIComponent(redirect)}`}>
-              <Button variant="outline" className="h-11 w-full">
-                Ich habe schon ein Konto
-              </Button>
-            </Link>
-          </div>
-          {/* Ohne diesen Weg war /confirm fuer Gaeste eine Sackgasse: wer sich
-              (noch) nicht anmelden will, kam von hier nur ueber den
-              Zurueck-Knopf des Browsers wieder weg -- und die
-              Navigationsleiste gibt es hier bewusst nicht. */}
-          <div className="flex flex-col gap-2 border-t border-input pt-4">
-            <Link href="/scan">
-              <Button variant="ghost" className="h-11 w-full">
-                <Camera className="size-4" />
-                Nächsten Artikel scannen
-              </Button>
-            </Link>
-            <Link href="/scan-ean">
-              <Button variant="ghost" className="h-11 w-full">
-                <Hash className="size-4" />
-                EAN eingeben
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const listId = await requireActiveList(session.user.id);
-  const allCategories = await getCategoriesForList(listId);
+  const [allCategories, allPlaces] = await Promise.all([
+    getCategoriesForList(listId),
+    getPlacesForList(listId),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="p-4">
-        <h1 className="text-lg font-semibold">Artikel bestätigen</h1>
-        {barcode && !initialName && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Produkt zu Barcode {barcode} nicht gefunden – bitte Details ergänzen.
-          </p>
-        )}
-      </div>
+      {barcode && !initialName && (
+        <p className="px-5 pt-3 text-[13px] font-medium text-muted-foreground">
+          Zu Barcode <span className="font-mono">{barcode}</span> ist nichts
+          hinterlegt – bitte Details ergänzen.
+        </p>
+      )}
       {/* key=barcode erzwingt einen frischen ItemForm-Mount pro Barcode: unter
           cacheComponents:true haelt React <Activity> die vorherige Instanz
           samt useState-Werten am Leben, wenn man erneut zu /confirm mit
@@ -108,14 +61,16 @@ export default async function ConfirmPage({
           initialName wuerde sonst nur beim allerersten Scan uebernommen. */}
       <ItemForm
         key={barcode}
+        title="Artikel bestätigen"
         categories={allCategories}
+        places={allPlaces}
         initialName={initialName}
         barcode={barcode}
+        // Ohne via kam der Aufruf noch aus einer Version, die den Weg nicht
+        // mitschickte -- ein Barcode auf /confirm entstand dort immer am
+        // Scanner.
+        method={parseEntryMethod(via ?? "scan")}
         redirectTo="/"
-        // Nach dem Einkauf ist der naechste Artikel der Normalfall: ohne diesen
-        // Weg kostete jeder weitere Scan erneut FAB, Auswahl-Sheet und einen
-        // kompletten Kamera-Start.
-        showScanNext
       />
     </div>
   );

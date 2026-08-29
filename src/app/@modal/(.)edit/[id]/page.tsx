@@ -6,7 +6,7 @@ import { EditItemPage } from "@/components/edit-item-page";
 // blockiert die Navigation komplett den Server-Render (Next 16 "Instant
 // Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
 // instant-navigation.md, Abschnitt "Fixing a navigation that blocks").
-// RouteModal (das Sheet/Backdrop) bleibt bewusst ausserhalb, damit es sofort
+// RouteModal (Flaeche und Backdrop) bleibt bewusst ausserhalb, damit es sofort
 // erscheint, waehrend der Artikel-Inhalt nachlaedt.
 export default function InterceptedEditPage({
   params,
@@ -14,7 +14,7 @@ export default function InterceptedEditPage({
   params: Promise<{ id: string }>;
 }) {
   return (
-    <RouteModal>
+    <RouteModal variant="fullscreen">
       <Suspense fallback={<EditItemFallback />}>
         <ResolvedEditItemPage params={params} />
       </Suspense>

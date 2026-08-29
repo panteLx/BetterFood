@@ -2,33 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Archive,
-  BookOpen,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
+import { Archive, Home, List, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddActionSheet } from "@/components/add-action-sheet";
 
-// "Scannen" und "Hinzufuegen" sind keine eigenen Nav-Ziele mehr, sondern ueber
-// den zentralen AddActionSheet-Button erreichbar (siehe dort fuer die
-// Begruendung). LEFT_ITEMS/RIGHT_ITEMS werden links bzw. rechts der zentralen
-// Aktion gerendert.
+// Start und Vorrat beantworten zwei verschiedene Fragen ("was ist dringend?"
+// und "was habe ich?") und sind deshalb zwei Ziele. Die Datenbank ist keins
+// mehr: sie wird ein paar Mal im Jahr angefasst und steht jetzt unter "Mehr",
+// wo auch Erinnerungen, Darstellung und Listen liegen.
 const LEFT_ITEMS = [
   { href: "/", label: "Start", icon: Home },
-  { href: "/knowledge", label: "Datenbank", icon: BookOpen },
+  { href: "/inventory", label: "Vorrat", icon: List },
 ] as const;
 const RIGHT_ITEMS = [
   { href: "/archive", label: "Archiv", icon: Archive },
-  { href: "/settings", label: "Einstellungen", icon: Settings },
+  { href: "/settings", label: "Mehr", icon: SlidersHorizontal },
 ] as const;
 
-// Auf diesen Seiten gibt es (noch) keine Session bzw. keine Listen-gebundenen
-// Ziele, daher macht eine Navigation zu Start/Archiv/Einstellungen dort keinen
-// Sinn.
-const HIDDEN_PREFIXES = ["/login", "/register"];
+// Seiten, die den Bildschirm fuer sich beanspruchen: Anmeldung und
+// Registrierung haben noch keine Session, Kamera und Formulare haben ihre
+// eigene, seitenspezifische Fussleiste -- eine zweite darunter wuerde beide
+// nur verkuerzen.
+const HIDDEN_PREFIXES = [
+  "/login",
+  "/register",
+  "/welcome",
+  "/scan",
+  "/scan-ean",
+  "/confirm",
+  "/add",
+  "/edit",
+  "/item",
+  "/saved",
+];
+
+// Unterseiten von "Mehr": die Leiste soll dort weiterhin "Mehr" markieren,
+// nicht ins Leere zeigen.
+const SETTINGS_PREFIXES = ["/settings", "/knowledge"];
 
 function NavLink({
   href,
@@ -44,31 +54,15 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "flex flex-col items-center gap-0.5 px-3 py-2 text-xs",
-        active ? "text-primary" : "text-muted-foreground",
+        "flex flex-1 flex-col items-center gap-1 py-1.5 text-[10.5px] font-semibold",
+        active ? "text-primary" : "text-faint",
       )}
     >
-      <Icon className="size-5" />
+      <Icon className="size-5.5" strokeWidth={1.8} />
       {label}
     </Link>
-  );
-}
-
-// Der FAB-Button sitzt absolut zentriert ueber der Nav-Leiste, unabhaengig
-// davon, wie viele Items links/rechts stehen (aktuell 1 links, 2 rechts) -
-// eine gleichmaessige flex-1-Aufteilung wuerde ihn sonst sichtbar aus der
-// Bildschirmmitte schieben. Der aeussere Wrapper ist pointer-events-none und
-// deckt trotzdem die volle Breite ab (fuer die Zentrierung); nur der Button
-// selbst bekommt pointer-events wieder zurueck, damit darunterliegende
-// Nav-Items weiterhin klickbar bleiben.
-function CenterAction() {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 -top-6 flex justify-center">
-      <div className="pointer-events-auto">
-        <AddActionSheet />
-      </div>
-    </div>
   );
 }
 
@@ -80,26 +74,36 @@ function CenterAction() {
 export function BottomNav() {
   const pathname = usePathname();
 
-  if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix)))
-    return null;
+  if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
 
   function isActive(href: string) {
-    return href === "/" ? pathname === "/" : pathname.startsWith(href);
+    if (href === "/") return pathname === "/";
+    if (href === "/settings") return SETTINGS_PREFIXES.some((p) => pathname.startsWith(p));
+    return pathname.startsWith(href);
   }
 
   return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-center border-t bg-background pb-[env(safe-area-inset-bottom)]">
-      <div className="flex flex-1 justify-evenly">
+    <nav className="sticky bottom-0 z-30 flex shrink-0 items-start justify-between border-t border-border bg-card px-2.5 pt-2.5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+      <div className="flex flex-1">
         {LEFT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={isActive(item.href)} />
         ))}
       </div>
-      <div className="flex flex-1 justify-evenly">
+      {/* Fester Freiraum in der Mitte statt gleichmaessiger Aufteilung: der
+          Hinzufuegen-Knopf ragt ueber die Leiste hinaus und muss exakt
+          zentriert sitzen, unabhaengig davon, wie breit die Labels ausfallen. */}
+      <div className="w-[74px] shrink-0" aria-hidden="true" />
+      <div className="flex flex-1">
         {RIGHT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={isActive(item.href)} />
         ))}
       </div>
-      <CenterAction />
+
+      <div className="pointer-events-none absolute inset-x-0 -top-6 flex justify-center">
+        <div className="pointer-events-auto">
+          <AddActionSheet />
+        </div>
+      </div>
     </nav>
   );
 }

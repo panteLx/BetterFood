@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -39,6 +39,23 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Ueber die shadcn-Rollen hinaus: das Design trennt eine zweite Flaeche
+     (surface2) von der Karte, eine dritte Textstufe (faint) unter
+     muted-foreground, und drei Ablauf-Zustaende mit je eigenem Tint. Genau
+     diese Dreiteilung frisch / bald / abgelaufen traegt die gesamte
+     Oberflaeche -- sie gehoert in Tokens, nicht in verstreute Hex-Werte. */
+  --color-surface-2: var(--surface-2);
+  --color-faint: var(--faint);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-inv: var(--primary-inv);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+
+  --shadow-card: var(--shadow-elevated);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,75 +63,153 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  --animate-pop: bf-pop 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-rise: bf-rise 0.35s ease both;
+  --animate-scan: bf-scan 2.1s ease-in-out infinite;
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f2f4f0;
+  --foreground: #151c17;
+  --card: #ffffff;
+  --card-foreground: #151c17;
+  --popover: #ffffff;
+  --popover-foreground: #151c17;
+  --primary: #37714c;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f8f4;
+  --secondary-foreground: #151c17;
+  --muted: #f6f8f4;
+  --muted-foreground: #6b7a6e;
+  --accent: #e6f0e8;
+  --accent-foreground: #37714c;
+  --destructive: #b24734;
+  --border: #e3e7e0;
+  --input: #e3e7e0;
+  --ring: #37714c;
+
+  --surface-2: #f6f8f4;
+  --faint: #9aa79c;
+  --primary-tint: #e6f0e8;
+  /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primaerton hat dort
+     zu wenig Kontrast, deshalb ein eigener, aufgehellter Wert. */
+  --primary-inv: #8ed4a3;
+  --warning: #a9701a;
+  --warning-tint: #faefd9;
+  --danger: #b24734;
+  --danger-tint: #f9e4df;
+  --scrim: rgb(20 32 24 / 0.42);
+  --shadow-elevated: 0 1px 2px rgb(20 35 25 / 0.05), 0 10px 26px rgb(20 35 25 / 0.07);
+
+  --chart-1: #37714c;
+  --chart-2: #a9701a;
+  --chart-3: #b24734;
+  --chart-4: #6b7a6e;
+  --chart-5: #9aa79c;
+  --radius: 0.875rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #151c17;
+  --sidebar-primary: #37714c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e6f0e8;
+  --sidebar-accent-foreground: #37714c;
+  --sidebar-border: #e3e7e0;
+  --sidebar-ring: #37714c;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Kein reines Schwarz: gedaempfte Gruentoene halten die drei Ablauf-Farben
+     auch nachts unterscheidbar. */
+  --background: #0e1310;
+  --foreground: #e9efe9;
+  --card: #171e19;
+  --card-foreground: #e9efe9;
+  --popover: #171e19;
+  --popover-foreground: #e9efe9;
+  --primary: #74c48d;
+  --primary-foreground: #0e1310;
+  --secondary: #1e2721;
+  --secondary-foreground: #e9efe9;
+  --muted: #1e2721;
+  --muted-foreground: #96a597;
+  --accent: #1c2e22;
+  --accent-foreground: #74c48d;
+  --destructive: #e88e78;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.1);
+  --ring: #74c48d;
+
+  --surface-2: #1e2721;
+  --faint: #6d7b70;
+  --primary-tint: #1c2e22;
+  --primary-inv: #2c5c3e;
+  --warning: #e2aa5e;
+  --warning-tint: #2f2718;
+  --danger: #e88e78;
+  --danger-tint: #32201c;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-elevated: 0 1px 2px rgb(0 0 0 / 0.45);
+
+  --chart-1: #74c48d;
+  --chart-2: #e2aa5e;
+  --chart-3: #e88e78;
+  --chart-4: #96a597;
+  --chart-5: #6d7b70;
+  --sidebar: #171e19;
+  --sidebar-foreground: #e9efe9;
+  --sidebar-primary: #74c48d;
+  --sidebar-primary-foreground: #0e1310;
+  --sidebar-accent: #1c2e22;
+  --sidebar-accent-foreground: #74c48d;
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #74c48d;
+}
+
+@keyframes bf-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bf-rise {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bf-scan {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(150px);
+  }
+}
+
+/* Waagerecht scrollende Chip-Reihen (Schnell-Datumswahl, Kategorien): auf
+   dem Telefon gibt es dort ohnehin keine sichtbare Leiste, auf dem Desktop
+   zerschnitt sie die Reihe. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
@@ -126,5 +221,12 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Die Oberflaeche lebt von halbfetten Labels und sehr fetten Ueberschriften
+     -- Manrope liefert beides bis 800. */
+  h1,
+  h2,
+  h3 {
+    @apply font-extrabold tracking-tight;
   }
 }

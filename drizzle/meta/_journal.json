@@ -50,6 +50,27 @@
       "when": 1788017763072,
       "tag": "0006_absurd_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788028942140,
+      "tag": "0007_familiar_luminals",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788037301791,
+      "tag": "0008_equal_mongoose",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788037966917,
+      "tag": "0009_fix_place_fk",
+      "breakpoints": true
     }
   ]
 }

@@ -12,8 +12,7 @@ import {
   FormatException,
   NotFoundException,
 } from "@zxing/library";
-import { Flashlight, FlashlightOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Flashlight, FlashlightOff, X } from "lucide-react";
 
 // Ohne Hints probiert der MultiFormatReader pro Frame saemtliche Formate durch
 // -- QR, Micro-QR, Aztec, DataMatrix, PDF417 und alle 1D-Varianten. Auf
@@ -119,7 +118,7 @@ export default function ScanPage() {
             if (result) {
               scannedRef.current = true;
               controlsRef.current?.stop();
-              router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}`);
+              router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}&via=scan`);
               return;
             }
             if (err && !isExpectedDecodeError(err)) {
@@ -196,79 +195,107 @@ export default function ScanPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col pb-14">
-      <div className="flex items-center justify-between p-4">
-        <h1 className="text-lg font-semibold">Barcode scannen</h1>
-        <Button variant="ghost" onClick={() => router.push("/")}>
-          Abbrechen
-        </Button>
-      </div>
+    <div className="relative flex flex-1 flex-col overflow-hidden bg-[#0b0f0c] text-white">
+      {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
+          iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
+          object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
+          statt ueber explizite Positionierung bestimmt wird. */}
+      <video
+        ref={videoRef}
+        onPlaying={() => {
+          // "playing" heisst nur, dass Frames fliessen -- Safari braucht danach
+          // noch ein bis zwei gemalte Frames, bis die object-cover-Zuschneidung
+          // tatsaechlich korrekt gerendert ist (sonst blitzt kurz ein falsch
+          // zugeschnittenes erstes Frame auf). Zwei verschachtelte rAF warten,
+          // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
+          // aufdecken.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => setVideoReady(true));
+          });
+        }}
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+          videoReady ? "opacity-100" : "opacity-0"
+        }`}
+        muted
+        playsInline
+      />
+      {/* Solange die Kamera startet, steht statt eines schwarzen Rechtecks ein
+          ruhiger Verlauf -- der Screen sieht dann nicht kaputt aus. */}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_30%,#2a332c_0%,#12170f_60%,#0b0f0c_100%)] transition-opacity duration-300 ${
+          videoReady ? "opacity-0" : "opacity-100"
+        }`}
+      />
 
-      {/* Unterhalb des Kamerabilds steht jetzt der EAN-Ausweg; die Polsterung
-          am Seitenende (pb-14, siehe aussen) haelt ihn frei vom FAB, der ueber
-          die Navigationsleiste hinausragt. */}
-      <div className="relative mx-4 mb-3 flex-1 overflow-hidden rounded-xl bg-black">
-        {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
-            iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
-            object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
-            statt ueber explizite Positionierung bestimmt wird. */}
-        <video
-          ref={videoRef}
-          onPlaying={() => {
-            // "playing" heisst nur, dass Frames fliessen -- Safari braucht danach
-            // noch ein bis zwei gemalte Frames, bis die object-cover-Zuschneidung
-            // tatsaechlich korrekt gerendert ist (sonst blitzt kurz ein falsch
-            // zugeschnittenes erstes Frame auf). Zwei verschachtelte rAF warten,
-            // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
-            // aufdecken.
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => setVideoReady(true));
-            });
-          }}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
-            videoReady ? "opacity-100" : "opacity-0"
-          }`}
-          muted
-          playsInline
-        />
-        <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-lg border-2 border-white/80" />
-
-        <p className="pointer-events-none absolute inset-x-6 top-[calc(50%+4rem)] text-center text-sm text-white/90 drop-shadow">
-          Barcode in den Rahmen halten
-        </p>
-
-        {torchAvailable && (
-          <Button
-            size="icon-touch"
-            variant="outline"
+      <div className="relative flex items-center justify-between px-5 pt-3">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          aria-label="Scannen abbrechen"
+          className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+        >
+          <X className="size-5" strokeWidth={2} />
+        </button>
+        <span className="text-[15px] font-bold">Barcode scannen</span>
+        {torchAvailable ? (
+          <button
+            type="button"
             aria-label={torchOn ? "Licht ausschalten" : "Licht einschalten"}
             aria-pressed={torchOn}
             onClick={toggleTorch}
-            className="absolute top-3 right-3 border-white/40 bg-black/40 text-white hover:bg-black/60 hover:text-white"
+            className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
           >
             {torchOn ? <Flashlight className="size-5" /> : <FlashlightOff className="size-5" />}
-          </Button>
+          </button>
+        ) : (
+          <span className="size-10.5" aria-hidden="true" />
         )}
       </div>
 
-      {error && (
-        <div className="flex flex-col items-center gap-2 px-4 pt-4">
-          <p className="text-center text-sm text-destructive">{error}</p>
-          <Button variant="outline" onClick={handleRetry}>
-            Kamera neu starten
-          </Button>
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-6.5 px-7">
+        {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
+            bleibt genau der Ausschnitt hell, in dem der Code liegen soll. */}
+        <div className="relative h-48 w-[270px] overflow-hidden rounded-[26px] shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_0_0_2000px_rgb(0_0_0/0.42)]">
+          <span className="absolute inset-x-4 top-4 h-[3px] animate-scan rounded-sm bg-[#74c48d] shadow-[0_0_18px_#74c48d]" />
         </div>
-      )}
+        <p className="text-center text-[15px] leading-relaxed font-semibold text-balance text-white/90">
+          Halte den Barcode ins Feld.
+          <br />
+          <span className="font-medium text-white/55">Wir erkennen ihn automatisch.</span>
+        </p>
+
+        {error && (
+          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
+            <p className="text-center text-sm font-semibold text-[#e88e78]">{error}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="h-10 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white"
+            >
+              Kamera neu starten
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Der Ausweg gehoert auf diesen Screen: wer hier steht, hat einen Code
           vor sich, den die Kamera nicht liest. Ihn ueber den zentralen
           Hinzufuegen-Button suchen zu lassen, hilft in dem Moment niemandem. */}
-      <p className="px-4 text-center text-sm text-muted-foreground">
-        Code lässt sich nicht lesen?{" "}
-        <Link href="/scan-ean" className="underline">
-          EAN eintippen
+      <div className="relative flex flex-col gap-2.5 px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+        <Link
+          href="/scan-ean"
+          className="flex h-13 items-center justify-center rounded-[17px] border border-white/25 bg-white/10 text-[15px] font-semibold text-white backdrop-blur-sm"
+        >
+          EAN von Hand eingeben
         </Link>
-      </p>
+        <Link
+          href="/add"
+          className="flex h-11 items-center justify-center text-sm font-semibold text-white/60"
+        >
+          Kein Barcode vorhanden
+        </Link>
+      </div>
     </div>
   );
 }
