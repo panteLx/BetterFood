@@ -18,6 +18,7 @@ cp .env.example .env
 
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — mit `npx web-push generate-vapid-keys` erzeugen
 - `VAPID_SUBJECT` — Kontakt-URI für Push-Dienste (z. B. `mailto:...`)
+- `INTERNAL_CRON` — `false` schaltet den eingebauten stündlichen Zeitgeber für die Erinnerungen ab (Standard: an)
 - `CRON_SECRET` — Bearer-Token für `POST /api/cron/check-expiry`, z. B. mit `openssl rand -hex 32`
 - `BETTER_AUTH_SECRET` — z. B. mit `openssl rand -hex 32`
 - `BETTER_AUTH_URL` — Basis-URL der App (lokal `http://localhost:3000`)
@@ -58,14 +59,16 @@ Die SQLite-Datenbank liegt im gemounteten `data`-Volume. Migrationen laufen beim
 
 ### Erinnerungen planen
 
-`POST /api/cron/check-expiry` verschickt die Ablauf-Erinnerungen und muss von außen angestoßen werden (Cron, systemd-Timer, Uptime-Kuma …):
+Die App bringt einen eigenen Zeitgeber mit: sie prüft zu jeder vollen Stunde, was abläuft, und hält sich dabei an die pro Nutzer eingestellte Uhrzeit (`08:00` / `09:00` / `18:00`) sowie an die Wochenübersicht am Sonntag. Dafür ist nichts einzurichten — es braucht nur die VAPID-Schlüssel.
+
+Wer die Läufe lieber selbst plant (Cron, systemd-Timer, Uptime-Kuma …), setzt `INTERNAL_CRON=false` und stößt die Route von außen an:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
   "https://example.org/api/cron/check-expiry?schedule=hourly"
 ```
 
-Mit `?schedule=hourly` hält sich der Job an die pro Nutzer eingestellte Uhrzeit (`08:00` / `09:00` / `18:00`) und schickt sonntags die Wochenübersicht — dafür muss er stündlich laufen. Ohne den Parameter verhält er sich wie bisher und meldet bei jedem Lauf alles Fällige; das ist die richtige Wahl, wenn der Job nur einmal am Tag läuft.
+Mit `?schedule=hourly` hält sich der Job an die eingestellte Uhrzeit — dafür muss er stündlich laufen. Ohne den Parameter meldet er bei jedem Lauf alles Fällige; das ist die richtige Wahl, wenn der Job nur einmal am Tag läuft.
 
 ## Tech-Stack
 
