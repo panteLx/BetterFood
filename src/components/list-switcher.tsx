@@ -105,10 +105,8 @@ export function ListSwitcher({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-bold">{list.name}</span>
                   <span className="mt-1 block text-[12.5px] font-medium text-muted-foreground">
-                    {list.itemCount} {list.itemCount === 1 ? "Artikel" : "Artikel"} ·{" "}
-                    {list.memberCount === 1
-                      ? "nur du"
-                      : `${list.memberCount} Mitglieder`}
+                    {list.itemCount} Artikel ·{" "}
+                    {list.memberCount === 1 ? "nur du" : `${list.memberCount} Mitglieder`}
                   </span>
                 </span>
                 {active && <Check className="size-5 shrink-0 text-primary" strokeWidth={2.4} />}

@@ -59,7 +59,11 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>
-          <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+          {/* Die Safe Area oben gehoert an genau eine Stelle: als
+              installierte PWA laeuft der Inhalt sonst unter der Statusleiste
+              des Geraets durch, und jede Seite muesste denselben Abstand
+              selbst noch einmal setzen. */}
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col pt-[env(safe-area-inset-top)]">
             {children}
             <Suspense fallback={null}>
               <BottomNavGate />

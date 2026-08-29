@@ -201,6 +201,17 @@
   }
 }
 
+/* Waagerecht scrollende Chip-Reihen (Schnell-Datumswahl, Kategorien): auf
+   dem Telefon gibt es dort ohnehin keine sichtbare Leiste, auf dem Desktop
+   zerschnitt sie die Reihe. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

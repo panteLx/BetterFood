@@ -238,7 +238,8 @@ export function ListManager() {
                       <span className="block truncate text-[15px] font-bold">{list.name}</span>
                       <span className="mt-1 block text-[12.5px] font-medium text-muted-foreground">
                         {isOwner ? "Deine Liste" : "Geteilte Liste"}
-                        {listMembers && ` · ${listMembers.length} Mitglieder`}
+                        {listMembers &&
+                          ` · ${listMembers.length} ${listMembers.length === 1 ? "Mitglied" : "Mitglieder"}`}
                       </span>
                     </span>
                   </button>

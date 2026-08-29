@@ -1,6 +1,14 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { formatMedium, fromDateInputValue } from "@/lib/expiry";
+
+type SavedParams = Promise<{
+  name?: string;
+  date?: string;
+  method?: string;
+  merged?: string;
+}>;
 
 /**
  * Der Abschluss nach dem Erfassen.
@@ -10,12 +18,21 @@ import { formatMedium, fromDateInputValue } from "@/lib/expiry";
  * Auswahl-Blatt und einen kompletten Kamerastart. Nach dem Einkauf ist genau
  * dieser naechste Artikel aber der Normalfall, deshalb steht er hier als
  * eigener Knopf.
+ *
+ * "await searchParams" muss unterhalb einer <Suspense>-Grenze passieren, sonst
+ * blockiert die Navigation komplett den Server-Render (Next 16 "Instant
+ * Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
+ * instant-navigation.md, Abschnitt "Fixing a navigation that blocks").
  */
-export default async function SavedPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ name?: string; date?: string; method?: string; merged?: string }>;
-}) {
+export default function SavedPage({ searchParams }: { searchParams: SavedParams }) {
+  return (
+    <Suspense fallback={<div className="flex-1" />}>
+      <Saved searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Saved({ searchParams }: { searchParams: SavedParams }) {
   const { name, date, method, merged } = await searchParams;
 
   const expiry = date ? fromDateInputValue(date) : null;

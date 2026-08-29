@@ -161,15 +161,16 @@ export function ItemDetail({
             <ArrowLeft className="size-5.5" />
           </Button>
           <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon-touch"
+            {/* Ein echter Link statt eines Buttons mit render-Prop: Base UI
+                besteht zu Recht auf einem nativen <button>, und Bearbeiten
+                ist ohnehin eine Navigation, kein Formularknopf. */}
+            <Link
+              href={`/edit/${item.id}`}
               aria-label="Artikel bearbeiten"
-              render={<Link href={`/edit/${item.id}`} />}
-              className="rounded-2xl"
+              className="flex size-11 items-center justify-center rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <Pencil className="size-5" />
-            </Button>
+            </Link>
             <AlertDialog>
               <AlertDialogTrigger
                 render={

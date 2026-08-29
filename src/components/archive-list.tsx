@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import { Archive as ArchiveIcon } from "lucide-react";
+import { Archive as ArchiveIcon, EyeOff, RotateCcw } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -197,23 +197,27 @@ function ArchiveCard({
         </div>
 
         {/* Die Wischgeste ist auch hier nicht der einzige Weg: mit Tastatur
-            und Screenreader bleiben beide Aktionen als Buttons erreichbar. */}
+            und Screenreader bleiben beide Aktionen als Buttons erreichbar.
+            Als Symbole, damit sie die Zeile nicht laenger machen als den
+            Artikelnamen darin. */}
         <div className="flex shrink-0 gap-1.5">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={onRestore}
-            className="rounded-xl"
+            aria-label={`${item.name} wiederherstellen`}
+            className="size-10 rounded-[13px]"
           >
-            Zurück
+            <RotateCcw className="size-4" />
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
+            variant="outline"
+            size="icon"
             onClick={onHide}
-            className="rounded-xl text-muted-foreground"
+            aria-label={`${item.name} ausblenden`}
+            className="size-10 rounded-[13px] text-muted-foreground"
           >
-            Ausblenden
+            <EyeOff className="size-4" />
           </Button>
         </div>
       </div>

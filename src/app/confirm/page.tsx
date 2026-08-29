@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Barcode, Camera, ClipboardList } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
@@ -5,11 +6,23 @@ import { lookupProductByBarcode } from "@/lib/off";
 import { optionalSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 
-export default async function ConfirmPage({
+// "await searchParams" muss unterhalb einer <Suspense>-Grenze passieren, sonst
+// blockiert die Navigation komplett den Server-Render (Next 16 "Instant
+// Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
+// instant-navigation.md).
+export default function ConfirmPage({
   searchParams,
 }: {
   searchParams: Promise<{ barcode?: string }>;
 }) {
+  return (
+    <Suspense fallback={<div className="flex-1" />}>
+      <Confirm searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Confirm({ searchParams }: { searchParams: Promise<{ barcode?: string }> }) {
   const { barcode } = await searchParams;
   const session = await optionalSession();
 

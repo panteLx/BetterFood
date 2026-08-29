@@ -1,9 +1,9 @@
 import { db } from "@/db";
-import { items, listMembers, lists } from "@/db/schema";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { items } from "@/db/schema";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { HomeOverview } from "@/components/home-overview";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, getPlacesForList } from "@/lib/data";
+import { getCategoriesForList, getListsWithCounts, getPlacesForList } from "@/lib/data";
 
 export default async function HomePage() {
   const session = await requireSession();
@@ -27,27 +27,7 @@ export default async function HomePage() {
       .where(
         and(ne(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)),
       ),
-    db
-      .select({
-        id: lists.id,
-        name: lists.name,
-        // Unterabfragen statt zweier weiterer Joins: ein Join ueber Artikel
-        // UND Mitglieder gleichzeitig vervielfacht die Zeilen und zaehlt
-        // beides falsch.
-        itemCount: sql<number>`(
-          select count(*) from ${items}
-          where ${items.listId} = ${lists.id}
-            and ${items.status} = 'active'
-            and ${items.hiddenAt} is null
-        )`,
-        memberCount: sql<number>`(
-          select count(*) from ${listMembers} where ${listMembers.listId} = ${lists.id}
-        )`,
-      })
-      .from(lists)
-      .innerJoin(listMembers, eq(listMembers.listId, lists.id))
-      .where(and(eq(listMembers.userId, session.user.id), isNull(lists.archivedAt)))
-      .orderBy(asc(lists.createdAt)),
+    getListsWithCounts(session.user.id),
   ]);
 
   return (

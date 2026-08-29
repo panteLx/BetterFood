@@ -1,8 +1,8 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { categories, items, lists, places, productKnowledge } from "@/db/schema";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { categories, items, listMembers, lists, places, productKnowledge } from "@/db/schema";
+import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
 import { normalizeProductName } from "@/lib/utils";
 
@@ -80,6 +80,79 @@ export async function getPlacesForList(listId: number) {
     .from(places)
     .where(eq(places.listId, listId))
     .orderBy(asc(places.position), asc(places.id));
+}
+
+/**
+ * Die nicht archivierten Listen eines Nutzers samt Artikel- und
+ * Mitgliederzahl -- das, was im Listen-Blatt unter jedem Namen steht.
+ *
+ * Zwei Gruppierungen statt zweier Joins in einer Abfrage: ein gemeinsamer
+ * Join ueber Artikel UND Mitglieder vervielfacht die Zeilen und zaehlt beides
+ * falsch.
+ */
+export async function getListsWithCounts(userId: string) {
+  const rows = await db
+    .select({ id: lists.id, name: lists.name })
+    .from(lists)
+    .innerJoin(listMembers, eq(listMembers.listId, lists.id))
+    .where(and(eq(listMembers.userId, userId), isNull(lists.archivedAt)))
+    .orderBy(asc(lists.createdAt));
+
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.id);
+
+  const [itemCounts, memberCounts] = await Promise.all([
+    db
+      .select({ listId: items.listId, total: count() })
+      .from(items)
+      .where(
+        and(inArray(items.listId, ids), eq(items.status, "active"), isNull(items.hiddenAt)),
+      )
+      .groupBy(items.listId),
+    db
+      .select({ listId: listMembers.listId, total: count() })
+      .from(listMembers)
+      .where(inArray(listMembers.listId, ids))
+      .groupBy(listMembers.listId),
+  ]);
+
+  const itemsByList = new Map(itemCounts.map((row) => [row.listId, row.total]));
+  const membersByList = new Map(memberCounts.map((row) => [row.listId, row.total]));
+
+  return rows.map((row) => ({
+    ...row,
+    itemCount: itemsByList.get(row.id) ?? 0,
+    memberCount: membersByList.get(row.id) ?? 1,
+  }));
+}
+
+/**
+ * Die Orte einer Liste samt der Zahl der Artikel, die gerade darin liegen.
+ *
+ * Bewusst zwei Abfragen und eine Zusammenfuehrung in JavaScript statt einer
+ * korrelierten Unterabfrage: die Zahl steht in der Loeschabfrage ("3 Artikel
+ * liegen hier") und muss stimmen. Eine Gruppierung ueber items ist dafuer
+ * nachvollziehbarer -- und liefert im Gegensatz zur Unterabfrage auch dann
+ * das Richtige, wenn der Ort selbst die aeussere Tabelle ist.
+ */
+export async function getPlacesWithCounts(listId: number) {
+  const [rows, counts] = await Promise.all([
+    db
+      .select()
+      .from(places)
+      .where(eq(places.listId, listId))
+      .orderBy(asc(places.position), asc(places.id)),
+    db
+      .select({ placeId: items.placeId, total: count() })
+      .from(items)
+      .where(
+        and(eq(items.listId, listId), eq(items.status, "active"), isNull(items.hiddenAt)),
+      )
+      .groupBy(items.placeId),
+  ]);
+
+  const byPlace = new Map(counts.map((row) => [row.placeId, row.total]));
+  return rows.map((place) => ({ ...place, itemCount: byPlace.get(place.id) ?? 0 }));
 }
 
 /**

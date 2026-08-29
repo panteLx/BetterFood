@@ -1,10 +1,10 @@
 import { db } from "@/db";
-import { items, lists, places } from "@/db/schema";
-import { asc, eq, sql } from "drizzle-orm";
+import { lists } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { KnowledgeManager } from "@/components/knowledge-manager";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, getKnowledgeForList } from "@/lib/data";
+import { getCategoriesForList, getKnowledgeForList, getPlacesWithCounts } from "@/lib/data";
 
 export default async function KnowledgePage() {
   const session = await requireSession();
@@ -15,23 +15,7 @@ export default async function KnowledgePage() {
     getCategoriesForList(listId),
     // Die Zahl steht in der Loeschabfrage ("3 Artikel liegen hier") und macht
     // erst begreifbar, was das Entfernen eines Fachs bedeutet.
-    db
-      .select({
-        id: places.id,
-        name: places.name,
-        position: places.position,
-        createdAt: places.createdAt,
-        listId: places.listId,
-        itemCount: sql<number>`(
-          select count(*) from ${items}
-          where ${items.placeId} = ${places.id}
-            and ${items.status} = 'active'
-            and ${items.hiddenAt} is null
-        )`,
-      })
-      .from(places)
-      .where(eq(places.listId, listId))
-      .orderBy(asc(places.position), asc(places.id)),
+    getPlacesWithCounts(listId),
     db.select({ name: lists.name }).from(lists).where(eq(lists.id, listId)).get(),
   ]);
 

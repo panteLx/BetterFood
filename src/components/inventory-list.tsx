@@ -251,7 +251,7 @@ export function InventoryList({
                 {section.title}
               </h2>
               <span className="text-[11.5px] font-semibold text-faint">
-                {section.items.length} {section.items.length === 1 ? "Artikel" : "Artikel"}
+                {section.items.length} Artikel
               </span>
             </div>
             {section.items.map((item) => (

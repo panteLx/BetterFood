@@ -73,7 +73,7 @@ export function DateSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Haltbar bis">
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-4">
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-4">
         {QUICK_DATES.map((quick) => {
           const date = addDays(quick.days, today);
           return (

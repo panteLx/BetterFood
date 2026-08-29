@@ -148,7 +148,7 @@ export function PlaceManager({ places }: { places: PlaceWithCount[] }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14.5px] leading-tight font-bold">{place.name}</p>
                 <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
-                  {place.itemCount} {place.itemCount === 1 ? "Artikel" : "Artikel"}
+                  {place.itemCount} Artikel
                 </p>
               </div>
               <Button
