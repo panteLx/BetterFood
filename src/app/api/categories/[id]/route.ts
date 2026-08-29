@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { categoriesTag } from "@/lib/data";
+import { categoriesTag, forgetProductsInCategory } from "@/lib/data";
 
 export async function PATCH(
   req: NextRequest,
@@ -102,6 +102,9 @@ export async function DELETE(
   }
 
   await db.delete(categories).where(eq(categories.id, Number(id)));
+  // Sonst blieben in der Wissensdatenbank Produkte stehen, die auf eine
+  // Kategorie zeigen, die es nicht mehr gibt.
+  await forgetProductsInCategory(listId, target.key);
 
   revalidateTag(categoriesTag(listId), { expire: 0 });
 

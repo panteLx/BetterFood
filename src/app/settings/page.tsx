@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { subscribeToPush, getNotificationPermissionState } from "@/lib/push-client";
-import { CategoryManager } from "@/components/category-manager";
 import { ListManager } from "@/components/list-manager";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallHintSettings } from "@/components/install-hint";
@@ -21,7 +22,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [permission, setPermission] = useState<string>("default");
   const [testing, setTesting] = useState(false);
-  const [activeList, setActiveList] = useState<{ id: number; name: string } | null>(null);
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -157,11 +157,26 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="flex flex-col gap-4 rounded-xl border border-input p-3">
-        <ListManager onActiveListChange={setActiveList} />
-        <div className="flex flex-col gap-3 border-t border-dashed border-input pt-4">
-          <CategoryManager listId={activeList?.id} listName={activeList?.name} />
+      {/* Kategorien wurden frueher direkt hier gepflegt. Sie sind aber nur die
+          eine Haelfte dessen, was die App ueber die Vorraete weiss -- die
+          andere sind die Produkte selbst. Beides steht jetzt zusammen unter
+          /knowledge, statt sich auf zwei Seiten zu verteilen. */}
+      <Link
+        href="/knowledge"
+        className="flex items-center gap-3 rounded-xl border border-input p-3 text-left hover:bg-muted"
+      >
+        <BookOpen className="size-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Wissen</p>
+          <p className="text-xs text-muted-foreground">
+            Kategorien und gelernte Produktzuordnungen bearbeiten
+          </p>
         </div>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </Link>
+
+      <div className="flex flex-col gap-4 rounded-xl border border-input p-3">
+        <ListManager />
       </div>
     </div>
   );

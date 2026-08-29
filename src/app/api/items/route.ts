@@ -4,6 +4,7 @@ import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
+import { rememberProduct } from "@/lib/data";
 import { normalizeProductName } from "@/lib/utils";
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -97,6 +98,8 @@ export async function POST(req: NextRequest) {
       .where(eq(items.id, existing.id))
       .returning();
 
+    await rememberProduct(listId, { barcode, name, category });
+
     return NextResponse.json({ ...merged, merged: true }, { status: 200 });
   }
 
@@ -114,6 +117,11 @@ export async function POST(req: NextRequest) {
       addedById: session.user.id,
     })
     .returning();
+
+  // Jeder gespeicherte Artikel ist zugleich eine Aussage darueber, wohin
+  // dieses Produkt in diesem Haushalt gehoert -- genau davon lebt die
+  // Vorauswahl beim naechsten Mal.
+  await rememberProduct(listId, { barcode, name, category });
 
   return NextResponse.json(created, { status: 201 });
 }

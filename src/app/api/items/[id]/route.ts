@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
+import { rememberProduct } from "@/lib/data";
 
 export async function PATCH(
   req: NextRequest,
@@ -76,6 +77,18 @@ export async function PATCH(
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
+  // Wer einen falsch einsortierten Artikel oeffnet und die Kategorie
+  // korrigiert, korrigiert damit auch die Vorauswahl fuer das naechste Mal --
+  // der kuerzeste Weg, das Wissen richtigzustellen. Nur bei einer Aenderung
+  // an Name oder Kategorie: ein reines Umdatieren sagt darueber nichts aus.
+  if (update.name !== undefined || update.category !== undefined) {
+    await rememberProduct(listId, {
+      barcode: updated.barcode,
+      name: updated.name,
+      category: updated.category,
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -83,10 +96,9 @@ export async function PATCH(
  * Blendet einen Artikel aus, statt ihn zu loeschen.
  *
  * Die Zeile bleibt in der Datenbank, taucht aber in keiner Ansicht mehr auf
- * (alle Abfragen filtern auf hiddenAt IS NULL). Grund: erst die Historie
- * dieser Liste weiss, dass ein Haehnchenbrustfilet hier unter "Fleisch &
- * Fisch" gehoert -- wuerde das Aufraeumen des Archivs dieses Wissen mit
- * loeschen, faenge die Vorauswahl bei jedem Grossputz wieder bei null an.
+ * (alle Abfragen filtern auf hiddenAt IS NULL) -- ein Aufraeumen im Archiv
+ * soll nichts unwiederbringlich vernichten. Die Kategorie-Zuordnung haengt
+ * nicht daran: die steht in product_knowledge und bleibt so oder so.
  */
 export async function DELETE(
   _req: NextRequest,

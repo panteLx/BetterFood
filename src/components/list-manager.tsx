@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,11 +25,7 @@ import { cn } from "@/lib/utils";
 
 type Member = { userId: string; name: string; email: string; isOwner: boolean };
 
-export function ListManager({
-  onActiveListChange,
-}: {
-  onActiveListChange?: (list: { id: number; name: string } | null) => void;
-} = {}) {
+export function ListManager() {
   const router = useRouter();
   const { data: session } = useSession();
   const [lists, setLists] = useState<List[]>([]);
@@ -58,15 +54,6 @@ export function ListManager({
   useEffect(() => {
     load();
   }, []);
-
-  const activeList = useMemo(
-    () => lists.find((l) => l.id === activeListId) ?? null,
-    [lists, activeListId],
-  );
-
-  useEffect(() => {
-    onActiveListChange?.(activeList ? { id: activeList.id, name: activeList.name } : null);
-  }, [activeList, onActiveListChange]);
 
   function loadMembers(listId: number) {
     fetch(`/api/lists/${listId}/members`)

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Archive, Settings, type LucideIcon } from "lucide-react";
+import { Home, Archive, BookOpen, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddActionSheet } from "@/components/add-action-sheet";
 
@@ -10,7 +10,10 @@ import { AddActionSheet } from "@/components/add-action-sheet";
 // den zentralen AddActionSheet-Button erreichbar (siehe dort fuer die
 // Begruendung). LEFT_ITEMS/RIGHT_ITEMS werden links bzw. rechts der zentralen
 // Aktion gerendert.
-const LEFT_ITEMS = [{ href: "/", label: "Start", icon: Home }] as const;
+const LEFT_ITEMS = [
+  { href: "/", label: "Start", icon: Home },
+  { href: "/knowledge", label: "Wissen", icon: BookOpen },
+] as const;
 const RIGHT_ITEMS = [
   { href: "/archive", label: "Archiv", icon: Archive },
   { href: "/settings", label: "Einstellungen", icon: Settings },
