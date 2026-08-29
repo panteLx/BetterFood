@@ -17,6 +17,13 @@ export const DEFAULT_CATEGORIES = [
   { key: "sonstiges", label: "Sonstiges", shelfLifeDays: 14 },
 ] as const;
 
+/**
+ * Die Faecher, mit denen eine neue Liste startet. Bewusst kurz gehalten:
+ * drei Orte decken einen normalen Haushalt ab, alles darueber (Keller,
+ * Speisekammer, Garage) legt der Nutzer selbst an.
+ */
+export const DEFAULT_PLACES = ["Kühlschrank", "Gefrierfach", "Vorratsschrank"] as const;
+
 export function estimateExpiryDate(shelfLifeDays: number, from: Date = new Date()): Date {
   const result = new Date(from);
   result.setDate(result.getDate() + shelfLifeDays);

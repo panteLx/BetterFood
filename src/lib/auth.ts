@@ -5,7 +5,12 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { categories, items, listMembers, lists, pushSubscriptions, user } from "@/db/schema";
 import { count, eq, isNull } from "drizzle-orm";
-import { listHasCategories, seedDefaultCategories } from "@/lib/data";
+import {
+  listHasCategories,
+  listHasPlaces,
+  seedDefaultCategories,
+  seedDefaultPlaces,
+} from "@/lib/data";
 
 const oidcConfigured = Boolean(
   process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET,
@@ -37,6 +42,12 @@ async function claimLegacyData(newUser: { id: string }) {
   // keinen Artikel speichern, ohne sich vorher selbst eine auszudenken.
   if (!(await listHasCategories(list.id))) {
     await seedDefaultCategories(list.id);
+  }
+
+  // Dieselbe Ueberlegung fuer die Orte: ohne sie bliebe die Frage "Wo liegt
+  // es?" beim ersten Artikel unbeantwortbar.
+  if (!(await listHasPlaces(list.id))) {
+    await seedDefaultPlaces(list.id);
   }
 
   await db.update(user).set({ activeListId: list.id }).where(eq(user.id, newUser.id));

@@ -1,13 +1,17 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { categories, items, lists, productKnowledge } from "@/db/schema";
+import { categories, items, lists, places, productKnowledge } from "@/db/schema";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { DEFAULT_CATEGORIES } from "@/lib/categories";
+import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
 import { normalizeProductName } from "@/lib/utils";
 
 export function categoriesTag(listId: number) {
   return `categories:${listId}`;
+}
+
+export function placesTag(listId: number) {
+  return `places:${listId}`;
 }
 
 // Categories change rarely (a handful of edits per list, ever) compared to
@@ -58,6 +62,74 @@ export async function listHasCategories(listId: number) {
     .where(eq(categories.listId, listId))
     .get();
   return Boolean(existing);
+}
+
+/**
+ * Die Orte einer Liste, in der vom Nutzer festgelegten Reihenfolge.
+ *
+ * Gecacht wie die Kategorien und aus demselben Grund: sie aendern sich ein
+ * paar Mal im Leben einer Liste, werden aber auf jedem Screen gebraucht.
+ */
+export async function getPlacesForList(listId: number) {
+  "use cache";
+  cacheTag(placesTag(listId));
+  cacheLife("hours");
+
+  return db
+    .select()
+    .from(places)
+    .where(eq(places.listId, listId))
+    .orderBy(asc(places.position), asc(places.id));
+}
+
+/**
+ * Befuellt eine frisch angelegte Liste mit den Standardorten.
+ *
+ * Ohne das stuende im Erfassungsformular ein leerer Abschnitt "Wo liegt es?",
+ * den der Nutzer erst in der Datenbank fuellen muesste, bevor er seinen
+ * ersten Artikel sinnvoll einsortieren kann.
+ */
+export async function seedDefaultPlaces(listId: number) {
+  const now = new Date();
+  await db.insert(places).values(
+    DEFAULT_PLACES.map((name, index) => ({
+      name,
+      position: index,
+      createdAt: now,
+      listId,
+    })),
+  );
+}
+
+/** True, wenn die Liste (noch) keinen einzigen Ort hat. */
+export async function listHasPlaces(listId: number) {
+  const existing = await db
+    .select({ id: places.id })
+    .from(places)
+    .where(eq(places.listId, listId))
+    .get();
+  return Boolean(existing);
+}
+
+/**
+ * Legt die Standardorte fuer jede Liste an, die noch keine hat.
+ *
+ * Laeuft beim Start (siehe instrumentation): Listen, die vor den Orten
+ * existierten, haetten sonst dauerhaft einen leeren Ort-Abschnitt -- und
+ * niemand kommt von selbst auf die Idee, in der Datenbank drei Faecher
+ * anzulegen, bevor die App wieder vollstaendig ist.
+ */
+export async function backfillDefaultPlaces() {
+  const allLists = await db.select({ id: lists.id }).from(lists);
+  let seeded = 0;
+
+  for (const list of allLists) {
+    if (await listHasPlaces(list.id)) continue;
+    await seedDefaultPlaces(list.id);
+    seeded += 1;
+  }
+
+  return seeded;
 }
 
 /**

@@ -3,9 +3,63 @@ import { db } from "@/db";
 import { items, listMembers, lists, pushSubscriptions, settings } from "@/db/schema";
 import { and, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { getWebPush } from "@/lib/push";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NOTIFICATION_KEYS,
+  NOTIFICATION_TIMES,
+  notificationHour,
+  type NotificationTime,
+} from "@/lib/notification-settings";
 import type { Item } from "@/db/schema";
 
-const DEFAULT_LEAD_DAYS = 2;
+const DEFAULT_LEAD_DAYS = DEFAULT_NOTIFICATION_SETTINGS.leadDays;
+
+// Merker fuer die Wochenuebersicht: der Job laeuft ggf. stuendlich, die
+// Uebersicht darf sonntags aber nur einmal rausgehen. Steht als
+// Einstellungs-Zeile beim Nutzer, weil sie -- anders als lastNotifiedAt am
+// Artikel -- an keinem einzelnen Artikel haengt.
+const WEEKLY_SENT_KEY = "notification_weekly_last_sent";
+
+type MemberPreferences = {
+  leadDays: number;
+  time: NotificationTime;
+  weeklySummary: boolean;
+  weeklyLastSent: string | null;
+};
+
+async function readPreferences(userId: string): Promise<MemberPreferences> {
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(
+      and(
+        eq(settings.userId, userId),
+        inArray(settings.key, [...Object.values(NOTIFICATION_KEYS), WEEKLY_SENT_KEY]),
+      ),
+    );
+
+  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+  const leadDays = Number(byKey.get(NOTIFICATION_KEYS.leadDays));
+  const time = byKey.get(NOTIFICATION_KEYS.time);
+  const weekly = byKey.get(NOTIFICATION_KEYS.weeklySummary);
+
+  return {
+    leadDays: Number.isFinite(leadDays) ? leadDays : DEFAULT_LEAD_DAYS,
+    time: NOTIFICATION_TIMES.includes(time as NotificationTime)
+      ? (time as NotificationTime)
+      : DEFAULT_NOTIFICATION_SETTINGS.time,
+    weeklySummary:
+      weekly === undefined ? DEFAULT_NOTIFICATION_SETTINGS.weeklySummary : weekly === "1",
+    weeklyLastSent: byKey.get(WEEKLY_SENT_KEY) ?? null,
+  };
+}
+
+/** Lokales Datum als yyyy-mm-dd -- Vergleichsschluessel fuer den Wochenmerker. */
+function dateKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 function startOfToday(): Date {
   const d = new Date();
@@ -58,6 +112,16 @@ export async function POST(req: NextRequest) {
   const today = startOfToday();
   const webpush = getWebPush();
 
+  // Die gewuenschte Uhrzeit laesst sich nur einhalten, wenn der Job auch
+  // stuendlich laeuft. Wer ihn weiterhin einmal am Tag anstoesst, ruft ihn
+  // ohne diesen Parameter auf und bekommt wie bisher bei jedem Lauf alles
+  // Faellige -- eine stillschweigende Zeitpruefung wuerde dort schlicht nie
+  // zutreffen und die Erinnerungen fuer immer verstummen lassen.
+  const respectPreferredHour = req.nextUrl.searchParams.get("schedule") === "hourly";
+  const currentHour = new Date().getHours();
+  const isSunday = new Date().getDay() === 0;
+  const todayKey = dateKey(today);
+
   const allLists = await db.select({ id: lists.id }).from(lists);
 
   let totalSent = 0;
@@ -71,28 +135,23 @@ export async function POST(req: NextRequest) {
       .where(eq(listMembers.listId, list.id));
     if (members.length === 0) continue;
 
-    // Die Vorwarnzeit ist eine persoenliche Einstellung. Vorher wurde
+    // Vorwarnzeit und Uhrzeit sind persoenliche Einstellungen. Vorher wurde
     // ausschliesslich die des Listen-Eigentuemers gelesen -- ein Mitglied
     // konnte den Wert verstellen, bekam "Gespeichert" und es passierte nichts.
-    const leadDaysByUser = new Map<string, number>();
+    const preferencesByUser = new Map<string, MemberPreferences>();
     for (const member of members) {
-      const row = await db
-        .select()
-        .from(settings)
-        .where(
-          and(eq(settings.userId, member.userId), eq(settings.key, "notification_lead_days")),
-        )
-        .get();
-      const parsed = row ? Number(row.value) : NaN;
-      leadDaysByUser.set(
-        member.userId,
-        Number.isFinite(parsed) ? parsed : DEFAULT_LEAD_DAYS,
-      );
+      preferencesByUser.set(member.userId, await readPreferences(member.userId));
     }
 
     // Einmal die weiteste Vorwarnzeit abfragen und danach pro Mitglied
-    // filtern -- statt pro Mitglied erneut die Datenbank zu befragen.
-    const maxLead = Math.max(...leadDaysByUser.values());
+    // filtern -- statt pro Mitglied erneut die Datenbank zu befragen. Die
+    // Wochenuebersicht schaut sieben Tage voraus und weitet das Fenster
+    // entsprechend.
+    const maxLead = Math.max(
+      ...[...preferencesByUser.values()].map((p) =>
+        isSunday && p.weeklySummary ? Math.max(p.leadDays, 7) : p.leadDays,
+      ),
+    );
     const candidates = await db
       .select()
       .from(items)
@@ -109,13 +168,28 @@ export async function POST(req: NextRequest) {
     const notYetNotifiedToday = candidates.filter(
       (item) => !item.lastNotifiedAt || item.lastNotifiedAt < today,
     );
-    if (notYetNotifiedToday.length === 0) continue;
+    // Sonntags kann trotzdem etwas rausgehen, auch wenn heute schon jeder
+    // einzelne Artikel gemeldet wurde: die Wochenuebersicht haengt nicht an
+    // lastNotifiedAt.
+    if (notYetNotifiedToday.length === 0 && !isSunday) continue;
 
     const actuallyNotified = new Set<number>();
 
     for (const member of members) {
-      const threshold = thresholdFor(leadDaysByUser.get(member.userId) ?? DEFAULT_LEAD_DAYS);
-      const dueItems = notYetNotifiedToday.filter((item) => item.expiryDate <= threshold);
+      const prefs = preferencesByUser.get(member.userId)!;
+
+      // Sonntags zusaetzlich zur normalen Vorwarnzeit ein Blick auf die
+      // ganze Woche -- und zwar unabhaengig davon, ob die einzelnen Artikel
+      // heute schon gemeldet wurden: die Uebersicht ist eine andere Aussage
+      // als "das hier laeuft gleich ab".
+      const wantsWeekly =
+        isSunday && prefs.weeklySummary && prefs.weeklyLastSent !== todayKey;
+
+      if (respectPreferredHour && notificationHour(prefs.time) !== currentHour) continue;
+
+      const threshold = thresholdFor(wantsWeekly ? Math.max(prefs.leadDays, 7) : prefs.leadDays);
+      const pool = wantsWeekly ? candidates : notYetNotifiedToday;
+      const dueItems = pool.filter((item) => item.expiryDate <= threshold);
       if (dueItems.length === 0) continue;
 
       const subscriptions = await db
@@ -127,7 +201,9 @@ export async function POST(req: NextRequest) {
       if (subscriptions.length === 0) continue;
 
       const payload = JSON.stringify({
-        title: notificationTitle(dueItems, today),
+        title: wantsWeekly
+          ? `Diese Woche: ${dueItems.length} Lebensmittel laufen ab`
+          : notificationTitle(dueItems, today),
         body: dueItems.map((i) => i.name).join(", "),
         // Eine Meldung pro Liste ersetzt die vorherige, statt sich zu stapeln.
         tag: `list-${list.id}`,
@@ -137,6 +213,8 @@ export async function POST(req: NextRequest) {
         itemId: dueItems.length === 1 ? dueItems[0].id : null,
       });
 
+      let sentToMember = 0;
+
       for (const sub of subscriptions) {
         try {
           await webpush.sendNotification(
@@ -144,7 +222,12 @@ export async function POST(req: NextRequest) {
             payload,
           );
           totalSent++;
-          for (const item of dueItems) actuallyNotified.add(item.id);
+          sentToMember++;
+          // Die Wochenuebersicht verbraucht nicht die Tagesmeldung: sonst
+          // bliebe die Milch, die morgen ablaeuft, am Montag stumm.
+          if (!wantsWeekly) {
+            for (const item of dueItems) actuallyNotified.add(item.id);
+          }
         } catch (err: unknown) {
           const statusCode = (err as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
@@ -153,6 +236,16 @@ export async function POST(req: NextRequest) {
             console.error("push notification failed", sub.endpoint, err);
           }
         }
+      }
+      if (wantsWeekly && sentToMember > 0) {
+        await db
+          .insert(settings)
+          .values({ userId: member.userId, key: WEEKLY_SENT_KEY, value: todayKey })
+          .onConflictDoUpdate({
+            target: [settings.userId, settings.key],
+            set: { value: todayKey },
+          });
+        prefs.weeklyLastSent = todayKey;
       }
     }
 

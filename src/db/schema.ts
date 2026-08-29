@@ -28,11 +28,42 @@ export const listMembers = sqliteTable(
   (table) => [uniqueIndex("list_members_list_id_user_id_unique").on(table.listId, table.userId)],
 );
 
+/**
+ * Die Faecher, in denen der Vorrat tatsaechlich liegt: Kuehlschrank,
+ * Gefrierfach, Vorratsschrank, Keller.
+ *
+ * Bewusst eine eigene Tabelle und kein Textfeld am Artikel: ein Ort wird
+ * umbenannt ("Kuehlschrank" -> "Kuehlschrank unten"), und alle Artikel darin
+ * sollen der Umbenennung folgen, statt auf einen Namen zu zeigen, den es
+ * nicht mehr gibt. Und bewusst getrennt von der Kategorie: wo etwas liegt und
+ * was es ist, sind zwei verschiedene Fragen -- TK-Erbsen und Lachsfilet
+ * teilen sich das Gefrierfach, nicht die Kategorie.
+ */
+export const places = sqliteTable(
+  "places",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("places_list_id_idx").on(table.listId)],
+);
+
 export const items = sqliteTable("items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   barcode: text("barcode"),
+  // Optional, und das bleibt so: ein Artikel ohne zugeordneten Ort ist kein
+  // Fehler, sondern der Normalfall fuer alles, was vor den Orten erfasst
+  // wurde. onDelete "set null" statt Kaskade -- wer einen Ort loescht, will
+  // das Fach aufraeumen, nicht seinen Vorrat.
+  placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }),
+  note: text("note"),
   quantity: integer("quantity").notNull().default(1),
   addedAt: integer("added_at", { mode: "timestamp" }).notNull(),
   expiryDate: integer("expiry_date", { mode: "timestamp" }).notNull(),
@@ -126,6 +157,8 @@ export type NewItem = typeof items.$inferInsert;
 export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+export type Place = typeof places.$inferSelect;
+export type NewPlace = typeof places.$inferInsert;
 export type List = typeof lists.$inferSelect;
 export type NewList = typeof lists.$inferInsert;
 export type ListMember = typeof listMembers.$inferSelect;

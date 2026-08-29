@@ -13,6 +13,12 @@ export async function register() {
   // migrierte Datenbank ihr bisheriges Wissen uebernimmt. Die Uebernahme
   // laeuft nur, solange die Tabelle leer ist; danach ist es ein einzelnes
   // SELECT pro Start.
-  const { backfillProductKnowledge } = await import("./instrumentation.node");
+  const { backfillProductKnowledge, backfillDefaultPlaces } = await import(
+    "./instrumentation.node"
+  );
   await backfillProductKnowledge();
+
+  // Ebenfalls einmalig und aus demselben Grund: Listen aus der Zeit vor den
+  // Orten haetten sonst dauerhaft ein leeres Fach-Angebot.
+  await backfillDefaultPlaces();
 }

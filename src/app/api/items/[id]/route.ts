@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { categories, items } from "@/db/schema";
+import { categories, items, places } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { rememberProduct } from "@/lib/data";
@@ -14,12 +14,14 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { name, category, expiryDate, quantity, status } = body as {
+  const { name, category, expiryDate, quantity, status, placeId, note } = body as {
     name?: string;
     category?: string;
     expiryDate?: string;
     quantity?: number;
     status?: "active" | "used" | "thrown_away";
+    placeId?: number | null;
+    note?: string | null;
   };
 
   const update: Partial<typeof items.$inferInsert> = {};
@@ -45,6 +47,26 @@ export async function PATCH(
 
   if (expiryDate !== undefined) {
     update.expiryDate = new Date(expiryDate);
+  }
+
+  if (placeId !== undefined) {
+    if (placeId === null) {
+      update.placeId = null;
+    } else {
+      const placeRow = await db
+        .select({ id: places.id })
+        .from(places)
+        .where(and(eq(places.id, placeId), eq(places.listId, listId)))
+        .get();
+      if (!placeRow) {
+        return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
+      }
+      update.placeId = placeRow.id;
+    }
+  }
+
+  if (note !== undefined) {
+    update.note = note?.trim() || null;
   }
 
   if (quantity !== undefined) {

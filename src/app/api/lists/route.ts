@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { listMembers, lists, user } from "@/db/schema";
 import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { seedDefaultCategories } from "@/lib/data";
+import { seedDefaultCategories, seedDefaultPlaces } from "@/lib/data";
 
 const listColumns = {
   id: lists.id,
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
   // Ohne Standardkategorien landet der Nutzer in einer Liste, in der sich kein
   // Artikel speichern laesst -- siehe seedDefaultCategories.
   await seedDefaultCategories(created.id);
+  await seedDefaultPlaces(created.id);
   await db.update(user).set({ activeListId: created.id }).where(eq(user.id, session.user.id));
 
   return NextResponse.json(created, { status: 201 });

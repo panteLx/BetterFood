@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { categories, items } from "@/db/schema";
+import { categories, items, places } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { rememberProduct } from "@/lib/data";
 import { normalizeProductName } from "@/lib/utils";
+
+/**
+ * Prueft eine uebergebene Ort-ID gegen die aktive Liste. Liefert die ID, null
+ * (kein Ort gewaehlt) oder "invalid", wenn der Ort einer anderen Liste
+ * gehoert.
+ */
+async function resolvePlace(placeId: number | null | undefined, listId: number) {
+  if (placeId === undefined || placeId === null) return null;
+
+  const row = await db
+    .select({ id: places.id })
+    .from(places)
+    .where(and(eq(places.id, placeId), eq(places.listId, listId)))
+    .get();
+
+  return row ? row.id : ("invalid" as const);
+}
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -33,12 +50,14 @@ export async function POST(req: NextRequest) {
   const listId = await requireActiveList(session.user.id);
 
   const body = await req.json();
-  const { name, category, barcode, expiryDate, quantity } = body as {
+  const { name, category, barcode, expiryDate, quantity, placeId, note } = body as {
     name: string;
     category: string;
     barcode?: string;
     expiryDate?: string;
     quantity?: number;
+    placeId?: number | null;
+    note?: string | null;
   };
 
   if (!name || !category) {
@@ -53,6 +72,14 @@ export async function POST(req: NextRequest) {
 
   if (!categoryRow) {
     return NextResponse.json({ error: "ungültige Kategorie" }, { status: 400 });
+  }
+
+  // Der Ort ist optional, muss aber -- wenn angegeben -- zu dieser Liste
+  // gehoeren: sonst liesse sich ein Artikel in das Fach einer fremden Liste
+  // legen.
+  const place = await resolvePlace(placeId, listId);
+  if (place === "invalid") {
+    return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
   }
 
   const qty = quantity !== undefined ? Math.round(quantity) : 1;
@@ -109,6 +136,8 @@ export async function POST(req: NextRequest) {
       name,
       category,
       barcode: barcode ?? null,
+      placeId: place,
+      note: note?.trim() || null,
       quantity: qty,
       addedAt: now,
       expiryDate: expiry,

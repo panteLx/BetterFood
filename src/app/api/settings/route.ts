@@ -1,38 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireSession } from "@/lib/session";
-
-const LEAD_DAYS_KEY = "notification_lead_days";
-const DEFAULT_LEAD_DAYS = 2;
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NOTIFICATION_KEYS,
+  NOTIFICATION_TIMES,
+  type NotificationTime,
+} from "@/lib/notification-settings";
 
 export async function GET() {
   const session = await requireSession();
-  const row = await db
+
+  const rows = await db
     .select()
     .from(settings)
-    .where(and(eq(settings.userId, session.user.id), eq(settings.key, LEAD_DAYS_KEY)))
-    .get();
-  const leadDays = row ? Number(row.value) : DEFAULT_LEAD_DAYS;
-  return NextResponse.json({ leadDays });
+    .where(
+      and(
+        eq(settings.userId, session.user.id),
+        inArray(settings.key, Object.values(NOTIFICATION_KEYS)),
+      ),
+    );
+
+  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+  const leadDays = Number(byKey.get(NOTIFICATION_KEYS.leadDays));
+  const time = byKey.get(NOTIFICATION_KEYS.time);
+
+  return NextResponse.json({
+    leadDays: Number.isFinite(leadDays) ? leadDays : DEFAULT_NOTIFICATION_SETTINGS.leadDays,
+    time: NOTIFICATION_TIMES.includes(time as NotificationTime)
+      ? (time as NotificationTime)
+      : DEFAULT_NOTIFICATION_SETTINGS.time,
+    weeklySummary:
+      byKey.get(NOTIFICATION_KEYS.weeklySummary) === undefined
+        ? DEFAULT_NOTIFICATION_SETTINGS.weeklySummary
+        : byKey.get(NOTIFICATION_KEYS.weeklySummary) === "1",
+  });
 }
 
 export async function PUT(req: NextRequest) {
   const session = await requireSession();
-  const { leadDays } = (await req.json()) as { leadDays: number };
+  const { leadDays, time, weeklySummary } = (await req.json()) as {
+    leadDays?: number;
+    time?: string;
+    weeklySummary?: boolean;
+  };
 
-  if (!Number.isFinite(leadDays) || leadDays < 0 || leadDays > 30) {
-    return NextResponse.json({ error: "leadDays muss zwischen 0 und 30 liegen" }, { status: 400 });
+  const updates: { key: string; value: string }[] = [];
+
+  if (leadDays !== undefined) {
+    if (!Number.isFinite(leadDays) || leadDays < 0 || leadDays > 30) {
+      return NextResponse.json({ error: "leadDays muss zwischen 0 und 30 liegen" }, { status: 400 });
+    }
+    updates.push({ key: NOTIFICATION_KEYS.leadDays, value: String(Math.round(leadDays)) });
   }
 
-  await db
-    .insert(settings)
-    .values({ userId: session.user.id, key: LEAD_DAYS_KEY, value: String(leadDays) })
-    .onConflictDoUpdate({
-      target: [settings.userId, settings.key],
-      set: { value: String(leadDays) },
-    });
+  if (time !== undefined) {
+    if (!NOTIFICATION_TIMES.includes(time as NotificationTime)) {
+      return NextResponse.json({ error: "ungültige Uhrzeit" }, { status: 400 });
+    }
+    updates.push({ key: NOTIFICATION_KEYS.time, value: time });
+  }
 
-  return NextResponse.json({ leadDays });
+  if (weeklySummary !== undefined) {
+    updates.push({ key: NOTIFICATION_KEYS.weeklySummary, value: weeklySummary ? "1" : "0" });
+  }
+
+  if (updates.length === 0) {
+    return NextResponse.json({ error: "Keine Änderungen übergeben" }, { status: 400 });
+  }
+
+  for (const update of updates) {
+    await db
+      .insert(settings)
+      .values({ userId: session.user.id, key: update.key, value: update.value })
+      .onConflictDoUpdate({
+        target: [settings.userId, settings.key],
+        set: { value: update.value },
+      });
+  }
+
+  return GET();
 }
