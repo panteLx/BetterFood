@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
+import { ChecksumException, FormatException, NotFoundException } from "@zxing/library";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -14,11 +15,19 @@ import { Input } from "@/components/ui/input";
 // mit hoeherer Aufloesung) tritt das haeufiger als NotFoundException auf,
 // daher muessen auch Checksum-/FormatException ignoriert werden - sonst
 // blinkt die Fehlermeldung auch bei einem erfolgreichen Scan kurz auf.
-const EXPECTED_DECODE_ERRORS = new Set([
-  "NotFoundException",
-  "ChecksumException",
-  "FormatException",
-]);
+//
+// instanceof statt err.name-Stringvergleich: im Next.js-Produktionsbuild
+// werden Klassennamen minifiziert (z.B. "NotFoundException" -> "e"), daher
+// lieferte err.name in Produktion nie einen Treffer und JEDER "kein Code im
+// Bild"-Frame wurde faelschlich als fataler Fehler behandelt -- das war die
+// eigentliche Ursache der staendigen Fehlermeldung auf dem iPhone.
+function isExpectedDecodeError(err: unknown) {
+  return (
+    err instanceof NotFoundException ||
+    err instanceof ChecksumException ||
+    err instanceof FormatException
+  );
+}
 
 // Jeder Fehler, der NICHT in EXPECTED_DECODE_ERRORS steht, wird von
 // @zxing/browser intern als fatal behandelt: die Scan-Schleife bricht ab
@@ -99,7 +108,7 @@ export default function ScanPage() {
               router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}`);
               return;
             }
-            if (err && !EXPECTED_DECODE_ERRORS.has(err.name)) {
+            if (err && !isExpectedDecodeError(err)) {
               console.error("Barcode scan error:", err);
               const videoStillStarting = !isVideoReady();
               const canRestart = videoStillStarting
@@ -116,15 +125,7 @@ export default function ScanPage() {
                   if (active) startScanning();
                 }, 250);
               } else {
-                // TEMP-DIAGNOSE: err.name/message mit ausgeben, um den
-                // tatsaechlichen Fehler auf dem iPhone zu sehen -- die
-                // bisherige IndexSizeError-Annahme laesst sich anhand des
-                // sichtbar laufenden Kamerabilds nicht mehr halten. Sobald
-                // wir wissen, was hier wirklich geworfen wird, wieder auf
-                // die feste Meldung zurueckbauen.
-                setError(
-                  `Fehler beim Scannen (${err.name}: ${err.message || "keine Nachricht"}). Bitte erneut versuchen.`,
-                );
+                setError("Fehler beim Scannen. Bitte erneut versuchen.");
               }
             }
           },
