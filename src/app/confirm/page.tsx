@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
 import { DEFAULT_CATEGORIES, estimateExpiryDate, guessCategoryFromOffTags } from "@/lib/categories";
-import { auth } from "@/lib/auth";
-import { requireActiveList } from "@/lib/session";
+import { optionalSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +13,7 @@ export default async function ConfirmPage({
   searchParams: Promise<{ barcode?: string }>;
 }) {
   const { barcode } = await searchParams;
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await optionalSession();
 
   let initialName = "";
   let offTags: string[] = [];
@@ -91,11 +89,18 @@ export default async function ConfirmPage({
           </p>
         )}
       </div>
+      {/* key=barcode erzwingt einen frischen ItemForm-Mount pro Barcode: unter
+          cacheComponents:true haelt React <Activity> die vorherige Instanz
+          samt useState-Werten am Leben, wenn man erneut zu /confirm mit
+          anderem Barcode navigiert (gleiche Route, gleiche Baumposition) -
+          initialName wuerde sonst nur beim allerersten Scan uebernommen. */}
       <ItemForm
+        key={barcode}
         categories={allCategories}
         initialName={initialName}
         initialCategory={initialCategory}
         barcode={barcode}
+        redirectTo="/"
       />
     </div>
   );

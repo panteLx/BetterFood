@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { BottomNav, BottomNavFallback } from "@/components/bottom-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,7 +33,7 @@ export const viewport: Viewport = {
   themeColor: "#16a34a",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children, modal }: LayoutProps<"/">) {
   return (
     <html
       lang="de"
@@ -42,7 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
             {children}
+            <Suspense fallback={<BottomNavFallback />}>
+              <BottomNav />
+            </Suspense>
           </div>
+          {modal}
         </Providers>
       </body>
     </html>

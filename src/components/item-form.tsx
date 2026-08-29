@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
@@ -42,6 +42,7 @@ export function ItemForm({
   initialQuantity = 1,
   barcode,
   addedBy,
+  redirectTo,
 }: {
   categories: CategoryOption[];
   itemId?: number;
@@ -51,26 +52,77 @@ export function ItemForm({
   initialQuantity?: number;
   barcode?: string;
   addedBy?: { name: string; email: string } | null;
+  // Nur fuer Formulare ausserhalb der Modal-Routen (z.B. /confirm nach dem
+  // Scannen, erreicht per echter Navigation von /scan aus): dort landet
+  // router.back() auf der Kamera-Seite statt auf der Startseite. Wenn
+  // gesetzt, wird stattdessen dorthin navigiert (wie vor Einfuehrung des
+  // Modal-Routings).
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [categoryList, setCategoryList] = useState<CategoryOption[]>(categories);
   const fallbackCategory = initialCategory ?? categoryList[0]?.key ?? "";
-  const [name, setName] = useState(initialName);
-  const [category, setCategory] = useState(fallbackCategory);
-  const [quantity, setQuantity] = useState(String(initialQuantity));
-  const [dateTouched, setDateTouched] = useState(Boolean(initialExpiryDate));
-  const [expiryDate, setExpiryDate] = useState(() => {
+
+  // Lazy, nicht als Render-Ausdruck: estimateExpiryDate ruft new Date() auf,
+  // und ein "unstable value" waehrend des Prerenders laesst Next die Route
+  // abbrechen (siehe nextjs.org/docs/messages/blocking-prerender-current-time).
+  function initialExpiryValue() {
     if (initialExpiryDate) return toDateInputValue(initialExpiryDate);
     const shelfLifeDays =
       categoryList.find((c) => c.key === fallbackCategory)?.shelfLifeDays ?? 14;
     return toDateInputValue(estimateExpiryDate(shelfLifeDays));
-  });
+  }
+
+  const [name, setName] = useState(initialName);
+  const [category, setCategory] = useState(fallbackCategory);
+  const [quantity, setQuantity] = useState(String(initialQuantity));
+  const [dateTouched, setDateTouched] = useState(Boolean(initialExpiryDate));
+  const [expiryDate, setExpiryDate] = useState(initialExpiryValue);
   const [saving, setSaving] = useState(false);
 
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [newCategoryShelfLife, setNewCategoryShelfLife] = useState("14");
   const [creatingCategory, setCreatingCategory] = useState(false);
+
+  // Nach einem erfolgreichen Speichern muss das Formular zurueckgesetzt
+  // werden: Cache Components unmountet die verlassene Route nicht, sondern
+  // versteckt sie via <Activity>, der State ueberlebt also (siehe
+  // node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md).
+  //
+  // Zurueckgesetzt wird auf die initial*-Props, NICHT auf leere Werte: auf
+  // /confirm kommt der Produktname vom Server, und wer nach dem Speichern
+  // per Browser-Zurueck auf dieselbe URL zurueckkehrt, bekommt genau diese
+  // Instanz wieder zu sehen - mit einem harten "" stand das Namensfeld dann
+  // leer da, bis man die Seite neu lud.
+  //
+  // Der Reset laeuft im useLayoutEffect-Cleanup, also erst beim Verstecken,
+  // damit die noch sichtbare Seite waehrend der Wegnavigation nicht kurz
+  // leer aufblitzt.
+  const shouldResetRef = useRef(false);
+  const resetToInitialRef = useRef<() => void>(undefined);
+
+  // Nach jedem Render aktualisiert, damit der Cleanup unten die aktuellen
+  // Props/Kategorien sieht, ohne selbst von ihnen abzuhaengen (eine
+  // Dependency wuerde den Cleanup schon bei einer neu angelegten Kategorie
+  // ausloesen und das Formular mitten in der Eingabe zuruecksetzen).
+  useEffect(() => {
+    resetToInitialRef.current = () => {
+      setName(initialName);
+      setCategory(fallbackCategory);
+      setQuantity(String(initialQuantity));
+      setDateTouched(Boolean(initialExpiryDate));
+      setExpiryDate(initialExpiryValue());
+    };
+  });
+
+  useLayoutEffect(() => {
+    return () => {
+      if (!shouldResetRef.current) return;
+      shouldResetRef.current = false;
+      resetToInitialRef.current?.();
+    };
+  }, []);
 
   function applyCategory(value: string, list: CategoryOption[] = categoryList) {
     setCategory(value);
@@ -158,7 +210,15 @@ export function ItemForm({
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
 
       toast.success(itemId ? `${name} aktualisiert` : `${name} hinzugefügt`);
-      router.push("/");
+      if (!itemId) {
+        // Reset erst beim Verstecken durch Activity, siehe shouldResetRef.
+        shouldResetRef.current = true;
+      }
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else {
+        router.back();
+      }
       router.refresh();
     } catch {
       toast.error("Konnte Artikel nicht speichern.");
@@ -255,7 +315,11 @@ export function ItemForm({
       </div>
 
       <div className="mt-auto flex gap-2">
-        <Button variant="outline" className="flex-1" onClick={() => router.push("/")}>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={() => (redirectTo ? router.push(redirectTo) : router.back())}
+        >
           Abbrechen
         </Button>
         <Button className="flex-1" onClick={handleSave} disabled={saving}>

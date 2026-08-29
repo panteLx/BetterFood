@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
 import { ChecksumException, FormatException, NotFoundException } from "@zxing/library";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 // Waehrend der kontinuierlichen Live-Scan-Schleife feuert der Decoder bei
 // jedem Frame ohne vollstaendig lesbaren Code eine dieser drei Exceptions --
@@ -56,30 +55,16 @@ export default function ScanPage() {
   const silentRestartsRef = useRef(0);
   const startupRestartsRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [manualEntry, setManualEntry] = useState(false);
-  const [manualBarcode, setManualBarcode] = useState("");
   const [retrySession, setRetrySession] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
 
-  useLayoutEffect(() => {
-    // Mit cacheComponents:true haelt Next.js diese Seite beim Navigieren via
-    // React <Activity> nur versteckt (display:none) statt sie zu unmounten -
-    // State ueberlebt das (siehe node_modules/next/dist/docs/01-app/
-    // 02-guides/preserving-ui-state.md). Reset beim Verstecken (statt
-    // synchron im Setup des Kamera-Effects) folgt dem dort empfohlenen
-    // Muster und vermeidet ein setState direkt im Effect-Body.
-    return () => {
-      setManualEntry(false);
-      setManualBarcode("");
-    };
-  }, []);
-
   useEffect(() => {
     // scannedRef/silentRestartsRef sind Refs und ueberleben das Verstecken
-    // via <Activity> ebenfalls (siehe oben) -- ohne diesen Reset bliebe
-    // scannedRef.current nach dem ersten erfolgreichen Scan fuer immer true,
-    // sobald man zu /scan zurueckkehrt, und jeder weitere erkannte Barcode
-    // wuerde stillschweigend ignoriert. Dieser Effect laeuft bei jedem
+    // via <Activity> (siehe node_modules/next/dist/docs/01-app/02-guides/
+    // preserving-ui-state.md) -- ohne diesen Reset bliebe scannedRef.current
+    // nach dem ersten erfolgreichen Scan fuer immer true, sobald man zu
+    // /scan zurueckkehrt, und jeder weitere erkannte Barcode wuerde
+    // stillschweigend ignoriert. Dieser Effect laeuft bei jedem
     // Hidden->Visible-Wechsel erneut, also gibt jeder Besuch hier eine
     // frische Scan-Session.
     let active = true;
@@ -214,33 +199,9 @@ export default function ScanPage() {
       )}
 
       <div className="flex flex-col gap-2 p-4">
-        {manualEntry ? (
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const trimmed = manualBarcode.trim();
-              if (!trimmed) return;
-              controlsRef.current?.stop();
-              router.push(`/confirm?barcode=${encodeURIComponent(trimmed)}`);
-            }}
-          >
-            <Input
-              inputMode="numeric"
-              autoFocus
-              placeholder="EAN-Nummer eingeben"
-              value={manualBarcode}
-              onChange={(e) => setManualBarcode(e.target.value)}
-            />
-            <Button type="submit" disabled={!manualBarcode.trim()}>
-              Weiter
-            </Button>
-          </form>
-        ) : (
-          <Button variant="outline" className="w-full" onClick={() => setManualEntry(true)}>
-            EAN manuell eingeben
-          </Button>
-        )}
+        <Button variant="outline" className="w-full" onClick={() => router.push("/scan-ean")}>
+          EAN manuell eingeben
+        </Button>
         <Button variant="ghost" className="w-full" onClick={() => router.push("/add")}>
           Stattdessen komplett manuell eingeben
         </Button>
