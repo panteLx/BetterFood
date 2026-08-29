@@ -184,18 +184,27 @@ export default function ScanPage() {
             statt ueber explizite Positionierung bestimmt wird. */}
         <video
           ref={videoRef}
-          onLoadedMetadata={() => setVideoReady(true)}
+          onPlaying={() => {
+            // "playing" heisst nur, dass Frames fliessen -- Safari braucht danach
+            // noch ein bis zwei gemalte Frames, bis die object-cover-Zuschneidung
+            // tatsaechlich korrekt gerendert ist (sonst blitzt kurz ein falsch
+            // zugeschnittenes erstes Frame auf). Zwei verschachtelte rAF warten,
+            // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
+            // aufdecken.
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => setVideoReady(true));
+            });
+          }}
           className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
             videoReady ? "opacity-100" : "opacity-0"
           }`}
           muted
           playsInline
         />
-        {/* Solange die Video-Metadaten (und damit videoWidth/-Height) noch nicht
-            vorliegen, hat der Browser die tatsaechliche Groesse des Streams noch
-            nicht in die object-cover-Berechnung einbezogen und rendert kurz die
-            intrinsische Groesse zentriert statt gestreckt -- das Video bleibt bis
-            dahin unsichtbar, damit dieser Zwischenzustand nicht aufblitzt. */}
+        {/* Solange keine Frames sichtbar gemalt wurden, ist die Groesse/der
+            Zuschnitt des Videos noch nicht verlaesslich object-cover-korrekt --
+            das Video bleibt bis dahin unsichtbar, damit dieser Zwischenzustand
+            nicht aufblitzt. */}
         {!videoReady && !error && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
