@@ -43,14 +43,22 @@ export async function POST(
   const { id } = await params;
   const listId = Number(id);
 
-  const membership = await db
-    .select({ listId: listMembers.listId })
-    .from(listMembers)
-    .where(and(eq(listMembers.userId, session.user.id), eq(listMembers.listId, listId)))
-    .get();
+  const list = await db.select().from(lists).where(eq(lists.id, listId)).get();
+  if (!list) {
+    return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
+  }
 
-  if (!membership) {
-    return NextResponse.json({ error: "Kein Mitglied dieser Liste" }, { status: 403 });
+  // Wer jemanden in den Haushalt holt, gibt den kompletten Vorrat frei --
+  // Artikel, Archiv, gelerntes Wissen und die Mitgliederliste samt Adressen.
+  // Das ist dieselbe Tragweite wie Archivieren, Loeschen oder das Entfernen
+  // eines Mitglieds, und damit gilt hier dieselbe Regel: nur der Besitzer.
+  // Vorher genuegte die eigene Mitgliedschaft, was als einzige Stelle aus der
+  // Besitzer-Regel dieser Ressource ausbrach.
+  if (list.ownerId !== session.user.id) {
+    return NextResponse.json(
+      { error: "Nur der Besitzer kann Mitglieder hinzufügen" },
+      { status: 403 },
+    );
   }
 
   const { userId } = (await req.json()) as { userId: string };

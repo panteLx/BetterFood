@@ -14,7 +14,11 @@ import {
   ComboboxItem,
 } from "@/components/ui/combobox";
 
-type UserResult = { id: string; name: string; email: string };
+// Ohne E-Mail-Adresse: die Suche gibt sie nicht mehr heraus, damit sich aus
+// ihr keine Nutzerliste der ganzen Instanz zusammensuchen laesst. Zum
+// Einladen genuegt die id -- und wer jemanden meint, den er nicht am Namen
+// erkennt, tippt dessen Adresse vollstaendig ein und trifft ihn exakt.
+type UserResult = { id: string; name: string };
 
 export function UserCombobox({
   onSelect,
@@ -44,8 +48,11 @@ export function UserCombobox({
     if (pending) return "Suche…";
     if (trimmed.length > 0 && trimmed.length < 2)
       return "Mindestens 2 Zeichen eingeben.";
+    // Der Zusatz ist kein Beiwerk: die Adresse trifft nur vollstaendig, ein
+    // Teil davon gar nicht. Ohne den Hinweis sucht man am halben Namen der
+    // Adresse weiter und haelt die Person fuer nicht vorhanden.
     if (trimmed.length >= 2 && results.length === 0)
-      return `Keine Treffer für "${trimmed}".`;
+      return `Keine Treffer für „${trimmed}“. E-Mail-Adressen treffen nur vollständig.`;
     return null;
   }
 
@@ -108,7 +115,7 @@ export function UserCombobox({
     >
       <ComboboxInputGroup className="h-11 rounded-[10px]">
         <ComboboxInput
-          placeholder="Name oder E-Mail suchen…"
+          placeholder="Name oder vollständige E-Mail…"
           disabled={disabled}
         />
       </ComboboxInputGroup>
@@ -120,12 +127,7 @@ export function UserCombobox({
             <ComboboxList>
               {(u: UserResult) => (
                 <ComboboxItem key={u.id} value={u}>
-                  <span className="flex flex-col gap-0.5">
-                    <span className="font-medium">{u.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {u.email}
-                    </span>
-                  </span>
+                  <span className="font-medium">{u.name}</span>
                 </ComboboxItem>
               )}
             </ComboboxList>

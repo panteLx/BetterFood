@@ -35,9 +35,29 @@ the reference date as a prop.
 `src/proxy.ts` gates everything: unauthenticated requests go to `/login`, or to `/welcome` while the
 `bf_welcome_seen` cookie is missing (`src/lib/welcome.ts`). The proxy sets that cookie on the first
 _authenticated_ request, so the intro repeats until an account exists. Exceptions: `PUBLIC_PREFIXES`
-(`/login`, `/register`, `/welcome`, `/api/auth`, `/api/cron`) and any path with a file extension
-(static assets). `/api/cron` is public — an external cron has no session cookie and authenticates
-with `CRON_SECRET`.
+(`/login`, `/register`, `/welcome`, `/api/auth`, `/api/cron`) and `ASSET_EXTENSIONS` — an allowlist of
+real asset suffixes, deliberately not "any path containing a dot". `/api/cron` is public — an external
+cron has no session cookie and authenticates with `CRON_SECRET`; **an unset secret answers 503, never
+"open"** (the old `Bearer ${undefined}` comparison let anyone in).
+
+The proxy also rejects cross-origin writes (`POST`/`PUT`/`PATCH`/`DELETE` under `/api/`) as the second
+layer behind `SameSite=Lax`. It compares the **host**, not `request.nextUrl.origin` — that value does
+not reflect the `Host` header (under `next start` it carries the bind address, so a request to
+`127.0.0.1` was rejected as foreign). Accepted: `host`, `x-forwarded-host`, and `BETTER_AUTH_URL`'s
+host; the scheme is ignored because a TLS-terminating proxy speaks http internally.
+
+**Registration is a runtime switch**, same pattern as the OIDC gate: `src/lib/registration.ts` is the
+only place it lives, `ALLOW_REGISTRATION=false` sets better-auth's `disableSignUp`. `/register` then
+renders an explanation instead of the form — not a `redirect()`, because under `cacheComponents` the
+shell is already flushed and the page would flash before jumping. It also stays in `PUBLIC_PREFIXES`
+either way: gating it would send a visitor without a session to `/welcome`, which ends by linking here.
+
+`advanced.ipAddress` (`ipAddressOptions()` in `auth.ts`) must name the reverse proxy's CIDRs via
+`TRUSTED_PROXIES`. Without them better-auth resolves no client IP behind a proxy that appends to
+`X-Forwarded-For` and silently degrades the sign-in limit to **one bucket shared by everyone**; with a
+single-entry header it trusts the value unchecked. An explicitly empty `TRUSTED_PROXIES` means "no
+proxy" and maps to `ipAddressHeaders: []` — an empty `trustedProxies` alone would fall back into
+exactly that second, spoofable branch.
 
 Auth is `better-auth` (`src/lib/auth.ts`) with the Drizzle adapter, email/password and an optional
 OIDC plugin gated on `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`. **That gate is read at
@@ -136,6 +156,12 @@ spaces marking a column, i.e. `pdftotext -layout`), `parse.ts` reads
 (`tsconfig` targets ES2017). A weight in the quantity column ("600g") goes into `note`, **not** the
 name, which is the learning key; expiry dates come from the invoice's delivery date, not today.
 
+`layout.ts` also carries the abuse limits (`MAX_PAGES`, `MAX_FRAGMENTS`, `DEADLINE_MS`, throwing
+`ReceiptTooComplexError`). They sit **inside** the parser on purpose: a `Promise.race` in the route
+would end the response while pdf.js kept burning the single Node process — only a loop that asks
+whether it may still continue actually stops. The route additionally allows one import per user at a
+time (`parsing` set), because the 10 MB cap bounds the upload, not the work.
+
 `POST /api/receipt/parse` returns a proposal per line with learned category/shelf, and **every line
 arrives checked**; the VAT class only adds a dismissable "vermutlich kein Lebensmittel" hint on
 unknown lines (importing a product once is itself the "this is food" marker, hence no `nonFood`
@@ -214,4 +240,13 @@ cuts — `icon-*.png` rounded, `maskable-*.png` full-bleed at 40 %, `apple-icon.
 ## Deployment
 
 Single Docker container (`Dockerfile`, `compose.yaml`), `data/` volume for the SQLite DB, env vars
-documented in `.env.example`.
+documented in `.env.example`. The runner stage drops to `USER node`, so an existing volume needs a
+one-off `chown -R 1000:1000`.
+
+Security headers (CSP, `frame-ancestors 'none'`, `Referrer-Policy`, HSTS in production only) live in
+`next.config.ts`'s `headers()`. `script-src`/`style-src` need `'unsafe-inline'` — Next streams inline
+scripts and styles; `connect-src` stays `'self'` because Open Food Facts is queried server-side.
+
+`assertEnvironment()` in `src/instrumentation.ts` fails fast on missing `BETTER_AUTH_*` and on a
+half-configured VAPID triple — but **must return early on `NEXT_PHASE === "phase-production-build"`**,
+since `register()` also runs during `next build` and the Docker build has no `.env`.

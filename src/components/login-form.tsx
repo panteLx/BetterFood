@@ -10,7 +10,13 @@ import { safeRedirect, withRedirect } from "@/lib/utils";
 const fieldClass =
   "h-14 w-full rounded-[18px] border border-border bg-card px-4 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function LoginForm({ ssoName }: { ssoName: string | null }) {
+export function LoginForm({
+  ssoName,
+  registrationOpen,
+}: {
+  ssoName: string | null;
+  registrationOpen: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
@@ -104,14 +110,16 @@ export function LoginForm({ ssoName }: { ssoName: string | null }) {
       {/* Der Redirect muss mit auf /register: wer aus einer Erinnerung oder
           einem Lesezeichen kommt, landet sonst nach der Anmeldung nicht dort,
           wo er hinwollte, sondern auf einer leeren Startseite. */}
-      <div className="flex justify-center">
-        <Link
-          href={withRedirect("/register", redirect)}
-          className="p-2 text-sm font-bold text-primary"
-        >
-          Noch kein Konto? Registrieren
-        </Link>
-      </div>
+      {registrationOpen && (
+        <div className="flex justify-center">
+          <Link
+            href={withRedirect("/register", redirect)}
+            className="p-2 text-sm font-bold text-primary"
+          >
+            Noch kein Konto? Registrieren
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
