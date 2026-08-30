@@ -22,7 +22,7 @@ cp .env.example .env
 - `CRON_SECRET` — Bearer-Token für `POST /api/cron/check-expiry`, z. B. mit `openssl rand -hex 32`
 - `BETTER_AUTH_SECRET` — z. B. mit `openssl rand -hex 32`
 - `BETTER_AUTH_URL` — Basis-URL der App (lokal `http://localhost:3000`)
-- optional: `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `NEXT_PUBLIC_OIDC_DISPLAY_NAME` für Single Sign-on
+- optional: `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_DISPLAY_NAME` für Single Sign-on
 
 Datenbank-Migrationen anwenden:
 
@@ -41,9 +41,10 @@ App läuft auf `http://localhost:3000`.
 ## Weitere Befehle
 
 ```bash
-npm run build       # Produktions-Build
+npm run build        # Produktions-Build
 npm run start        # Produktions-Server
-npm run lint          # ESLint
+npm run lint         # ESLint
+npm run icons        # App-Icons aus dem Blatt-Zeichen neu bauen (braucht ImageMagick)
 npm run db:generate  # Migration aus Schema-Änderungen generieren
 ```
 

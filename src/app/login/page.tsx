@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/components/login-form";
 import { getOidcDisplayName } from "@/lib/oidc";
+
+export const metadata: Metadata = {
+  title: "Anmelden",
+  description: "Melde dich an, um deinen Vorrat auf allen Geräten zu sehen.",
+};
 
 /**
  * Ob es SSO gibt, weiss erst der laufende Server -- deshalb steckt die

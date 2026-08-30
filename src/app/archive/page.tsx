@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
@@ -5,6 +6,11 @@ import { ArchiveView } from "@/components/archive-view";
 import { ListSwitcher } from "@/components/list-switcher";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getListsWithCounts } from "@/lib/data";
+
+export const metadata: Metadata = {
+  title: "Archiv",
+  description: "Was du aufgebraucht oder entsorgt hast, samt Rettungsquote.",
+};
 
 export default async function ArchivePage() {
   const session = await requireSession();

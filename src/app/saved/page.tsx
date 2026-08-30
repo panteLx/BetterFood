@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { formatMedium, fromDateInputValue } from "@/lib/expiry";
 import { ENTRY_METHODS, parseEntryMethod } from "@/lib/entry-method";
+
+export const metadata: Metadata = {
+  title: "Gespeichert",
+};
 
 type SavedParams = Promise<{
   name?: string;

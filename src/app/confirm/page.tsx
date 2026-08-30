@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ItemForm } from "@/components/item-form";
 import { lookupProductByBarcode } from "@/lib/off";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 import { parseEntryMethod } from "@/lib/entry-method";
+
+export const metadata: Metadata = {
+  title: "Artikel bestätigen",
+};
 
 // "await searchParams" muss unterhalb einer <Suspense>-Grenze passieren, sonst
 // blockiert die Navigation komplett den Server-Render (Next 16 "Instant
