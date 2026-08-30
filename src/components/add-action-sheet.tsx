@@ -145,7 +145,7 @@ export function AddActionSheet({ className }: { className?: string }) {
         aria-label="Artikel hinzufügen"
         title="Artikel hinzufügen"
         className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary text-primary-foreground shadow-[0_4px_12px_rgb(30_80_50/0.28)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary text-primary-foreground shadow-action outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           className,
         )}
       >
