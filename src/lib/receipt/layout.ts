@@ -13,6 +13,31 @@ const ROW_TOLERANCE = 2.5;
 const COLUMN_GAP_RATIO = 0.55;
 const WORD_GAP_RATIO = 0.12;
 
+/**
+ * Schranken gegen eine PDF, die nicht gelesen, sondern ausgenutzt werden will.
+ *
+ * Die 10-MB-Grenze der Route begrenzt den Upload, nicht die Arbeit daraus:
+ * ein paar hundert Kilobyte stark komprimierter Text koennen pdf.js minutenlang
+ * und ueber mehrere Gigabyte beschaeftigen. Die App laeuft als EIN Node-Prozess
+ * in EINEM Container -- der Event Loop stuende damit fuer alle still, auch fuer
+ * den Ablauf-Zeitgeber.
+ *
+ * Deshalb hier und nicht nur als Promise.race in der Route: ein Rennen beendet
+ * die Antwort, aber nicht die Arbeit. Abgebrochen wird nur, was sich selbst
+ * fragt, ob es noch darf.
+ */
+const MAX_PAGES = 40;
+const MAX_FRAGMENTS = 200_000;
+const DEADLINE_MS = 15_000;
+
+/** Wird geworfen, wenn eine der Schranken greift. Die Route macht daraus 400. */
+export class ReceiptTooComplexError extends Error {
+  constructor(reason: string) {
+    super(`receipt too complex: ${reason}`);
+    this.name = "ReceiptTooComplexError";
+  }
+}
+
 type Fragment = { text: string; x: number; y: number; width: number; height: number };
 
 /**
@@ -29,7 +54,21 @@ export async function extractLayoutLines(data: Uint8Array): Promise<string[]> {
   const pdf = await getDocumentProxy(data);
   const lines: string[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+  const deadline = Date.now() + DEADLINE_MS;
+  let fragmentBudget = MAX_FRAGMENTS;
+
+  // Eine Lieferdienst-Rechnung hat ein paar Seiten. Wer hundert schickt, will
+  // keinen Beleg einlesen.
+  const pageCount = Math.min(pdf.numPages, MAX_PAGES);
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    // Zwischen zwei Seiten ist die einzige Stelle, an der sich der Lauf
+    // ueberhaupt abbrechen laesst -- innerhalb von getTextContent() haelt
+    // pdf.js das Ruder.
+    if (Date.now() > deadline) {
+      throw new ReceiptTooComplexError("Zeitlimit überschritten");
+    }
+
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
 
@@ -40,6 +79,12 @@ export async function extractLayoutLines(data: Uint8Array): Promise<string[]> {
       // wuerde genau den Abstand verschlucken, aus dem hier die Spalten
       // entstehen.
       if (!("str" in item) || !item.str.trim()) continue;
+      // Das eigentliche Druckmittel einer praeparierten PDF sind nicht die
+      // Seiten, sondern die Textstuecke darauf: eine einzige Seite kann
+      // Hunderttausende tragen, und groupIntoRows sortiert sie danach alle.
+      if (--fragmentBudget < 0) {
+        throw new ReceiptTooComplexError("zu viele Textstücke");
+      }
       fragments.push({
         text: item.str,
         x: item.transform[4],

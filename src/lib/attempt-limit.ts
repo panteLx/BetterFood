@@ -14,6 +14,12 @@ import "server-only";
  * Voreinstellung, und die App laeuft als ein einzelner Container. Ein
  * Neustart setzt die Zaehler zurueck; das ist der Preis dafuer, keine Tabelle
  * dafuer anzulegen.
+ *
+ * Damit ist auch gesagt, wogegen diese Bremse NICHT hilft: wer den Prozess zum
+ * Neustart bringen kann, hebt die Sperre mit auf. Sie schuetzt vor dem kurz
+ * unbeaufsichtigten Telefon, nicht vor jemandem mit Zugriff auf den Server --
+ * dort ist die Datenbank ohnehin das groessere Ziel. Wer das anders braucht,
+ * legt eine Tabelle (key, at) an und raeumt sie beim Lesen auf.
  */
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;

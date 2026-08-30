@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/components/login-form";
 import { getOidcDisplayName } from "@/lib/oidc";
+import { getRegistrationOpen } from "@/lib/registration";
 
 export const metadata: Metadata = {
   title: "Anmelden",
@@ -15,8 +16,13 @@ export const metadata: Metadata = {
  * (useSearchParams), und nicht in der statischen Huelle der Seite.
  */
 async function LoginFormSlot() {
-  const ssoName = await getOidcDisplayName();
-  return <LoginForm ssoName={ssoName} />;
+  const [ssoName, registrationOpen] = await Promise.all([
+    getOidcDisplayName(),
+    // Ist die Registrierung zu, fuehrt der Link unten ins Leere -- also weg
+    // damit, statt jemanden auf eine Seite zu schicken, die ihn zurueckwirft.
+    getRegistrationOpen(),
+  ]);
+  return <LoginForm ssoName={ssoName} registrationOpen={registrationOpen} />;
 }
 
 export default function LoginPage() {

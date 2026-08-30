@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getPlacesForList, lookupKnownProduct } from "@/lib/data";
-import { extractLayoutLines } from "@/lib/receipt/layout";
+import { extractLayoutLines, ReceiptTooComplexError } from "@/lib/receipt/layout";
 import { parseReceipt } from "@/lib/receipt/parse";
 import type { ReceiptDraft, ReceiptDraftLine } from "@/lib/receipt/types";
 
 /** Eine Lieferdienst-Rechnung wiegt ein paar hundert Kilobyte. Alles darueber ist keine. */
 const MAX_BYTES = 10 * 1024 * 1024;
 const PDF_MAGIC = "%PDF-";
+
+/**
+ * Wer gerade einen Beleg einliest.
+ *
+ * Die Groesse allein schuetzt den Prozess nicht: dreissig gleichzeitige
+ * Uploads sind dreissig parallele pdf.js-Laeufe in demselben einen Node-
+ * Prozess, der auch alle anderen Anfragen bedient. Ein Beleg auf einmal pro
+ * Person reicht voellig -- niemand liest zwei Rechnungen gleichzeitig ein.
+ *
+ * Im Speicher und pro Prozess, dieselbe Bauart wie lib/attempt-limit.ts: die
+ * App laeuft als ein einzelner Container, und ein Neustart soll den Eintrag
+ * ohnehin vergessen.
+ */
+const parsing = new Set<string>();
 
 /**
  * Liest eine PDF-Rechnung und macht daraus einen Vorschlag -- mehr nicht.
@@ -21,6 +35,24 @@ export async function POST(req: NextRequest) {
   const session = await requireSession();
   const listId = await requireActiveList(session.user.id);
 
+  if (parsing.has(session.user.id)) {
+    return NextResponse.json(
+      { error: "Es wird bereits ein Beleg eingelesen. Einen Moment noch." },
+      { status: 429 },
+    );
+  }
+
+  parsing.add(session.user.id);
+  try {
+    return await parseUpload(req, listId);
+  } finally {
+    // Auch wenn oben etwas wirft -- ein haengengebliebener Eintrag wuerde den
+    // Rechnungsimport fuer diese Person bis zum Neustart sperren.
+    parsing.delete(session.user.id);
+  }
+}
+
+async function parseUpload(req: NextRequest, listId: number) {
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
 
@@ -47,7 +79,19 @@ export async function POST(req: NextRequest) {
   let layoutLines: string[];
   try {
     layoutLines = await extractLayoutLines(bytes);
-  } catch {
+  } catch (error) {
+    // Eine PDF, die an eine der Schranken stoesst, ist etwas anderes als eine
+    // kaputte -- und der Nutzer soll nicht nach einem Fehler suchen, den seine
+    // Datei nicht hat.
+    if (error instanceof ReceiptTooComplexError) {
+      return NextResponse.json(
+        {
+          error:
+            "Diese PDF ist zu umfangreich zum Einlesen. Bitte die Original-Rechnung des Lieferdienstes verwenden.",
+        },
+        { status: 413 },
+      );
+    }
     return NextResponse.json(
       { error: "Die PDF konnte nicht gelesen werden." },
       { status: 400 },

@@ -29,8 +29,17 @@ FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=builder /app ./
-RUN mkdir -p /app/data
+COPY --from=builder --chown=node:node /app ./
+RUN mkdir -p /app/data && chown node:node /app/data
+
+# Das node-Image bringt diesen Nutzer schon mit. Ohne die Zeile lief der
+# Serverprozess als root -- und damit auch alles, was ihm jemand unterschiebt;
+# der PDF-Parser ist dafuer der naheliegendste Weg.
+#
+# Auf einem bestehenden Volume einmalig nachziehen, sonst kann der Prozess die
+# SQLite-Datei nicht mehr schreiben:
+#   docker run --rm -v betterfood_data:/data alpine chown -R 1000:1000 /data
+USER node
 
 EXPOSE 3000
 VOLUME ["/app/data"]

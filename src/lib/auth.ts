@@ -18,6 +18,7 @@ import {
   seedDefaultPlaces,
 } from "@/lib/data";
 import { isOidcConfigured, oidcDisplayName } from "@/lib/oidc";
+import { isRegistrationOpen } from "@/lib/registration";
 
 type Headerish = { get(name: string): string | null };
 
@@ -69,6 +70,42 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
+/**
+ * Woher die Client-IP kommen darf.
+ *
+ * Ohne diese Angabe hatte better-auth genau zwei Ausgaenge, und beide waren
+ * falsch. Haengt der Reverse Proxy an X-Forwarded-For an (das uebliche
+ * $proxy_add_x_forwarded_for), stehen zwei Eintraege im Header, better-auth
+ * ermittelt gar keine IP und faellt auf einen fuer ALLE Nutzer gemeinsamen
+ * Zaehler zurueck -- ein einzelner Passwort-Rater sperrt damit jede Anmeldung
+ * der Instanz aus. Steht dagegen genau ein Eintrag drin, wurde er ungeprueft
+ * uebernommen und liess sich pro Anfrage frei setzen: gar kein Limit mehr.
+ *
+ * Mit TRUSTED_PROXIES laeuft better-auth die Kette von rechts nach links ab
+ * und nimmt die erste Adresse, die NICHT aus diesen Netzen stammt; alles davor
+ * hat der Client geschrieben und faellt weg. Erst das fuellt auch
+ * session.ip_address, die /settings/account als "fremder Zugriff?"-Hinweis
+ * anzeigt.
+ *
+ * TRUSTED_PROXIES ausdruecklich leer heisst: kein Proxy davor. Dann wird gar
+ * kein Header mehr gelesen -- ein leeres trustedProxies allein wuerde genau in
+ * das zweite Verhalten oben zurueckfallen, und ein faelschbares Limit ist
+ * schlechter als ein grobes.
+ */
+function ipAddressOptions() {
+  const raw = process.env.TRUSTED_PROXIES ?? "127.0.0.1/32,::1/128";
+  const trustedProxies = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (trustedProxies.length === 0) {
+    return { ipAddressHeaders: [] };
+  }
+
+  return { trustedProxies };
+}
+
 async function claimLegacyData(newUser: { id: string }, context: SignUpContext) {
   const [{ value: userCount }] = await db.select({ value: count() }).from(user);
 
@@ -113,6 +150,11 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
   emailAndPassword: {
     enabled: true,
+    // Die Tuer faellt zu, sobald der Haushalt steht -- siehe lib/registration.ts.
+    // Angemeldet wird weiter, nur neu angelegt nicht mehr. Der Riegel gehoert
+    // hierher und nicht in den Proxy: /api/auth/sign-up/email liegt in dessen
+    // Allowlist, weil eine Registrierung ohne Sitzung stattfindet.
+    disableSignUp: !isRegistrationOpen(),
   },
   user: {
     // Ohne updateEmailWithoutVerification waere die Adresse hier unaenderbar:
@@ -137,6 +179,7 @@ export const auth = betterAuth({
   },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  advanced: { ipAddress: ipAddressOptions() },
   plugins: isOidcConfigured()
     ? [
         genericOAuth({

@@ -13,13 +13,87 @@ import { WELCOME_COOKIE, WELCOME_COOKIE_MAX_AGE } from "@/lib/welcome";
 // prueft ihr eigenes Bearer-Token (CRON_SECRET).
 const PUBLIC_PREFIXES = ["/login", "/register", "/welcome", "/api/auth", "/api/cron"];
 
+// Eine Allowlist echter Asset-Endungen. Vorher stand hier /\.[a-zA-Z0-9]+$/ --
+// also "irgendein Punkt im letzten Segment", und damit war jeder Pfad, der so
+// aussah, an diesem Gate vorbei. Ausnutzbar war das nicht, weil jede Route und
+// jede datentragende Seite zusaetzlich selbst requireSession() aufruft; eine
+// Falle fuer die naechste Route, die sich allein auf den Proxy verlaesst, war
+// es trotzdem -- und genau das tun die Client-Seiten unter /settings.
+const ASSET_EXTENSIONS =
+  /\.(?:js|mjs|css|map|json|webmanifest|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|txt|xml)$/i;
+
+// Alles, was Zustand aendert, muss vom eigenen Ursprung kommen. Das
+// Sitzungs-Cookie ist SameSite=Lax, faengt einen fremden POST also bereits ab
+// -- aber das ist eine einzelne Schicht, und req.json() prueft den
+// Content-Type nicht. Hier steht die zweite, an einer Stelle fuer alle Routen,
+// auch die, die es noch nicht gibt.
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Kommt diese Anfrage von der eigenen Seite?
+ *
+ * Verglichen wird der Host, nicht der ganze Origin. Zwei Gruende, beide
+ * nachgemessen:
+ *
+ * - `request.nextUrl.origin` gibt NICHT den Host-Header wieder. Unter
+ *   `next start` steht dort die Adresse, an die der Server gebunden ist --
+ *   ein Aufruf an 127.0.0.1 wurde damit als fremd abgewiesen, obwohl er es
+ *   nicht war. Massgeblich ist, was der Browser adressiert hat, und das steht
+ *   im Host-Header (bzw. in x-forwarded-host, wenn ein Proxy ihn umschreibt).
+ * - Das Schema faellt bewusst weg: hinter einem TLS-terminierenden Proxy
+ *   schickt der Browser https://…, waehrend intern http gesprochen wird. Der
+ *   Host traegt die Sicherheitsaussage ohnehin allein -- eine fremde Seite
+ *   kann ihn nicht auf den eigenen setzen, ohne die Domain zu besitzen.
+ *
+ * BETTER_AUTH_URL zaehlt zusaetzlich: es ist die oeffentliche Adresse, die
+ * ohnehin stimmen muss, und rettet den Fall eines Proxys, der den Host auf
+ * einen internen Namen umschreibt.
+ */
+function isOwnOrigin(origin: string, request: NextRequest): boolean {
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    // Ein unlesbarer Origin (z. B. "null" bei einer sandboxed iframe) ist
+    // nichts, dem wir eine Schreiboperation anvertrauen.
+    return false;
+  }
+
+  const candidates = [
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+  ];
+
+  const configured = process.env.BETTER_AUTH_URL;
+  if (configured) {
+    try {
+      candidates.push(new URL(configured).host);
+    } catch {
+      // Eine kaputte BETTER_AUTH_URL faellt hier einfach weg -- better-auth
+      // beschwert sich darueber an eigener Stelle laut genug.
+    }
+  }
+
+  return candidates.some((candidate) => candidate === originHost);
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (UNSAFE_METHODS.has(request.method) && pathname.startsWith("/api/")) {
+    const origin = request.headers.get("origin");
+    // Kein Origin-Header heisst: kein Browser. Das ist der Cron von aussen,
+    // und der weist sich mit seinem eigenen Token aus. Schickt ein Browser
+    // einen mit, muss es der eigene sein.
+    if (origin && !isOwnOrigin(origin, request)) {
+      return NextResponse.json({ error: "forbidden origin" }, { status: 403 });
+    }
+  }
 
   // Static/PWA assets (manifest, service worker, icons, hashed workbox
   // bundles) always have a file extension -- let them through unauthenticated
   // so the app shell and offline support keep working while logged out.
-  if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+  if (ASSET_EXTENSIONS.test(pathname)) {
     return NextResponse.next();
   }
 

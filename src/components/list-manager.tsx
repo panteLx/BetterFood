@@ -332,14 +332,19 @@ export function ListManager() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2.5">
-                      <UserPlus className="size-4 shrink-0 text-faint" />
-                      <div className="min-w-0 flex-1">
-                        <UserCombobox
-                          onSelect={(user) => addMember(list.id, user.id)}
-                        />
+                    {/* Nur der Besitzer laedt ein -- die API antwortet allen
+                        anderen mit 403, und ein Feld, das immer scheitert,
+                        ist schlimmer als keins. */}
+                    {isOwner && (
+                      <div className="flex items-center gap-2.5">
+                        <UserPlus className="size-4 shrink-0 text-faint" />
+                        <div className="min-w-0 flex-1">
+                          <UserCombobox
+                            onSelect={(user) => addMember(list.id, user.id)}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {isOwner && (
                       <div className="flex justify-end gap-2 border-t border-border pt-3">
