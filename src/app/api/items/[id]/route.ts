@@ -105,7 +105,7 @@ export async function PATCH(
   // an Name, Kategorie oder Ort: ein reines Umdatieren sagt darueber nichts
   // aus, und ein "aufgebraucht" schon gar nicht.
   if (update.name !== undefined || update.category !== undefined || update.placeId !== undefined) {
-    await rememberProduct(listId, {
+    rememberProduct(listId, {
       barcode: updated.barcode,
       name: updated.name,
       category: updated.category,

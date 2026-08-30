@@ -88,6 +88,18 @@ export const categories = sqliteTable(
     key: text("key").notNull(),
     label: text("label").notNull(),
     shelfLifeDays: integer("shelf_life_days").notNull().default(14),
+    // Das Fach, in dem diese Kategorie ueblicherweise liegt. Es beantwortet
+    // die zweite Frage des Formulars gleich mit: wer "Tiefkuehl" waehlt,
+    // meint fast immer das Gefrierfach. Bewusst schwaecher als
+    // product_knowledge.placeId -- was der Haushalt ueber ein konkretes
+    // Produkt gelernt hat, schlaegt den Standard der Kategorie immer.
+    //
+    // onDelete "set null" wie bei items.placeId und
+    // productKnowledge.placeId: ein geleertes Fach darf die Kategorie nicht
+    // mit sich reissen.
+    defaultPlaceId: integer("default_place_id").references(() => places.id, {
+      onDelete: "set null",
+    }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     listId: integer("list_id").references(() => lists.id),
   },

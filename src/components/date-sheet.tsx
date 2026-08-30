@@ -34,6 +34,9 @@ export function DateSheet({
   value,
   onChange,
   today,
+  title = "Haltbar bis",
+  confirmLabel,
+  onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +45,21 @@ export function DateSheet({
   onChange: (value: string) => void;
   /** Stichtag -- kommt vom Aufrufer, damit new Date() nicht im Render landet. */
   today: Date;
+  /**
+   * Ueberschrift des Blatts. Der Beleg-Import setzt hier den Produktnamen
+   * ein -- nach dem dritten Blatt in Folge weiss man sonst nicht mehr,
+   * worueber man gerade entscheidet.
+   */
+  title?: string;
+  /** Beschriftung des Abschlussknopfs; sonst "Auf <Datum> setzen". */
+  confirmLabel?: string;
+  /**
+   * Wird nur vom Abschlussknopf ausgeloest, nicht vom Wegwischen. Fuer
+   * Aufrufer, bei denen das Datum nicht in ein offenes Formular laeuft,
+   * sondern selbst die Handlung ist -- der Nachkauf legt damit eine Packung
+   * an, und das darf ein Tipp neben das Blatt nicht tun.
+   */
+  onConfirm?: (value: string) => void;
 }) {
   const selected = useMemo(() => (value ? fromDateInputValue(value) : today), [value, today]);
   const [monthCursor, setMonthCursor] = useState<Date | null>(null);
@@ -72,7 +90,7 @@ export function DateSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Haltbar bis">
+    <Sheet open={open} onOpenChange={onOpenChange} title={title}>
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-4">
         {QUICK_DATES.map((quick) => {
           const date = addDays(quick.days, today);
@@ -152,10 +170,13 @@ export function DateSheet({
 
       <button
         type="button"
-        onClick={() => onOpenChange(false)}
+        onClick={() => {
+          onConfirm?.(toDateInputValue(selected));
+          onOpenChange(false);
+        }}
         className="mt-4 h-13.5 w-full rounded-lg bg-primary text-base font-bold text-primary-foreground"
       >
-        Auf {formatMedium(selected)} setzen
+        {confirmLabel ?? `Auf ${formatMedium(selected)} setzen`}
       </button>
     </Sheet>
   );

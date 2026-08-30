@@ -70,6 +70,7 @@ async function ResolvedItem({ params }: { params: Promise<{ id: string }> }) {
     .select({
       item: items,
       categoryLabel: categories.label,
+      shelfLifeDays: categories.shelfLifeDays,
       placeName: places.name,
       addedByName: user.name,
       addedByEmail: user.email,
@@ -93,6 +94,7 @@ async function ResolvedItem({ params }: { params: Promise<{ id: string }> }) {
     <ItemDetail
       item={row.item}
       categoryLabel={row.categoryLabel ?? row.item.category}
+      shelfLifeDays={row.shelfLifeDays}
       placeName={row.placeName}
       addedBy={
         row.addedByName && row.addedByEmail

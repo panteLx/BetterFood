@@ -5,8 +5,7 @@ import { and, asc, count, eq, isNull, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { listMembers, lists, user } from "@/db/schema";
-
-type Executor = Omit<typeof db, "$client">;
+import type { Executor } from "@/lib/data";
 
 // Liefert null statt nach /login umzuleiten -- fuer Stellen, die eine fehlende
 // Anmeldung selbst beantworten (die Navigationsleiste blendet sich aus, eine

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { places } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { placesTag } from "@/lib/data";
+import { categoriesTag, placesTag } from "@/lib/data";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -56,6 +56,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   revalidateTag(placesTag(listId), { expire: 0 });
+  // Auch die Kategorien haben sich geaendert, ohne dass diese Route sie
+  // angefasst haette: "ON DELETE SET NULL" hat den Standardort jeder
+  // Kategorie geleert, die auf dieses Fach zeigte. Ohne diese Zeile bliebe
+  // die geleerte Spalte im Cache stehen.
+  revalidateTag(categoriesTag(listId), { expire: 0 });
 
   return NextResponse.json({ ok: true });
 }

@@ -2,20 +2,27 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Barcode, Camera, ClipboardList, Plus, type LucideIcon } from "lucide-react";
+import {
+  Barcode,
+  Camera,
+  ClipboardList,
+  Plus,
+  Receipt,
+  type LucideIcon,
+} from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-// Zentrale "Hinzufuegen"-Aktion in der Bottom-Nav: Scannen, EAN-Eingabe und
-// komplett manuelle Eingabe sind kein eigenstaendiges Nav-Ziel (Destination),
-// sondern drei Wege zur selben Aufgabe ("Artikel erfassen"). Nach
-// Material-Design-Konvention gehoert das in eine primaere Aktion
+// Zentrale "Hinzufuegen"-Aktion in der Bottom-Nav: Scannen, EAN-Eingabe,
+// manuelle Eingabe und Rechnung sind kein eigenstaendiges Nav-Ziel
+// (Destination), sondern vier Wege zur selben Aufgabe ("Artikel erfassen").
+// Nach Material-Design-Konvention gehoert das in eine primaere Aktion
 // (FAB-artig), nicht in mehrere gleichwertige Nav-Eintraege - daher oeffnet
 // ein zentraler Button dieses kurze Auswahl-Sheet statt direkt zu navigieren.
 //
 // Die Reihenfolge ist keine Geschmacksfrage: der Scan ist fuer alles
 // Verpackte der schnellste Weg und steht deshalb hervorgehoben oben, die
-// beiden anderen fangen die Faelle auf, in denen er nicht funktioniert.
+// naechsten beiden fangen die Faelle auf, in denen er nicht funktioniert.
 const OPTIONS: {
   href: string;
   label: string;
@@ -42,6 +49,15 @@ const OPTIONS: {
     hint: "Salat, Reste, Selbstgemachtes",
     icon: ClipboardList,
   },
+  // Steht unten, weil er einen ganzen Einkauf auf einmal erfasst statt eines
+  // Artikels -- und weil er als einziger etwas voraussetzt, das man nicht in
+  // der Hand hat: eine PDF-Rechnung.
+  {
+    href: "/receipt",
+    label: "Rechnung einlesen",
+    hint: "Wenn Lebensmittel mal wieder geliefert wurden",
+    icon: Receipt,
+  },
 ];
 
 function AddOptionsSheet({
@@ -59,7 +75,11 @@ function AddOptionsSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Wie möchtest du hinzufügen?">
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Wie möchtest du hinzufügen?"
+    >
       <div className="flex flex-col gap-2">
         {OPTIONS.map((option) => (
           <button
@@ -74,7 +94,10 @@ function AddOptionsSheet({
             )}
           >
             <option.icon
-              className={cn("size-6 shrink-0", !option.primary && "text-primary")}
+              className={cn(
+                "size-6 shrink-0",
+                !option.primary && "text-primary",
+              )}
               strokeWidth={1.8}
             />
             <span>

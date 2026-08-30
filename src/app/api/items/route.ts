@@ -1,39 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { categories, items, places } from "@/db/schema";
+import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { rememberProduct } from "@/lib/data";
-import { normalizeProductName } from "@/lib/utils";
-
-/**
- * Prueft eine uebergebene Ort-ID gegen die aktive Liste. Liefert die ID, null
- * (kein Ort gewaehlt) oder "invalid", wenn der Ort einer anderen Liste
- * gehoert.
- */
-async function resolvePlace(
-  placeId: number | null | undefined,
-  listId: number,
-) {
-  if (placeId === undefined || placeId === null) return null;
-
-  const row = await db
-    .select({ id: places.id })
-    .from(places)
-    .where(and(eq(places.id, placeId), eq(places.listId, listId)))
-    .get();
-
-  return row ? row.id : ("invalid" as const);
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
+import { rememberProduct, resolvePlace } from "@/lib/data";
+import { findMergeTarget } from "@/lib/item-merge";
 
 export async function GET() {
   const session = await requireSession();
@@ -108,17 +80,9 @@ export async function POST(req: NextRequest) {
     ? new Date(expiryDate)
     : estimateExpiryDate(categoryRow.shelfLifeDays, now);
 
-  // Drei gleiche Joghurts aus einem Einkauf wurden bisher zu drei identischen
-  // Zeilen, obwohl quantity genau dafuer existiert. Zusammengefasst wird nur
-  // bei gleichem MHD-Tag: eine frische Milch darf nicht stillschweigend mit
-  // einer aelteren verschmelzen.
-  //
-  // Der Barcode ist dabei nur das genauere von zwei Erkennungsmerkmalen, kein
-  // Trennzeichen: zweimal gescannte Margarine und dieselbe Margarine von Hand
-  // nachgetragen sind derselbe Artikel, standen aber in getrennten Zeilen,
-  // weil die eine Seite einen Barcode hatte und die andere nicht. Verglichen
-  // wird der Name normalisiert (Gross-/Kleinschreibung, doppelte
-  // Leerzeichen), sonst trennt schon "Milch " von "Milch".
+  // Nur die Zeilen derselben Kategorie kommen als Ziel in Frage -- nach
+  // welcher Regel darunter zusammengefasst wird, steht in findMergeTarget
+  // (dieselbe Regel benutzt der Rechnungsimport).
   const sameCategory = await db
     .select()
     .from(items)
@@ -131,13 +95,12 @@ export async function POST(req: NextRequest) {
       ),
     );
 
-  const nameKey = normalizeProductName(name);
-  const sameDay = sameCategory.filter((item) =>
-    isSameDay(item.expiryDate, expiry),
-  );
-  const existing =
-    (barcode ? sameDay.find((item) => item.barcode === barcode) : undefined) ??
-    sameDay.find((item) => normalizeProductName(item.name) === nameKey);
+  const existing = findMergeTarget(sameCategory, {
+    name,
+    category,
+    barcode,
+    expiryDate: expiry,
+  });
 
   if (existing) {
     const [merged] = await db
@@ -152,7 +115,7 @@ export async function POST(req: NextRequest) {
       .where(eq(items.id, existing.id))
       .returning();
 
-    await rememberProduct(listId, { barcode, name, category, placeId: place });
+    rememberProduct(listId, { barcode, name, category, placeId: place });
 
     return NextResponse.json({ ...merged, merged: true }, { status: 200 });
   }
@@ -178,7 +141,7 @@ export async function POST(req: NextRequest) {
   // dieses Produkt in diesem Haushalt gehoert -- genau davon lebt die
   // Vorauswahl beim naechsten Mal. Der Ort gehoert dazu: Joghurt liegt in
   // jedem Haushalt woanders, aber im selben immer am selben Platz.
-  await rememberProduct(listId, { barcode, name, category, placeId: place });
+  rememberProduct(listId, { barcode, name, category, placeId: place });
 
   return NextResponse.json(created, { status: 201 });
 }

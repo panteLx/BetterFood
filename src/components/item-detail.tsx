@@ -8,19 +8,23 @@ import { ArrowLeft, Check, Pencil, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DateSheet } from "@/components/date-sheet";
 import { useIsClient } from "@/lib/use-is-client";
+import { estimateExpiryDate } from "@/lib/categories";
 import {
   STATUS_CLASSES,
   daysUntil,
   expiryLabel,
   expiryStatus,
   formatMedium,
+  fromDateInputValue,
+  toDateInputValue,
 } from "@/lib/expiry";
 import {
   hideItem,
   resolveItem,
   resolveVerb,
-  setQuantity,
+  restockItem,
   undoResolve,
   type ResolveStatus,
 } from "@/lib/item-actions";
@@ -38,11 +42,14 @@ import type { Item } from "@/db/schema";
 export function ItemDetail({
   item,
   categoryLabel,
+  shelfLifeDays,
   placeName,
   addedBy,
 }: {
   item: Item;
   categoryLabel: string;
+  /** Haltbarkeit der Kategorie -- der Vorschlag beim Nachkauf. Null, wenn die Kategorie geloescht wurde. */
+  shelfLifeDays: number | null;
   placeName: string | null;
   addedBy: { name: string; email: string } | null;
 }) {
@@ -50,6 +57,8 @@ export function ItemDetail({
   const [quantity, setLocalQuantity] = useState(item.quantity);
   const [prevItemQuantity, setPrevItemQuantity] = useState(item.quantity);
   const [busy, setBusy] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(false);
+  const [restockDate, setRestockDate] = useState("");
 
   // Die Menge wird optimistisch im Client gefuehrt, damit ein Tipp sofort
   // sichtbar ist. Sobald der Server eine andere Zahl liefert -- nach dem
@@ -125,30 +134,44 @@ export function ItemDetail({
     }
   }
 
-  async function addOne() {
-    const next = quantity + 1;
+  /**
+   * Der Nachkauf fragt nach dem MHD der neuen Packung, statt stillschweigend
+   * die Menge zu erhoehen: eine zweite Milch teilt sich nicht das
+   * Haltbarkeitsdatum der ersten. Was daraus wird, entscheidet die Route --
+   * gleiches Datum heisst dieselbe Zeile mit hoeherer Menge, ein anderes eine
+   * eigene Zeile, die dann auch eigenstaendig gemeldet wird.
+   */
+  function openRestock() {
+    const today = startOfDay(new Date());
+    setRestockDate(
+      shelfLifeDays === null
+        ? ""
+        : toDateInputValue(estimateExpiryDate(shelfLifeDays, today)),
+    );
+    setRestockOpen(true);
+  }
+
+  async function restock(value: string) {
+    if (!value) return;
+    const expiry = fromDateInputValue(value);
     setBusy(true);
-    setLocalQuantity(next);
     try {
-      await setQuantity(item.id, next);
-      toast.success(`${item.name} – jetzt ${next}× im Vorrat`, {
-        action: {
-          label: "Rückgängig",
-          onClick: async () => {
-            setLocalQuantity(quantity);
-            try {
-              await setQuantity(item.id, quantity);
-            } catch {
-              toast.error("Rückgängig machen hat nicht geklappt.");
-            }
-            router.refresh();
-          },
-        },
-      });
-      router.refresh();
+      const result = await restockItem(item, expiry);
+      if (result.id === item.id) {
+        // Gleiches MHD, gleiche Zeile: hier aendert sich nur die Menge.
+        const next = quantity + 1;
+        setLocalQuantity(next);
+        toast.success(`${item.name} – jetzt ${next}× im Vorrat`);
+        router.refresh();
+      } else {
+        // Eigene Zeile -- und die zeigen wir auch, sonst sieht es aus, als
+        // sei nichts passiert: diese Seite hier hat sich ja nicht geaendert.
+        toast.success(`${item.name} – neue Packung bis ${formatMedium(expiry)}`);
+        router.push(`/item/${result.id}`);
+        router.refresh();
+      }
     } catch {
-      toast.error("Konnte nicht aktualisiert werden.");
-      setLocalQuantity(quantity);
+      toast.error("Konnte nicht gespeichert werden.");
     } finally {
       setBusy(false);
     }
@@ -278,7 +301,7 @@ export function ItemDetail({
           <button
             type="button"
             disabled={busy}
-            onClick={addOne}
+            onClick={openRestock}
             className="h-12.5 flex-1 rounded-lg border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
           >
             Nachgekauft
@@ -293,8 +316,28 @@ export function ItemDetail({
           </button>
         </div>
       </div>
+
+      {/* Erst mit dem Datum wird der Nachkauf eingetragen -- ausgeloest nur
+          vom Abschlussknopf, damit ein Tipp neben das Blatt keine Packung
+          anlegt. */}
+      {isClient && (
+        <DateSheet
+          open={restockOpen}
+          onOpenChange={setRestockOpen}
+          title="Neue Packung hält bis"
+          confirmLabel="Nachkauf eintragen"
+          value={restockDate}
+          onChange={setRestockDate}
+          onConfirm={restock}
+          today={startOfDay(new Date())}
+        />
+      )}
     </div>
   );
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function DetailRow({

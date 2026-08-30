@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronRight, Check, Package } from "lucide-react";
+import { ChevronRight, Package } from "lucide-react";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
@@ -22,9 +22,14 @@ import {
 } from "@/lib/item-actions";
 import type { Category, Item, List, Place } from "@/db/schema";
 
-// Mehr als das passt nicht auf den ersten Bildschirm, und die Startseite soll
-// genau eine Frage beantworten: was muss ich als Naechstes aufbrauchen?
-const URGENT_PREVIEW_COUNT = 4;
+// Zwei Vorschauen, zwei Aufgaben: Abgelaufenes ist Aufraeumarbeit, das
+// Kommende ist Planung. Eine gemeinsame Rangliste konnte das nicht -- bei
+// achtundzwanzig abgelaufenen Artikeln fuellten die sich vollstaendig damit,
+// und was morgen dran ist, stand nirgends. Zwei Karten reichen fuer den
+// Rueckstand: die Zahl daneben sagt, wie gross er ist, und achtundzwanzigmal
+// "Vor 3 Tagen abgelaufen" traegt keine Information mehr.
+const EXPIRED_PREVIEW_COUNT = 2;
+const UPCOMING_PREVIEW_COUNT = 4;
 
 function greetingFor(hour: number): string {
   if (hour < 11) return "Guten Morgen";
@@ -91,9 +96,18 @@ export function HomeOverview({
       soon,
       fresh: withDays.length - expired.length - soon.length,
       total: items.reduce((sum, item) => sum + item.quantity, 0),
-      urgent: [...expired, ...soon]
+      // Das laengst Abgelaufene zuerst -- days ist hier negativ.
+      expiredPreview: [...expired]
         .sort((a, b) => a.days - b.days)
-        .slice(0, URGENT_PREVIEW_COUNT)
+        .slice(0, EXPIRED_PREVIEW_COUNT)
+        .map((entry) => entry.item),
+      // Was als Naechstes dran ist, ohne Ruecksicht auf URGENT_WITHIN_DAYS:
+      // in einem gesunden Vorrat laeuft nichts in drei Tagen ab, und der
+      // Abschnitt waere dann leer, obwohl er die eigentliche Planung traegt.
+      upcoming: withDays
+        .filter((entry) => entry.days >= 0)
+        .sort((a, b) => a.days - b.days)
+        .slice(0, UPCOMING_PREVIEW_COUNT)
         .map((entry) => entry.item),
     };
   }, [items, today]);
@@ -152,6 +166,24 @@ export function HomeOverview({
         month: "long",
       }).format(today)
     : "";
+
+  // Beide Abschnitte zeichnen dieselbe Karte; sie unterscheiden sich nur
+  // darin, welche Artikel darin stehen.
+  function card(item: Item) {
+    return (
+      <ItemCard
+        key={item.id}
+        item={item}
+        meta={
+          item.placeId !== null && placeNames.has(item.placeId)
+            ? placeNames.get(item.placeId)!
+            : (categoryLabels.get(item.category) ?? item.category)
+        }
+        onConsume={() => resolve(item, "used")}
+        onDiscard={() => resolve(item, "thrown_away")}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-5 px-5 pt-2">
@@ -239,53 +271,67 @@ export function HomeOverview({
         </div>
       )}
 
-      {buckets && buckets.urgent.length > 0 && (
+      {buckets && buckets.expiredPreview.length > 0 && (
         <section className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-[15px] font-bold">Bald aufbrauchen</h2>
+            <h2 className="text-[15px] font-bold">
+              Abgelaufen
+              <span className="ml-1.5 font-mono text-[13px] font-bold text-muted-foreground">
+                {buckets.expired.length}
+              </span>
+            </h2>
             <Link
-              href="/inventory?filter=bald"
+              href="/inventory?filter=abgelaufen"
               className="text-[13px] font-semibold text-primary"
             >
               Alle ansehen
             </Link>
           </div>
-          {buckets.urgent.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              meta={
-                item.placeId !== null && placeNames.has(item.placeId)
-                  ? placeNames.get(item.placeId)!
-                  : (categoryLabels.get(item.category) ?? item.category)
-              }
-              onConsume={() => resolve(item, "used")}
-              onDiscard={() => resolve(item, "thrown_away")}
-            />
-          ))}
+          {buckets.expiredPreview.map(card)}
+          {/* Zwei Karten sind ein Ausschnitt, und ohne diese Zeile sieht er
+              aus wie der ganze Rueckstand. */}
+          {buckets.expired.length > buckets.expiredPreview.length && (
+            <Link
+              href="/inventory?filter=abgelaufen"
+              className="flex items-center justify-center gap-1 py-1 text-[12.5px] font-semibold text-muted-foreground"
+            >
+              Noch {buckets.expired.length - buckets.expiredPreview.length}{" "}
+              {buckets.expired.length - buckets.expiredPreview.length === 1
+                ? "weiteren"
+                : "weitere"}{" "}
+              ansehen
+              <ChevronRight className="size-3.5" strokeWidth={2.2} />
+            </Link>
+          )}
         </section>
       )}
 
-      {buckets && buckets.urgent.length === 0 && (
+      {buckets && buckets.upcoming.length > 0 && (
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between">
+            {/* Ohne Zaehler: der Zaehlerblock darueber hat die Zahlen
+                bereits, und "als Naechstes dran" ist eine Reihenfolge,
+                keine Menge. */}
+            <h2 className="text-[15px] font-bold">Als Nächstes dran</h2>
+            <Link
+              href="/inventory"
+              className="text-[13px] font-semibold text-primary"
+            >
+              Alle ansehen
+            </Link>
+          </div>
+          {buckets.upcoming.map(card)}
+        </section>
+      )}
+
+      {items.length === 0 && (
         <div className="rounded-3xl border border-border bg-card">
           <EmptyState
-            icon={items.length === 0 ? Package : Check}
-            tone={items.length === 0 ? "muted" : "primary"}
-            title={
-              items.length === 0
-                ? "Dein Vorrat ist noch leer"
-                : "Nichts läuft bald ab"
-            }
-            body={
-              items.length === 0
-                ? "Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
-                : "Dein Vorrat sieht gut aus. Wir melden uns rechtzeitig."
-            }
-            action={
-              items.length === 0 ? (
-                <AddItemButton label="Artikel hinzufügen" />
-              ) : undefined
-            }
+            icon={Package}
+            tone="muted"
+            title="Dein Vorrat ist noch leer"
+            body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
+            action={<AddItemButton label="Artikel hinzufügen" />}
           />
         </div>
       )}

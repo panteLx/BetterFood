@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -41,7 +41,11 @@ import type { Category, Place, ProductKnowledge } from "@/db/schema";
 // verdraengen die Frage, die darunter kommt.
 const SUGGESTION_COUNT = 3;
 
-type CategoryOption = Pick<Category, "key" | "label" | "shelfLifeDays">;
+// Ab wann getippter Text als Suche gilt. Ein einzelner Buchstabe passt auf
+// zu vieles, um die drei Plaetze sinnvoll zu belegen.
+const SEARCH_FROM_CHARS = 2;
+
+type CategoryOption = Pick<Category, "key" | "label" | "shelfLifeDays" | "defaultPlaceId">;
 type PlaceOption = Pick<Place, "id" | "name">;
 
 export function ItemForm({
@@ -124,7 +128,11 @@ export function ItemForm({
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [learnedCategory, setLearnedCategory] = useState<string | null>(null);
   const [learnedPlace, setLearnedPlace] = useState<number | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  // Alles, was die Liste kennt -- nicht nur die drei, die gerade darunter
+  // stehen: der Vorschlag soll mit der Eingabe mitsuchen koennen.
+  const [knownProducts, setKnownProducts] = useState<
+    { key: string; name: string }[]
+  >([]);
   const [deleting, setDeleting] = useState(false);
 
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
@@ -246,10 +254,11 @@ export function ItemForm({
     };
   }, []);
 
-  // Was die Liste schon kennt, als Vorschlag unter dem leeren Namensfeld:
-  // "Reste vom Abendessen" tippt niemand gern zweimal.
+  // Was die Liste schon kennt, als Vorschlag unter dem Namensfeld:
+  // "Reste vom Abendessen" tippt niemand gern zweimal. Auch mit Barcode
+  // geholt -- ein Scan ohne Treffer endet ebenfalls beim Tippen.
   useEffect(() => {
-    if (itemId || barcode) return;
+    if (itemId) return;
     let active = true;
     fetch("/api/knowledge")
       .then((res) => (res.ok ? res.json() : []))
@@ -260,7 +269,8 @@ export function ItemForm({
         // Barcode), einmal von Hand eingetippt (ohne). Als Vorschlag ist das
         // trotzdem ein Artikel, und "Margarine" zweimal untereinander sieht
         // aus wie ein Fehler. Der juengste Eintrag gewinnt, also der mit
-        // der Schreibweise, die zuletzt gespeichert wurde.
+        // der Schreibweise, die zuletzt gespeichert wurde -- und die
+        // Reihenfolge ist zugleich die der zuletzt benutzten Produkte.
         const byName = new Map<string, string>();
         for (const entry of [...entries].sort(
           (a, b) =>
@@ -269,9 +279,10 @@ export function ItemForm({
           const key = normalizeProductName(entry.name);
           if (!key || byName.has(key)) continue;
           byName.set(key, entry.name);
-          if (byName.size === SUGGESTION_COUNT) break;
         }
-        setSuggestions([...byName.values()]);
+        setKnownProducts(
+          [...byName].map(([key, label]) => ({ key, name: label })),
+        );
       })
       .catch(() => {
         // Ohne Vorschlaege tippt man eben -- kein Fehler, der jemanden interessiert.
@@ -279,7 +290,34 @@ export function ItemForm({
     return () => {
       active = false;
     };
-  }, [itemId, barcode]);
+  }, [itemId]);
+
+  /**
+   * Die drei Chips unter dem Namensfeld: bei leerem Feld die zuletzt
+   * benutzten Produkte, sobald getippt wird die passenden.
+   *
+   * Der Vorschlag ist mehr als Tipparbeit -- er trifft genau den Eintrag,
+   * unter dem die Liste Kategorie, Fach und Haltbarkeit gelernt hat. Wer
+   * "Mozza" tippt und den Rest selbst zu Ende schreibt, bekommt zwar
+   * denselben Namen, aber nur mit etwas Glueck dieselbe Schreibweise.
+   */
+  const suggestions = useMemo(() => {
+    const typed = normalizeProductName(name);
+    if (typed.length === 0)
+      return knownProducts.slice(0, SUGGESTION_COUNT).map((e) => e.name);
+    if (typed.length < SEARCH_FROM_CHARS) return [];
+    const hits = knownProducts.filter(
+      (entry) => entry.key !== typed && entry.key.includes(typed),
+    );
+    // Was vorn passt, passt besser: "Mozza" meint eher "Mozzarella 125g" als
+    // "Buffet-Platte mit Mozzarella". Innerhalb beider Gruppen bleibt die
+    // Reihenfolge nach zuletzt benutzt.
+    return hits
+      .filter((entry) => entry.key.startsWith(typed))
+      .concat(hits.filter((entry) => !entry.key.startsWith(typed)))
+      .slice(0, SUGGESTION_COUNT)
+      .map((entry) => entry.name);
+  }, [knownProducts, name]);
 
   function leave(target?: string) {
     const destination = target ?? redirectTo;
@@ -287,12 +325,30 @@ export function ItemForm({
     else router.back();
   }
 
+  /**
+   * Uebernimmt eine Kategorie -- und mit ihr das, was aus ihr folgt: das
+   * geschaetzte MHD und das Fach, in dem diese Kategorie ueblicherweise
+   * liegt.
+   *
+   * Nur eine eigene Auswahl des Nutzers (placeTouchedRef) haelt das Fach
+   * fest. Was die Liste ueber das Produkt gelernt hat, fuellt die
+   * Erstbelegung (applyKnownProduct traegt es nach dieser Funktion ein),
+   * ueberlebt aber keinen aktiven Kategoriewechsel: wer selbst umsortiert,
+   * erwartet, dass das Fach mitgeht, statt sichtbar falsch stehen zu
+   * bleiben.
+   */
   function applyCategory(value: string, list: CategoryOption[] = categoryList) {
     setCategory(value);
+    const option = list.find((c) => c.key === value);
+
     if (!dateTouched) {
-      const shelfLifeDays =
-        list.find((c) => c.key === value)?.shelfLifeDays ?? 14;
-      setExpiryDate(toDateInputValue(estimateExpiryDate(shelfLifeDays)));
+      setExpiryDate(
+        toDateInputValue(estimateExpiryDate(option?.shelfLifeDays ?? 14)),
+      );
+    }
+
+    if (!placeTouchedRef.current && option?.defaultPlaceId != null) {
+      setPlaceId(option.defaultPlaceId);
     }
   }
 
@@ -311,7 +367,10 @@ export function ItemForm({
   function handleCategoryChange(value: string) {
     categoryTouchedRef.current = true;
     setLearnedCategory(null);
-    applyCategory(value);
+    // Zieht das Standardfach der neuen Kategorie nach, siehe applyCategory.
+    // learnedPlace bleibt stehen und korrigiert sich selbst: der Hinweis
+    // haengt daran, dass der gelernte Ort auch der gewaehlte ist.
+    applyCategory(value, categoryList);
   }
 
   function handlePlaceChange(value: number) {
@@ -479,7 +538,7 @@ export function ItemForm({
             autoFocus={!itemId && !initialName}
             className="h-14 rounded-[18px] border-border bg-card px-4 text-base font-semibold"
           />
-          {!itemId && !name && suggestions.length > 0 && (
+          {!itemId && suggestions.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-0.5">
               {suggestions.map((suggestion) => (
                 <button
@@ -495,34 +554,9 @@ export function ItemForm({
           )}
         </Field>
 
-        {places.length > 0 && (
-          <Field label="Wo liegt es?">
-            <div className="flex flex-wrap gap-2">
-              {places.map((place) => (
-                <Chip
-                  key={place.id}
-                  active={placeId === place.id}
-                  // Kein Abwaehlen mehr: der Ort ist Pflicht, und ein zweites
-                  // Antippen fuehrte sonst in einen Zustand zurueck, den das
-                  // Speichern gleich wieder anmahnt.
-                  onClick={() => handlePlaceChange(place.id)}
-                  className="h-10 flex-1 px-2.5 text-xs"
-                >
-                  {place.name}
-                </Chip>
-              ))}
-            </div>
-            {/* Sind beide Felder uebernommen, sagt es der Hinweis unter der
-                Kategorie in einem Satz -- zweimal derselbe Satz untereinander
-                liest sich wie ein Fehler. */}
-            {placeLearned && !categoryLearned && (
-              <LearnedHint>
-                Der Ort stammt aus deinem letzten Eintrag zu diesem Artikel.
-              </LearnedHint>
-            )}
-          </Field>
-        )}
-
+        {/* Die Kategorie steht ueber dem Ort, weil sie ihn beantwortet: jede
+            Kategorie kennt ihr Standardfach, und wer von oben nach unten
+            arbeitet, soll die Frage nicht zweimal gestellt bekommen. */}
         <Field label="Kategorie">
           <div className="flex flex-wrap gap-2">
             {categoryList.map((option) => (
@@ -548,15 +582,46 @@ export function ItemForm({
               Neue Kategorie
             </button>
           </div>
-          {categoryLearned && (
+          {/* Sind beide Felder uebernommen, sagt es der Hinweis unter dem Ort
+              in einem Satz -- er steht unter dem unteren der beiden Felder,
+              damit er nichts ankuendigt, was noch gar nicht zu sehen war.
+              Hat die Liste kein einziges Fach, gibt es kein Ortsfeld und der
+              Satz steht hier. */}
+          {categoryLearned && (!placeLearned || places.length === 0) && (
             <LearnedHint>
-              {placeLearned
-                ? "Ort und Kategorie stammen"
-                : "Die Kategorie stammt"}{" "}
-              aus deinem letzten Eintrag zu diesem Artikel.
+              Die Kategorie stammt aus deinem letzten Eintrag zu diesem
+              Artikel.
             </LearnedHint>
           )}
         </Field>
+
+        {places.length > 0 && (
+          <Field label="Wo liegt es?">
+            <div className="flex flex-wrap gap-2">
+              {places.map((place) => (
+                <Chip
+                  key={place.id}
+                  active={placeId === place.id}
+                  // Kein Abwaehlen mehr: der Ort ist Pflicht, und ein zweites
+                  // Antippen fuehrte sonst in einen Zustand zurueck, den das
+                  // Speichern gleich wieder anmahnt.
+                  onClick={() => handlePlaceChange(place.id)}
+                  className="h-10 flex-1 px-2.5 text-xs"
+                >
+                  {place.name}
+                </Chip>
+              ))}
+            </div>
+            {placeLearned && (
+              <LearnedHint>
+                {categoryLearned
+                  ? "Ort und Kategorie stammen"
+                  : "Der Ort stammt"}{" "}
+                aus deinem letzten Eintrag zu diesem Artikel.
+              </LearnedHint>
+            )}
+          </Field>
+        )}
 
         <Field label="Menge">
           <div className="flex h-14 w-fit items-center gap-1 rounded-[18px] border border-border bg-card px-1.5">
