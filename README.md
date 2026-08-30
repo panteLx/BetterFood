@@ -44,7 +44,7 @@ App läuft auf `http://localhost:3000`.
 
 ```bash
 npm run build        # Produktions-Build
-npm run start        # Produktions-Server
+npm run start        # Produktions-Server (warnt wegen output: "standalone", läuft aber)
 npm run lint         # ESLint
 npm run icons        # App-Icons aus dem Blatt-Zeichen neu bauen (braucht ImageMagick)
 npm run db:generate  # Migration aus Schema-Änderungen generieren
