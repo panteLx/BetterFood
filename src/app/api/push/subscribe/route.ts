@@ -30,11 +30,19 @@ export async function POST(req: NextRequest) {
       auth: keys.auth,
       createdAt: new Date(),
       userId: session.user.id,
+      sessionId: session.session.id,
     });
-  } else if (existing.userId !== session.user.id) {
+  } else if (
+    existing.userId !== session.user.id ||
+    existing.sessionId !== session.session.id
+  ) {
+    // Auch bei gleichbleibendem Konto neu binden: nach jeder Anmeldung ist
+    // die Sitzung eine andere, und nur ueber die aktuelle haengt die
+    // Push-Anmeldung mit, wenn dieses Geraet in den Kontoeinstellungen
+    // abgemeldet wird.
     await db
       .update(pushSubscriptions)
-      .set({ userId: session.user.id })
+      .set({ userId: session.user.id, sessionId: session.session.id })
       .where(eq(pushSubscriptions.id, existing.id));
   }
 

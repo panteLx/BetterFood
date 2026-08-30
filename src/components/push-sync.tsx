@@ -16,24 +16,30 @@ import { syncPushSubscription } from "@/lib/push-client";
  */
 export function PushSync() {
   const { data: session } = useSession();
-  const userId = session?.user.id;
+  // Die Sitzung als Merker, nicht das Konto: ein Passwortwechsel mit "auf
+  // allen anderen Geräten abmelden" tauscht auch die eigene Sitzung aus, und
+  // die Push-Anmeldung dieses Geräts hängt seitdem mit ON DELETE CASCADE an
+  // der alten. Am Konto festgemacht hielte der Merker den Abgleich für
+  // erledigt -- und dieses Gerät bekäme bis zum nächsten Neuladen keine
+  // Erinnerungen mehr.
+  const sessionId = session?.session.id;
   const syncedFor = useRef<string | null>(null);
 
   useEffect(() => {
     // Abgemeldet: Merker zurücksetzen, sonst würde eine erneute Anmeldung
     // desselben Kontos im selben Tab als "schon erledigt" durchgehen.
-    if (!userId) {
+    if (!sessionId) {
       syncedFor.current = null;
       return;
     }
 
-    if (syncedFor.current === userId) return;
-    syncedFor.current = userId;
+    if (syncedFor.current === sessionId) return;
+    syncedFor.current = sessionId;
 
     syncPushSubscription().catch(() => {
       syncedFor.current = null;
     });
-  }, [userId]);
+  }, [sessionId]);
 
   return null;
 }
