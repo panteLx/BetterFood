@@ -16,10 +16,7 @@ import {
   seedDefaultCategories,
   seedDefaultPlaces,
 } from "@/lib/data";
-
-const oidcConfigured = Boolean(
-  process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET,
-);
+import { isOidcConfigured, oidcDisplayName } from "@/lib/oidc";
 
 type Headerish = { get(name: string): string | null };
 
@@ -122,13 +119,13 @@ export const auth = betterAuth({
   },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
-  plugins: oidcConfigured
+  plugins: isOidcConfigured()
     ? [
         genericOAuth({
           config: [
             {
               providerId: "oidc",
-              name: process.env.NEXT_PUBLIC_OIDC_DISPLAY_NAME ?? "SSO",
+              name: oidcDisplayName(),
               discoveryUrl: `${process.env.OIDC_ISSUER}/.well-known/openid-configuration`,
               clientId: process.env.OIDC_CLIENT_ID!,
               clientSecret: process.env.OIDC_CLIENT_SECRET!,
