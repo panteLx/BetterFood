@@ -243,6 +243,19 @@ Single Docker container (`Dockerfile`, `compose.yaml`), `data/` volume for the S
 documented in `.env.example`. The runner stage drops to `USER node`, so an existing volume needs a
 one-off `chown -R 1000:1000`.
 
+The runner gets **only `.next/standalone`** (`output: "standalone"`) plus three things tracing leaves
+out and the Dockerfile copies back: `public/`, `.next/static`, and `drizzle/` — migrations are
+runtime input, not code, so no trace ever mentions them. Hence `node server.js`, not `next start`
+(which still works locally, with a warning), and `HOSTNAME=0.0.0.0`, without which it binds to
+localhost. `npm ci` and `.next/cache` run on cache mounts: present during the build, in no layer
+after. No build toolchain — better-sqlite3 downloads a prebuild, so a failed download breaks `npm ci`
+loudly instead of the runtime quietly. `--webpack` stays: next-pwa is a webpack plugin, and Turbopack
+would silently produce no service worker.
+
+CI caches to a **registry tag** (`:buildcache`), not the Actions cache: that one is scoped per branch,
+so main after a merge could never read what the merged PR built, and its `mode=max` export cost a
+third of the run.
+
 Security headers (CSP, `frame-ancestors 'none'`, `Referrer-Policy`, HSTS in production only) live in
 `next.config.ts`'s `headers()`. `script-src`/`style-src` need `'unsafe-inline'` — Next streams inline
 scripts and styles; `connect-src` stays `'self'` because Open Food Facts is queried server-side.
