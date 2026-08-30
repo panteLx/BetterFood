@@ -8,6 +8,7 @@ import { Chip, Segment } from "@/components/ui/chip";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
+import { ListSwitcher } from "@/components/list-switcher";
 import {
   resolveItem,
   resolveVerb,
@@ -15,7 +16,7 @@ import {
   type ResolveStatus,
 } from "@/lib/item-actions";
 import { URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
-import type { Category, Item, Place } from "@/db/schema";
+import type { Category, Item, List, Place } from "@/db/schema";
 
 type StatusFilter = "alle" | "bald" | "abgelaufen";
 type Grouping = "ablauf" | "ort" | "kategorie";
@@ -54,12 +55,16 @@ export function InventoryList({
   categories,
   places,
   initialStatus = "alle",
+  lists,
+  activeListId,
 }: {
   initialItems: Item[];
   categories: Pick<Category, "key" | "label">[];
   places: Pick<Place, "id" | "name">[];
   /** Vorbelegter Filter -- die Zaehler auf der Startseite verlinken direkt hierher. */
   initialStatus?: StatusFilter;
+  lists: ListWithCounts[];
+  activeListId: number;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
@@ -194,7 +199,7 @@ export function InventoryList({
   if (items.length === 0) {
     return (
       <div className="flex flex-1 flex-col px-5 pt-2">
-        <Header total={0} shown={0} />
+        <Header total={0} shown={0} lists={lists} activeListId={activeListId} />
         <EmptyState
           className="mt-8"
           icon={Package}
@@ -209,7 +214,12 @@ export function InventoryList({
   return (
     <div className="flex flex-1 flex-col gap-3.5 pt-2">
       <div className="px-5">
-        <Header total={items.length} shown={pool.length} />
+        <Header
+          total={items.length}
+          shown={pool.length}
+          lists={lists}
+          activeListId={activeListId}
+        />
       </div>
 
       <div className="px-5">
@@ -295,19 +305,43 @@ export function InventoryList({
   );
 }
 
-function Header({ total, shown }: { total: number; shown: number }) {
+type ListWithCounts = Pick<List, "id" | "name"> & {
+  itemCount: number;
+  memberCount: number;
+};
+
+// Der Listenwechsel steht hier wie auf der Startseite rechts neben der
+// Ueberschrift: der Vorrat IST der Inhalt einer Liste, und wer ihn ansieht,
+// ist genau der, der die Liste wechseln will -- ihn dafuer erst auf die
+// Startseite zu schicken, war ein Umweg ohne Grund. Er gehoert auch in den
+// leeren Zustand: eine Liste kann leer sein, waehrend die andere voll ist,
+// und dann ist der Wechsel die einzige sinnvolle Handlung auf der Seite.
+function Header({
+  total,
+  shown,
+  lists,
+  activeListId,
+}: {
+  total: number;
+  shown: number;
+  lists: ListWithCounts[];
+  activeListId: number;
+}) {
   return (
-    <div>
-      <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
-      <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
-        {total === 0 ? (
-          "Noch nichts erfasst"
-        ) : (
-          <>
-            {shown} von {total} Artikeln
-          </>
-        )}
-      </p>
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
+        <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
+          {total === 0 ? (
+            "Noch nichts erfasst"
+          ) : (
+            <>
+              {shown} von {total} Artikeln
+            </>
+          )}
+        </p>
+      </div>
+      <ListSwitcher activeListId={activeListId} lists={lists} />
     </div>
   );
 }

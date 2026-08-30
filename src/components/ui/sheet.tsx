@@ -42,7 +42,7 @@ export function Sheet({
         <DialogPopup
           showClose={false}
           className={cn(
-            "top-auto bottom-0 left-1/2 max-h-[92dvh] w-full max-w-md translate-y-0 flex-col gap-0 overflow-y-auto rounded-3xl rounded-b-none border-x-0 border-b-0 bg-card p-4 pt-3 pb-[calc(2rem+env(safe-area-inset-bottom))]",
+            "top-auto bottom-0 left-1/2 max-h-[92dvh] w-full max-w-md translate-y-0 flex-col gap-0 overflow-y-auto rounded-3xl rounded-b-none border-x-0 border-b-0 bg-card p-4 pt-3 pb-[max(env(safe-area-inset-bottom),2rem)]",
             className,
           )}
         >

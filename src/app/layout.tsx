@@ -35,9 +35,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Kein maximumScale: Pinch-Zoom bleibt erlaubt (WCAG 1.4.4) -- bei einer
-  // App, deren Kerninhalt kleingedruckte Haltbarkeitsangaben sind, trifft die
-  // Sperre genau die Nutzer, die sie am noetigsten brauchen.
+  // Zoom app-weit gesperrt: die Oberflaeche ist eine installierte PWA mit
+  // fester Spaltenbreite, und dort ist jedes versehentliche Aufziehen ein
+  // verrutschtes Layout, aus dem man sich per Hand wieder herauszoomen muss.
+  // Dieselbe Sperre haelt zugleich iOS davon ab, beim Fokussieren eines
+  // Eingabefeldes hineinzuzoomen.
+  maximumScale: 1,
+  userScalable: false,
   //
   // viewportFit "cover" ist die Voraussetzung dafuer, dass env(safe-area-
   // inset-*) auf Geraeten mit Home-Indikator ueberhaupt einen Wert > 0

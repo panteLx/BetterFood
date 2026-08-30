@@ -221,6 +221,14 @@
   }
   html {
     @apply font-sans;
+    /* Die Zoom-Sperre steht im Viewport-Meta (layout.tsx). iOS Safari
+       ignoriert user-scalable=no im Browser-Tab jedoch bewusst -- dort haelt
+       erst touch-action die Aufziehgeste auf. pan-x pan-y laesst Scrollen in
+       beide Richtungen zu, also auch die Wischgesten der Vorratszeilen, und
+       nimmt nur Pinch und Doppeltipp-Zoom heraus. */
+    touch-action: pan-x pan-y;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   /* Die Oberflaeche lebt von halbfetten Labels und sehr fetten Ueberschriften
      -- Manrope liefert beides bis 800. */

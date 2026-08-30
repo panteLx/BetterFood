@@ -95,8 +95,23 @@ function AddOptionsSheet({
   );
 }
 
-/** Der zentrale Knopf der Navigationsleiste. */
-export function AddActionSheet() {
+/**
+ * Der zentrale Knopf der Navigationsleiste.
+ *
+ * Er sass frueher als ueberstehender FAB auf der Leiste. Seit die Leiste eine
+ * schwebende Insel ist, hat er dort keinen Boden mehr, auf dem er aufliegen
+ * koennte -- er haette ueber einer Luecke gehangen. Jetzt steht er in der
+ * Reihe, gleich gross wie die vier Ziele, und bleibt trotzdem die primaere
+ * Aktion: er ist das einzige gefuellte Element zwischen vier dünn
+ * gezeichneten Umrissen.
+ *
+ * className, damit derselbe Knopf auch als groesserer Einzelgaenger unten
+ * rechts auftreten kann, wenn die Leiste beim Lesen weggefahren ist (siehe
+ * bottom-nav.tsx). Es bleibt bewusst derselbe Knopf mit demselben Sheet: zwei
+ * Wege zum Hinzufuegen, die sich unterschiedlich verhalten, waeren einer zu
+ * viel.
+ */
+export function AddActionSheet({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -105,9 +120,13 @@ export function AddActionSheet() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Artikel hinzufügen"
-        className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-primary text-primary-foreground shadow-[0_10px_24px_rgb(30_80_50/0.32)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        title="Artikel hinzufügen"
+        className={cn(
+          "flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary text-primary-foreground shadow-[0_4px_12px_rgb(30_80_50/0.28)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          className,
+        )}
       >
-        <Plus className="size-7.5" strokeWidth={2.3} />
+        <Plus className="size-6" strokeWidth={2.4} />
       </button>
 
       <AddOptionsSheet open={open} onOpenChange={setOpen} />
