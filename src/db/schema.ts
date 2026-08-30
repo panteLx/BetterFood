@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { user } from "./auth-schema";
+import { session, user } from "./auth-schema";
 
 export * from "./auth-schema";
 
@@ -157,6 +157,15 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   auth: text("auth").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   userId: text("user_id").references(() => user.id),
+  // Welches Geraet -- genauer: welche Anmeldung -- diese Subscription
+  // gehoert. Ohne die Spalte ueberlebt die Push-Anmeldung eines Geraets, das
+  // in /settings/account rausgeworfen wurde, den Rauswurf und schickt weiter
+  // Erinnerungen. Nullable, weil Zeilen aus der Zeit davor keine Session
+  // mehr nennen koennen; sie binden sich beim naechsten Abgleich durch
+  // <PushSync /> von selbst nach.
+  sessionId: text("session_id").references(() => session.id, {
+    onDelete: "cascade",
+  }),
 });
 
 export const settings = sqliteTable(

@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import {
   Bell,
   ChevronRight,
@@ -15,8 +13,7 @@ import {
 import { useTheme } from "next-themes";
 import { LEAD_DAY_OPTIONS } from "@/lib/notification-settings";
 import { useIsClient } from "@/lib/use-is-client";
-import { unsubscribeFromPush } from "@/lib/push-client";
-import { authClient, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 
 /**
  * "Mehr" ist eine Verteilerseite, keine Sammelseite.
@@ -73,9 +70,7 @@ type SettingsSummary = {
 };
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { data: session } = useSession();
-  const [signingOut, setSigningOut] = useState(false);
   const [leadDaysLabel, setLeadDaysLabel] = useState<string>();
   const [activeListName, setActiveListName] = useState<string>();
 
@@ -137,21 +132,6 @@ export default function SettingsPage() {
     activeListName,
   };
 
-  async function handleSignOut() {
-    // Vor dem Abmelden, solange die Session den Löschaufruf noch autorisiert:
-    // sonst blieben die Erinnerungen dieses Kontos auf dem Gerät stehen.
-    setSigningOut(true);
-    const pushRemoved = await unsubscribeFromPush();
-    if (!pushRemoved) {
-      toast.warning(
-        "Benachrichtigungen konnten nicht vollständig abgemeldet werden.",
-      );
-    }
-    await authClient.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   const name = session?.user.name ?? "";
   const initials =
     name
@@ -165,8 +145,15 @@ export default function SettingsPage() {
     <div className="flex flex-1 flex-col gap-5 px-5 pt-2 pb-4">
       <h1 className="text-[26px] leading-tight">Einstellungen</h1>
 
+      {/* Die Karte ist selbst der Weg ins Konto -- dieselbe Bewegung wie
+          jede Zeile darunter. Vorher sass hier "Abmelden" als zweites Ziel
+          in derselben Flaeche; es steht jetzt am Ende von /settings/account,
+          bei allem anderen, was das Konto betrifft. */}
       {session && (
-        <div className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5">
+        <Link
+          href="/settings/account"
+          className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5"
+        >
           <span className="flex size-11.5 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-[17px] font-extrabold text-primary">
             {initials}
           </span>
@@ -178,15 +165,8 @@ export default function SettingsPage() {
               {session.user.email}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="h-9 shrink-0 rounded-[10px] border border-border bg-surface-2 px-3.5 text-[13px] font-semibold disabled:opacity-60"
-          >
-            Abmelden
-          </button>
-        </div>
+          <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
+        </Link>
       )}
 
       <section className="flex flex-col gap-2">

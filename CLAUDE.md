@@ -4,77 +4,214 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
-BetterFood ("Vorrat") is a self-hosted PWA for tracking household food inventory and expiry dates, with shared multi-user lists, barcode scanning (Open Food Facts lookup), and web push expiry reminders. German is the UI language — user-facing strings, error messages, and category data are German.
+BetterFood is a self-hosted PWA for household food inventory and expiry dates: shared
+multi-user lists, barcode scanning (Open Food Facts), PDF receipt import, web push reminders. German
+is the UI language (strings, errors, category data); code, comments and commits are English.
 
 ## Commands
 
-- `npm run dev` — dev server (PWA service worker is disabled in dev; see `next.config.ts`)
-- `npm run build` — production build. Uses `--webpack` explicitly, not the Turbopack default.
-- `npm run lint` — ESLint (flat config, `eslint.config.mjs`)
-- `npm run db:generate` — generate a Drizzle migration from schema changes in `src/db/schema.ts`
-- `npm run db:migrate` — apply pending migrations to `./data/food-tracker.db`
-- No test suite is configured in this repo.
+- `npm run dev` — dev server (PWA service worker disabled in dev, see `next.config.ts`)
+- `npm run build` — production build; uses `--webpack` explicitly, not the Turbopack default
+- `npm run lint` — ESLint (flat config)
+- `npm run db:generate` / `npm run db:migrate` — Drizzle migration from `src/db/schema.ts` / apply it
+- `npm run icons` — regenerate all app icons from `brand-mark.tsx` (needs ImageMagick for `.ico`)
+- No test suite is configured.
 
-## Architecture
+## Next.js 16 specifics
 
-**Next.js 16 with Cache Components.** `next.config.ts` sets `cacheComponents: true` and `partialPrefetching: true`. Data-fetching functions opt into caching explicitly with the `"use cache"` directive plus `cacheLife()`/`cacheTag()` (e.g. `src/lib/categories.ts`), and are invalidated on mutation via `revalidateTag`. `src/lib/session.ts`'s `requireSession()` uses `"use cache: private"` for per-session caching. Read `node_modules/next/dist/docs/` before touching caching or routing — this version's conventions (including `proxy.ts` replacing `middleware.ts`, see below) diverge from older Next.js knowledge.
+`cacheComponents: true`, `partialPrefetching: true`. Data fetching opts into caching explicitly with
+`"use cache"` + `cacheLife()`/`cacheTag()` (e.g. `src/lib/categories.ts`), invalidated on mutation
+via `revalidateTag`; `requireSession()` uses `"use cache: private"`. Read
+`node_modules/next/dist/docs/` before touching caching or routing — this version diverges from older
+knowledge (`proxy.ts` replaces `middleware.ts`).
 
-**Auth gating happens in `src/proxy.ts`** (the Next 16 rename of `middleware.ts`), which redirects unauthenticated requests to `/login` — or to `/welcome` (splash + four-slide onboarding) when the `bf_welcome_seen` cookie is missing, see `src/lib/welcome.ts`. That cookie is set by the proxy itself on the first *authenticated* request, not when the onboarding is dismissed: the intro repeats until an account actually exists, and both ways out of `/welcome` lead to `/register`. Exceptions: `PUBLIC_PREFIXES` (`/login`, `/register`, `/welcome`, `/api/auth`, `/api/cron`) and any path with a file extension (PWA/static assets). Nothing else is reachable without an account — scanning without logging in was removed, because a scan that lands nowhere only costs the walk to the camera. `/api/cron` is public because an external cron has no session cookie; it authenticates itself with `CRON_SECRET`.
+`params`/`searchParams` must be awaited **below** a `<Suspense>` boundary; the blocking form is
+rejected by "Instant Navigation" validation. Same for anything derived from `new Date()` — an
+unstable value aborts the prerender, so date-dependent rendering runs behind `useIsClient()` or takes
+the reference date as a prop.
 
-**Routes**: `/` is the overview (greeting, counters, freshness bar, then **two** preview sections — "Abgelaufen" with its full count beside the heading, at most two cards and a "noch N weitere" link, and "Als Nächstes dran" with the four nearest items that have *not* expired). One ranked urgency list did both jobs badly: with 28 expired articles it filled entirely with them, and what is due tomorrow appeared nowhere — expired stock is cleanup, the coming days are planning. The second section deliberately ignores `URGENT_WITHIN_DAYS`, because in a healthy stock nothing is due within three days and the section carrying the actual planning would stand empty; the card's own status pill names the state. The empty state is left for a genuinely empty stock only, `/inventory` the full stock (search, status segments, grouping by expiry/place/category), `/item/[id]` the item detail, `/saved` the post-capture confirmation (it offers the entry method just used again — `src/lib/entry-method.ts`, carried as `method` on the URL and as `via` into `/confirm`), `/archive`, `/receipt` (the receipt import), `/knowledge` (two tabs: **Sortierung** — the shelves with the categories that default to them — and **Produkte**, the learned products), and `/settings` as a hub over `/settings/reminders`, `/settings/appearance` and `/settings/lists`. Anything that takes over the screen (`/scan`, forms, `/item`, `/receipt`, `/welcome`, auth) is listed in `HIDDEN_PREFIXES` in `bottom-nav.tsx` and renders without the nav bar.
+## Auth and routing
 
-**`params`/`searchParams` must be awaited below a `<Suspense>` boundary** — Next 16's "Instant Navigation" validation rejects the blocking form. Same for anything derived from `new Date()`: an unstable value aborts the route's prerender, so date-dependent rendering runs behind `useIsClient()` (`src/lib/use-is-client.ts`) or takes the reference date as a prop.
+`src/proxy.ts` gates everything: unauthenticated requests go to `/login`, or to `/welcome` while the
+`bf_welcome_seen` cookie is missing (`src/lib/welcome.ts`). The proxy sets that cookie on the first
+_authenticated_ request, so the intro repeats until an account exists. Exceptions: `PUBLIC_PREFIXES`
+(`/login`, `/register`, `/welcome`, `/api/auth`, `/api/cron`) and any path with a file extension
+(static assets). `/api/cron` is public — an external cron has no session cookie and authenticates
+with `CRON_SECRET`.
 
-**Auth** is `better-auth` (`src/lib/auth.ts`) with the Drizzle adapter, email/password, and an optional generic OIDC/SSO plugin gated on `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` all being set. That gate is read at **runtime**, never at build time — `src/lib/oidc.ts` is the single place it lives, and `getOidcDisplayName()` (`await connection()`, called inside the `<Suspense>` boundary of `/login` and `/register`) is how the button reaches the client. It used to hang off `NEXT_PUBLIC_OIDC_DISPLAY_NAME`, which `next build` inlines into the client bundle: a Docker image built without SSO could never show the button, whatever the container's env said. The label (`OIDC_DISPLAY_NAME`, defaulting to "SSO") is now only ever read on the server, and it labels the button rather than gating it. A `databaseHooks.user.create.after` hook (`claimLegacyData`) runs on every new user: creates them their first list — named after the `householdName` the registration form sends, falling back to "Zuhause" for SSO sign-ups. The name travels in the sign-up request body and is read off the endpoint context (`readHouseholdName`); it deliberately has no user column, because after this moment `lists.name` is the only truth. The same hook — only if they're the very first user in the database — claims any pre-existing list-less rows (items/categories/push subscriptions from before multi-user support existed).
+Auth is `better-auth` (`src/lib/auth.ts`) with the Drizzle adapter, email/password and an optional
+OIDC plugin gated on `OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`. **That gate is read at
+runtime, never at build time** — `src/lib/oidc.ts` is the single place it lives, and
+`getOidcDisplayName()` (`await connection()`, inside `/login`'s and `/register`'s `<Suspense>`
+boundary) carries the label to the client. A `NEXT_PUBLIC_*` var would be inlined by `next build`, so
+a Docker image built without SSO could never show the button.
 
-**Data model** (`src/db/schema.ts`, `src/db/auth-schema.ts`): `lists` (owned, archivable) ← `listMembers` (join table) → users. `items`, `categories` and `places` all belong to a `listId`. `places` are the shelves the stock physically sits in (fridge / freezer / pantry, seeded from `DEFAULT_PLACES`); `items.placeId` is optional in the schema and falls back to null when a place is deleted — emptying a shelf must not take the food with it. The **form** requires a place whenever the list has any (`item-form.tsx`), but the API stays permissive: rows predating places, and lists whose shelves were all deleted, must still be saveable. `categories.defaultPlaceId` points the other way — the shelf a category usually lives on — and is nullable with the same `ON DELETE SET NULL`, for the same reason. A user has one `activeListId` (their currently-selected list); `src/lib/session.ts` (`requireActiveList`, `reassignActiveListAway`, `everyMemberHasAnotherActiveList`) handles picking/reassigning it and guards against leaving a member list-less when a list is archived or a membership is removed. `reassignActiveListAway` is intentionally synchronous — it's called inside `db.transaction(...)` and better-sqlite3 transaction callbacks must run fully synchronously.
+`databaseHooks.user.create.after` → `claimLegacyData` creates every new user's first list, named
+after the `householdName` from the registration body (`readHouseholdName`, "Zuhause" for SSO) —
+deliberately without a user column, since `lists.name` is the only truth afterwards. For the very
+first user it also claims list-less rows from before multi-user support.
 
-**Migrations**: hand-write nothing under `drizzle/` — always run `db:generate` after a schema change. One exception, and it bites silently: for a new foreign-key column drizzle-kit emits `ALTER TABLE … ADD COLUMN … REFERENCES x(id)` **without** the `ON DELETE` action, so the column ends up NO ACTION even though the schema says otherwise. SQLite accepts the action in `ADD COLUMN`, so add it to the generated line by hand (see `0008`, and `0010` for `categories.default_place_id` — which also carries its one-time backfill as further statements in the same file, deliberately not as a boot backfill that would keep rewriting a value the user cleared). Where it already went wrong, the fix is a table rebuild (`--custom` migration, 12-step pattern, see `0009` for `items.place_id` — without it, deleting a shelf that still held food failed with a foreign-key error). In production, migrations run at boot via `src/instrumentation.ts` → `src/instrumentation.node.ts`, gated on `RUN_MIGRATIONS=true` (see `Dockerfile`/`compose.yaml`); locally use `npm run db:migrate`.
+**Account self-service** (`/settings/account`): the name goes through `authClient.updateUser` (it
+rewrites the session cookie); e-mail and password need own routes under `/api/account/`, for three
+reasons. `changeEmail` sits under `user.changeEmail` and works without a mailer only via
+`updateEmailWithoutVerification` — i.e. only while `emailVerified` stays false — and reports success
+on an already-taken address, so the route pre-checks that and demands the password. `changePassword`
+with `revokeOtherSessions` mints its replacement session **without** a request, so the route writes
+user-agent and IP back onto the row that has none. `/list-sessions` needs a session younger than
+`freshAge` (24 h) and returns plaintext tokens, so the device list reads the table itself and revokes
+by `id` — showing `createdAt`, since `updatedAt` only moves once per `updateAge` and "last active"
+would be up to a day off. Both routes verify the password through `auth.api.*`, which bypasses
+better-auth's rate limiter, hence `src/lib/attempt-limit.ts`. Whether e-mail and password are
+editable is one question (`src/lib/account.ts`): is there a `credential` account with a password —
+SSO users have none. Errors inside a sheet render inline, not as a toast: the toast sits
+`bottom-center`, underneath the open sheet. `push_subscriptions.session_id` is `ON DELETE CASCADE`,
+so a revoked device goes quiet — which is why `<PushSync />` keys on the session id, revoking also
+drops rows still carrying `session_id IS NULL` (pre-`0011`, unattributable), and the client rebinds
+itself right after.
 
-**Categories**: `src/lib/categories.ts` holds the canonical `DEFAULT_CATEGORIES` (key, label, shelf-life days, `defaultPlace`) — the source of truth for the seed migration. Users can freely rename/add/delete categories after seeding, so don't assume `DEFAULT_CATEGORIES` reflects any given list's actual categories. `defaultPlace` names a shelf out of `DEFAULT_PLACES`; `applyDefaultCategoryPlaces(listId)` resolves it to an id after **both** seeds have run (call order between the two doesn't matter) and only fills rows that are still null. It is edited per category in `/knowledge` → `sorting-manager.tsx`, and "no default shelf" is a valid answer — `Sonstiges` ships that way, because the category says nothing about where the thing lives.
+**Routes**: `/` overview, `/inventory`, `/item/[id]`, `/saved` (post-capture confirmation, which
+re-offers the entry method just used — `src/lib/entry-method.ts`), `/archive`, `/receipt`,
+`/knowledge`, `/settings` over `reminders`/`appearance`/`lists`/`account`. Anything taking over the screen
+(`/scan`, forms, `/item`, `/receipt`, `/welcome`, auth) is in `HIDDEN_PREFIXES` in `bottom-nav.tsx`
+and renders without the nav bar.
 
-**The sorting scheme is one screen, not two lists.** `/knowledge` → *Sortierung* (`sorting-manager.tsx`) shows every shelf as a heading with the categories that default to it underneath, plus an "Ohne Standardfach" group; it replaced the separate `category-manager.tsx`/`place-manager.tsx` tabs, which described the same relationship twice from both ends. Both halves stay fully editable — a sheet per category (name, shelf life, shelf, delete) and per shelf (name, delete) — and `+ Kategorie` inside a group creates it with that shelf preselected. Grouping runs over the **place list**, not over `defaultPlaceId`, so a category still pointing at a deleted shelf lands in "Ohne Standardfach" instead of a phantom group. `DELETE /api/places/[id]` revalidates the categories tag as well: `ON DELETE SET NULL` changes category rows that route never touched.
+## Data model
 
-**Category and place preselection are learned, never guessed.** `product_knowledge` (one row per list × product, keyed by barcode or by `nameKey` = `normalizeProductName(name)`) records how a household sorts a product — its category and the shelf it goes on (`placeId`). Both answer the same question and both come back on the next entry; the form applies them independently, so a hand-picked category doesn't cost you the learned place. The shelf is prefilled with a three-step precedence — what the list learned about **this product** beats the **category's** default shelf beats nothing — and that prefill is the same in `item-form.tsx` and in `POST /api/receipt/parse`. From there on, only a shelf the user picked **by hand** is permanent (`placeTouchedRef` in the form, `placeTouched` per line in the receipt): an actively changed category always drags its default shelf along (`applyCategory`, `withCategory`), even over a learned one. The learned shelf used to win there too, on the argument that product knowledge is specific and a category default only a convention — in the hand it read as a broken field: you re-sort an item and the shelf stays visibly wrong. Because the category fills in the shelf, it is asked **first** — in `item-form.tsx` and in the receipt review alike; the joint "learned" hint therefore sits under the *lower* of the two fields, so it never announces one that isn't on screen yet. Every item save calls `rememberProduct`; `lookupKnownProduct` reads it back via `GET /api/items/known`, which `ItemForm` calls from the client — deliberately not a server-rendered prop, because `<Activity>` keeps a navigated-away `/confirm` alive and it would show a stale answer. A product the list has never seen gets no preselected category and no expiry date. The same table feeds the three chips under the name field: with the field empty they are the products used last, and from two typed characters they are the ones matching what is being typed (`normalizeProductName`, prefix hits first) — picking one is worth more than the typing it saves, because it hits the very entry the category, shelf and shelf life were learned under. There is no OFF-tag heuristic any more; it was removed because it was wrong too often and cannot work with user-defined categories. `/knowledge` (`knowledge-manager.tsx`) is where both halves — the sorting scheme and the learned products — are edited, and a learned product's category *and* place are both correctable there (`PATCH /api/knowledge/[id]` takes `placeId`, with `null` meaning "no shelf learned"); a correction changes only the next entry, never items already in stock; `backfillProductKnowledge()` runs once at boot (`src/instrumentation.ts`) to seed the table from pre-existing item history.
+`src/db/schema.ts` / `src/db/auth-schema.ts`: `lists` (owned, archivable) ← `listMembers` → users;
+`items`, `categories` and `places` all belong to a `listId`. `places` are the physical shelves
+(seeded from `DEFAULT_PLACES`); `items.placeId` is nullable with `ON DELETE SET NULL`, since emptying
+a shelf must not delete the food. The _form_ requires a place whenever the list has any
+(`item-form.tsx`), but the API stays permissive. `categories.defaultPlaceId` points the other way.
 
-**Barcode scanning**: `/scan` uses `@zxing` client-side, then `src/lib/off.ts` looks up the barcode against the Open Food Facts API to prefill name/category on `/confirm` and `/add`. Both the page and `GET /api/lookup` require a session.
+A user has one `activeListId`; `src/lib/session.ts` (`requireActiveList`, `reassignActiveListAway`,
+`everyMemberHasAnotherActiveList`) picks and reassigns it and guards against leaving a member
+list-less. `reassignActiveListAway` is intentionally synchronous: it runs inside `db.transaction(…)`,
+whose better-sqlite3 callbacks must be fully synchronous.
 
-**Receipt import** (`/receipt`): a whole shop at once, from a delivery service's PDF invoice. The missing EAN costs nothing — `product_knowledge` is keyed by barcode *or* `nameKey`, and `lookupKnownProduct` matches barcode rows by name too, so a receipt line hits the very entry an earlier scan wrote. Parsing is server-side (`unpdf`, pure JS, no native deps, nothing to configure for webpack or Docker) and the file is read in memory and never stored — a receipt carries the customer's name and address. `src/lib/receipt/` is three thin layers: `layout.ts` rebuilds the printed lines from pdf.js text fragments (cluster by y, sort by x, a gap wider than ~0.55× the font height becomes the two spaces that mark a column — i.e. `pdftotext -layout`), `parse.ts` reads a row as `Name ␣␣ Menge ␣ MwSt ␣ Einzelpreis ␣ Gesamt` and drops deposit/fee/credit lines (reported as `ignored`, never silently), `profiles.ts` only supplies the date and receipt-number labels per retailer. Numbered capture groups, not named ones: `tsconfig` targets ES2017. A weight in the quantity column ("600g") means one item and goes in `note`, **not** in the name — the name is the learning key and must not change with every shop. All expiry dates are computed from the invoice's delivery date, not today. `POST /api/receipt/parse` returns a proposal per line (learned category/shelf pre-filled) and **every line arrives checked**. The VAT class no longer preselects anything — it used to leave 19 % lines unchecked, which quietly dropped every soft drink; it now only carries a dismissable "vermutlich kein Lebensmittel" hint on lines the list doesn't know yet, with an *Abwählen* button right in it, because a forgotten article costs more than one you have to untick. A product the list already knows never gets that hint again — importing it once *is* the "this is food" marker, which is why no `nonFood` column exists. `POST /api/items/import` writes the confirmed lines in one transaction — which is why `rememberProduct` is synchronous and takes an `Executor` — and shares the merge rule with the single-item `POST /api/items` through `findMergeTarget` (`src/lib/item-merge.ts`, pure, because the two callers fetch their candidates differently: per category vs. once for the whole receipt). Import stays blocked while a checked line has no category.
+**Migrations**: never hand-write under `drizzle/`, run `db:generate` after every schema change. One
+exception bites silently: for a new foreign-key column drizzle-kit emits
+`ADD COLUMN … REFERENCES x(id)` **without** the `ON DELETE` action, leaving it NO ACTION — SQLite
+accepts it there, so add it to the generated line by hand (`0008`/`0010`); where it already went
+wrong, use a `--custom` table rebuild (`0009`). In production migrations run at boot via
+`src/instrumentation.ts` → `.node.ts`, gated on `RUN_MIGRATIONS=true`.
 
-**The review screen is four sections, not one list.** In receipt order 34 identical-looking rows hide the six that still need something, so the lines sort themselves into the order in which they get answered: *Vermutlich kein Lebensmittel* (the unknown 19 % lines, name and the only two answers there are — out, or "doch, ist eins"), *Braucht noch eine Kategorie*, *Kommt in den Vorrat*, and a collapsed *Nicht dabei*. Empty sections disappear, each heading carries its count, and an answered line moves to its new section at once — the warning counts visibly shrink. "Gehört das überhaupt in den Vorrat?" comes before "wohin gehört es?", which is why the suspicion is a section above rather than a band inside the row; that also keeps the category lock from suggesting a category for the toilet paper. The footer warning counts the two groups separately, because a total larger than any heading would send the reader looking for the difference. Above the list, one button flips every line at once (*Alle abwählen* / *Alle anwählen*) — the fast path for the opposite way round: throw everything out, then tick the ten things that really go in.
+## Categories, places and learned knowledge
 
-Within a row the screen asks one question at a time: category first (full width), and only once it is answered do shelf and expiry date appear — both prefilled from it, both editable, and a hand-set date survives a later category change (`expiryOverride`, the same rule as `dateTouched` in the form). **The expiry date follows the category in one move**: picking a category in a row's sheet immediately opens the `DateSheet` for that same line, product name in the title (`DateSheet` takes an optional `title`), the newly computed date preselected — confirm, correct, or swipe away. Otherwise the row jumps into a different section the moment it gets a category, and correcting the estimated date would mean hunting it down again; the estimate is wrong often enough that nobody would. A line that already carries a hand-set date is not asked again, the same rule by which `expiryOverride` survives a category change. **The bulk assignment chains the same way — one line at a time.** After a category for the marked lines the same `DateSheet` walks them, each with its own name in the title and a "· noch N" saying how many follow (`dateQueue`). One shared date for everything marked was a single sheet and was wrong in the quiet direction: it hit the six yoghurts out of the crate, and unseen behind it the butter beside them. Walking costs nothing where it matters, because the last date **actively picked** becomes the proposal for the next line (`carriedDate`) — the crate stays one tap per line. Merely confirming an estimate does not carry, or a queue clicked through over mixed categories would silently end up with one date everywhere. A line's own hand-set date beats the carried one, and a line that has one is skipped entirely (`expiryOverride`, the rule above). Confirming and correcting both step on, swiping away ends the whole walk and the rest keep their computed dates — which is why the sheet's self-close after `onConfirm` must not be read as an abort (`advancingRef`). A bulk *shelf* still does not chain — where a thing sits says nothing about how long it keeps. The name is its own button (tap to rename inline) rather than a pencil beside it, and the quantity has a stepper, so a receipt line for 2 can be entered as 1. A rename is only worth anything if it survives: `POST /api/items/import` therefore takes the line's `rawName` and, when it differs from the edited name, writes a **second** `product_knowledge` row keyed by the raw receipt wording but carrying the household's name (`rememberProduct`'s `lookupName`) — otherwise the next invoice would arrive as "KAROTTE SNACK RL" all over again.
+`src/lib/categories.ts` holds the canonical `DEFAULT_CATEGORIES` (key, label, shelf-life days,
+`defaultPlace`) — source of truth for the seed migration only; users rename/add/delete freely
+afterwards, so never assume it reflects a given list. `applyDefaultCategoryPlaces(listId)` resolves
+`defaultPlace` to an id after both seeds have run (call order irrelevant) and only fills rows still
+null. `/knowledge` → _Sortierung_ (`sorting-manager.tsx`) groups over the **place list**, not over
+`defaultPlaceId`, so a category pointing at a deleted shelf lands in "Ohne Standardfach" rather than
+a phantom group; `DELETE /api/places/[id]` also revalidates the categories tag, because
+`ON DELETE SET NULL` changes category rows that route never touches.
 
-Bulk edits run through a visible **selection mode** ("Mehrere bearbeiten" above the list, the only way in — the missing-category warning in the footer is text, not a second entrance). Two words, kept apart on purpose: a line is *übernommen* (it goes into the stock, `included`) or *markiert* (a bulk action will hit it, `selected`). Both were once called "ausgewählt", and after a bulk uncheck a row stayed marked *and* dimmed — it read as half-ticked. In selection mode every row shrinks to selector, name, one status line ("Milchprodukte · Kühlschrank") and the expiry date as its own right-hand column (mono, omitted where there is no category yet — the status line says "keine Kategorie" there anyway): stepper and pickers are not operable there and would only be noise, but the date has to be *readable*, or nobody can tell which of thirty estimates needs correcting. A column, not a third segment of the status line, so thirty dates compare at a glance. Marked is `bg-primary-tint` plus a filled circle; the sections stay, and each heading gains a *Diese N markieren* for its own lines — scoped in its own label, because two buttons reading "Alle markieren" with different reach was half the confusion. It is a toggle: with all its lines marked it reads *Markierung aufheben*, since a button asking to mark what is already marked reads as a bug. Not "abwählen" — that word belongs to the other question. **What has been dropped cannot be marked**: in selection mode the "Nicht dabei" section is not drawn at all, only a quiet "N Zeilen sind nicht dabei". That is what finally makes *alle* mean something — every line still in play — so the counter reads "31 von 31 markiert" and the toggle flips to "Keine markieren" instead of offering to re-mark lines the user has already answered. It also retires the button that flipped between *Übernehmen* and *Nicht übernehmen* under the finger: the reverse is unreachable now, and the way back is *Doch übernehmen* per row or *Alle zurückholen* in the "Nicht dabei" heading. The footer is three rows: the tally with the mark toggle and *Fertig*, then **one** button, *Einsortieren*, and below a hairline *Nicht übernehmen* as a quiet text button, which does something else entirely. Category, shelf and expiry once stood there as three equal buttons; two of them were only the rework of the first one's answer. *Einsortieren* asks the category, the shelf follows it as the category's default, and the date walk follows the shelf — a wrong shelf is corrected in the row itself, where a single line shows all three anyway. Both buttons clear the marks: the group is answered, and it should visibly leave the working area instead of being caught by the next bulk action. Assigning a category brings its default shelf along — that is the whole reason the cold start is bearable, one tap per group, and the date walk right after it turns the same group into one tap per line. It also answers the food question: a line that gets a category leaves "Vermutlich kein Lebensmittel" (`withCategory` sets `hintDismissed`), because sorting a thing into Milchprodukte has said everything about whether it belongs in the stock. Confirming an import that leaves lines out asks back (`ConfirmDialog` with `tone="primary"` — an incomplete import is hard to undo, not dangerous), because re-reading the same receipt later would sum the quantities of what is already in stock.
+**Category and place preselection are learned, never guessed.** `product_knowledge` (one row per
+list × product, keyed by barcode or `nameKey` = `normalizeProductName(name)`) records how a household
+sorts a product — category _and_ shelf, applied independently on the next entry. The shelf prefill
+follows a three-step precedence — what the list learned about **this product** > the **category's**
+default shelf > nothing — identical in `item-form.tsx` and `POST /api/receipt/parse`. Only a
+**hand-picked** shelf is permanent (`placeTouchedRef` / `placeTouched`); an actively changed category
+always drags its default shelf along (`applyCategory`, `withCategory`), which is why the category is
+asked **first**. There is deliberately no OFF-tag heuristic — it cannot work with user categories.
 
-The finished-state screen is reset when the route is hidden (`<Activity>` keeps it mounted), so coming back from the stock lands on the file picker again — but only the summary is dropped: a half-reviewed receipt survives a look at the stock. Duplicate-receipt protection via the invoice number is deliberately absent: the merge rule sums quantities visibly and the review screen is the human check.
+Every save calls `rememberProduct` (synchronous, takes an `Executor`, so the receipt import runs it
+in one transaction). `lookupKnownProduct` reads it back via `GET /api/items/known`, which `ItemForm`
+calls from the client — deliberately not a server prop, because `<Activity>` keeps a navigated-away
+`/confirm` alive and would show a stale answer.
 
-**Design tokens**: `src/app/globals.css` carries the green palette in both modes plus four roles beyond the shadcn set — `surface-2`, `faint`, `primary-tint`/`primary-inv` and the three expiry states `warning`/`danger` with their tints. That fresh / soon / expired split carries the whole interface (`STATUS_CLASSES` in `src/lib/expiry.ts`); never hard-code a hex value for it. Typography is Manrope (400–800) with JetBrains Mono for digit sequences only. `--radius` (14px) is the button radius the design uses everywhere a button sits inside a sheet, dialog or form footer — `rounded-lg`, not one of the larger card radii.
+## Capture paths
 
-**Elevation is a token, not a `shadow-[…]` in a component**, because the two modes solve it with different means: in the light mode a drop shadow lifts a card, on a dark ground it is nearly invisible and the work is done by a **light top edge** (`inset 0 1px 0 rgb(255 255 255 / .055)`). Four steps, all in `globals.css`: `shadow-card` (cards, dialogs, the active chip), `shadow-raise` (only the hairline, for stock rows — the full shadow is too heavy in a list, and in the light mode the value is `none`), `shadow-nav` and the two sizes of the add button, `shadow-action` in the bar and `shadow-fab` for the floating one, which in the dark mode is a glow in the accent colour rather than a black smudge. **Every dark value takes its hue from the light one** and changes only saturation and lightness, so the two modes stay one family: the surfaces (`#0b0d0c` → `#171b18` → `#222824`, `--popover` one step above the card) sit on the same green-grey as the light mode's *text* `#151c17`, the accent on the same hue as `#37714c`, the warning on the ochre of `#a9701a`, the danger on the terracotta of `#b24734`. What made the old dark mode look dated was not the hue but the amount: the same green at roughly twice the saturation turns olive on a dark ground, so the surfaces carry S≈8 % and colour is left to the accent. A cool blue-grey base is the other failure mode — it makes the green glow, but it is then a second, unrelated palette. For the same reason `--border` is an opaque toned value here and not white with alpha, which over a tinted surface degrades into a grey line.
+**Barcode scan** (`/scan`): `@zxing` client-side, then `src/lib/off.ts` against Open Food Facts to
+prefill name/category on `/confirm` or `/add`.
 
-**Name, titles and icons**: the app is called **BetterFood** everywhere — splash, home screen, browser tab, push notification. `src/lib/metadata.ts` holds `APP_NAME`/`APP_TITLE`/`APP_DESCRIPTION` and `TITLE_TEMPLATE` (`"%s · BetterFood"`); the root layout sets it as `title.template`, and every route adds only its own short title ("Vorrat", "Archiv", "Datenbank"). Careful with the template: as soon as a segment sets a `title` of its own, the parent's template stops applying below it — `settings/layout.tsx` therefore repeats `TITLE_TEMPLATE`, otherwise `/settings/reminders` would read plain "Erinnerungen". `/item/[id]` names itself after the item via `generateMetadata`, behind the same list boundary as the page. Pages that are Client Components (`/scan`, `/settings`, `/settings/reminders`, `/welcome`) cannot export `metadata`, so each has a `layout.tsx` that does nothing but carry the title. `public/manifest.json` repeats the same strings by hand — it is static JSON and can't import them. Nothing is indexable: `robots: { index: false }` in the root layout plus `src/app/robots.ts`. Deliberately no `metadataBase` and no OG image — the instance's public address is only known to the running container (`BETTER_AUTH_URL`), and a build-time read would bake `localhost` into every Docker image, the same trap the SSO button already fell into.
+**Receipt import** (`/receipt`): a whole shop from a delivery service's PDF invoice; the missing EAN
+costs nothing because `product_knowledge` also keys on `nameKey`. Parsing is server-side (`unpdf`,
+pure JS, nothing to configure) and the file is read in memory and never stored — a receipt carries
+name and address. `src/lib/receipt/` is three thin layers: `layout.ts` rebuilds printed lines from
+pdf.js fragments (cluster by y, sort by x, a gap wider than ~0.55× the font height becomes the two
+spaces marking a column, i.e. `pdftotext -layout`), `parse.ts` reads
+`Name ␣␣ Menge ␣ MwSt ␣ Einzelpreis ␣ Gesamt` and drops deposit/fee/credit lines (reported as
+`ignored`, never silently), `profiles.ts` supplies per-retailer labels. Use numbered capture groups
+(`tsconfig` targets ES2017). A weight in the quantity column ("600g") goes into `note`, **not** the
+name, which is the learning key; expiry dates come from the invoice's delivery date, not today.
 
-**Icons come out of `scripts/generate-icons.mjs`** (`npm run icons`), which draws every size from the one leaf path in `brand-mark.tsx` — hand-tuned PNGs drift apart across eight sizes. Three cuts, and they are not interchangeable: `icons/icon-*.png` (`purpose: any`) bring their own rounded corners because nothing masks them; `icons/maskable-*.png` are full-bleed with the mark at 40% so Android can cut any shape out of them; `apple-icon.png` is opaque and unrounded because iOS rounds it itself. Below ~20px outline and midrib merge into a blob, so the 16px favicon frame and the notification badge use the filled silhouette instead — and the badge is white-on-transparent, because Android recolours it to a flat silhouette and a green square would arrive as a grey smudge. The script needs ImageMagick for the `.ico` (sharp cannot write ICO) and skips it with a warning otherwise.
+`POST /api/receipt/parse` returns a proposal per line with learned category/shelf, and **every line
+arrives checked**; the VAT class only adds a dismissable "vermutlich kein Lebensmittel" hint on
+unknown lines (importing a product once is itself the "this is food" marker, hence no `nonFood`
+column). `POST /api/items/import` writes confirmed lines in one transaction and shares the merge
+rule with `POST /api/items` through `findMergeTarget` (`src/lib/item-merge.ts`, pure, because
+the callers fetch candidates differently); it stays blocked while a checked line has no category. A
+renamed line writes a **second** knowledge row keyed by the raw receipt wording but carrying the
+household's name (`rememberProduct`'s `lookupName`). Duplicate-receipt protection is deliberately
+absent — the merge rule sums visibly and the review screen is the check.
 
-**Toasts are inverted** (`src/components/ui/sonner.tsx`): `--foreground` as the surface, `--background` as the text, `--primary-inv` for the action label. A toast in card colour does not separate itself from the cards it appears over. Sonner's own rules are two attribute selectors deep, so anything they set (padding, font size, the icon, the filled action pill) needs Tailwind's `!` to override; the success icon is hidden that way, warning and error keep theirs. The bottom offset in `providers.tsx` clears the nav bar and the FAB that overhangs it.
+In the review screen (`receipt-import.tsx`) a row asks the category first, then shelf and expiry;
+picking a category immediately opens that line's `DateSheet`, and a hand-set date (`expiryOverride`)
+then survives every later category change. Bulk assignment chains one line at a time (`dateQueue`),
+carrying over the last **actively picked** date (`carriedDate`); swiping away ends the walk, and the
+sheet's self-close after `onConfirm` must not be read as an abort (`advancingRef`). A bulk _shelf_
+does not chain.
 
-**The top inset lives in `layout.tsx`**: `pt-[max(env(safe-area-inset-top),1.75rem)]`. On a device the real inset wins; in a browser tab, where the inset is 0, the fallback keeps every page's heading off the window edge. Pages add only their own `pt-2` on top — don't re-add a top gap per page.
+## Push notifications
 
-**Push notifications**: `src/lib/push.ts` wraps `web-push`, configured lazily on first use (not at module load) so `VAPID_*` env vars aren't required during `next build`'s route-collection pass — they only need to be present as container runtime env vars. `src/lib/expiry-check.ts` (`runExpiryCheck`) is the notification job: it iterates every list, applies each member's own reminder settings (`src/lib/notification-settings.ts`: lead days, time of day, Sunday weekly summary) and dedupes so an item is only notified once per day (`lastNotifiedAt`). The preferred hour is only honoured when `respectPreferredHour` is set — a silent time check would never match a once-a-day cron and would mute reminders entirely. Two callers exist: the built-in scheduler in `src/instrumentation.node.ts` (`startExpiryScheduler`, on the hour plus a catch-up run at boot, `respectPreferredHour: true`, off via `INTERNAL_CRON=false`) and `POST /api/cron/check-expiry` for external schedulers — bearer-token-protected via `CRON_SECRET`, hour honoured only with `?schedule=hourly`. A 404/410 from a push send means the subscription is dead and gets deleted. The custom service worker (`src/worker/index.js`, built by `@ducanh2912/next-pwa` via `customWorkerSrc`) handles the `push`/`notificationclick` events. A subscription is bound to the logged-in user: signing out sends `DELETE /api/push/subscribe` and calls `subscription.unsubscribe()` (`unsubscribeFromPush`), so a logged-out device stops receiving that account's reminders; `<PushSync />` in `providers.tsx` re-binds the device's subscription on the next login (only when notification permission is already granted — it never prompts). The offer to switch reminders on is not hidden in the settings: `reminder-hint.tsx` puts it on the home page whenever there is something to switch on (push supported, permission not yet answered — or granted without a subscription on this device), and stands down for `install-hint.tsx`'s banner on an iOS browser tab, where enabling could not work at all. Both are dismissed once and stay dismissed (`localStorage`). `useNeedsInstall` is the shared test for "iOS and not installed" — `display-mode: standalone` plus `navigator.standalone`; there is no server-side record of whether a device installed the PWA. **Testing push in dev**: `next dev` runs Turbopack, so next-pwa (a webpack plugin) never builds or registers a service worker and `navigator.serviceWorker.ready` would hang forever. `src/app/dev-sw.js/route.ts` serves `src/worker/index.js` verbatim at `/dev-sw.js` in development only (404 in production), and `getRegistration()` in `push-client.ts` registers it — so subscribing, `POST /api/push/test` and the notification actions all work on localhost.
+`src/lib/push.ts` wraps `web-push`, configured lazily on first use so `VAPID_*` need not exist during
+`next build`'s route collection. `runExpiryCheck` (`src/lib/expiry-check.ts`) iterates every list,
+applies each member's own settings (`src/lib/notification-settings.ts`) and dedupes per day via
+`lastNotifiedAt`. The preferred hour is only honoured when `respectPreferredHour` is set — a silent
+time check would never match a once-a-day cron and would mute reminders entirely. Two callers: the
+scheduler in `instrumentation.node.ts` (hourly plus a boot catch-up, off via `INTERNAL_CRON=false`)
+and `POST /api/cron/check-expiry` (bearer `CRON_SECRET`, hour honoured only with `?schedule=hourly`).
+A 404/410 from a send deletes the dead subscription.
 
-**UI components**: shadcn/ui-based primitives live in `src/components/ui/` (including the design's own `chip`, `switch`, `sheet` and `picker` — `PickerButton`/`PickerOption`, the icon-value-chevron button that opens a sheet, shared by the knowledge manager and the receipt import); feature components (`home-overview`, `inventory-list`, `item-card`, `item-detail`, `item-form`, `date-sheet`, `list-manager`, `list-switcher`, `archive-list`, `sorting-manager`, `knowledge-manager`, `receipt-import`, `user-combobox`) are flat under `src/components/`.
+A subscription is bound to the logged-in user: signing out sends `DELETE /api/push/subscribe` and
+calls `unsubscribeFromPush`; `<PushSync />` re-binds on the next login, only when permission is
+already granted — it never prompts. The custom service worker is `src/worker/index.js`, built by
+`@ducanh2912/next-pwa` via `customWorkerSrc`.
 
-**Intercepted routes** render through `RouteModal`, which has two shapes: `fullscreen` for the item form (`/add`, `/edit/[id]`) and the default bottom sheet for the short EAN entry. The form is a whole task, not an interjection — as a sheet the keyboard squeezed it into a few visible rows below a strip of the page it covers. Because the modal is portalled outside the layout container, the fullscreen variant repeats the top safe-area padding itself.
+**Testing push in dev**: `next dev` runs Turbopack, so next-pwa (a webpack plugin) never registers a
+worker and `navigator.serviceWorker.ready` would hang. `src/app/dev-sw.js/route.ts` serves the worker
+at `/dev-sw.js` in development only and `push-client.ts` registers it, so push works on localhost.
 
-**One rendering for every irreversible question**: `confirm-dialog.tsx` — icon in the warning colour, question and consequence centred, the dangerous action as a full-width button and cancel as quiet text below it. Used by item detail, item form, archive, places and lists; take it, don't rebuild a two-buttons-in-a-row dialog next to it. Its confirm button prints in `text-background`, not white: `--danger` is a light salmon in dark mode.
+## Design system
 
-**One way to add an item**: `add-action-sheet.tsx` owns the choice between scan, EAN, manual entry and reading a receipt. `AddActionSheet` is the FAB in the nav bar, `AddItemButton` the labelled variant that `EmptyState` renders — an empty stock used to link straight into the camera, which answered only one of the ways its own text offers. `EmptyState`'s `action` is therefore a rendered node, not a href.
+**Tokens** live in `src/app/globals.css`: the green palette in both modes plus `surface-2`, `faint`,
+`primary-tint`/`primary-inv` and the expiry states `warning`/`danger` with tints. The
+fresh/soon/expired split carries the whole interface (`STATUS_CLASSES` in `src/lib/expiry.ts`) —
+never hard-code a hex for it. Manrope (400–800), JetBrains Mono for digits; `--radius` (14px) is the
+button radius inside sheets, dialogs and form footers.
 
-**A restock is a new packet, not a bigger number**: *Nachgekauft* on the item detail asks for the new packet's expiry date first (`DateSheet` with `confirmLabel`/`onConfirm` — only the closing button commits, so a tap beside the sheet creates nothing) and then posts it through `restockItem` (`src/lib/item-actions.ts`) to `POST /api/items`. It used to be `quantity + 1`, which silently gave the fresh milk the old one's expiry date and had it reported as expired on the wrong day. What comes of it is `findMergeTarget`'s decision, not the button's: the same expiry day merges into the row you are looking at (the quantity rises, as before), a different one becomes its own row — and the view follows it there, because this page would otherwise look unchanged. Place and note travel along; they describe where the product lives in this household, which a restock does not change.
+**Elevation is a token, not a `shadow-[…]` in a component**, because the modes solve it differently:
+light mode uses a drop shadow, dark mode a light top edge (`inset 0 1px 0 rgb(255 255 255 / .055)`).
+Four steps: `shadow-card`, `shadow-raise` (hairline only, `none` in light mode), `shadow-nav`,
+`shadow-action`/`shadow-fab`. **Every dark value takes its hue from the light one**, changing only
+saturation and lightness; dark surfaces sit at S≈8 % and `--border` is opaque, not white with alpha.
 
-**Swipe gestures are never the only way**: `useSwipeActions` (`src/lib/use-swipe-actions.ts`) drives the stock and archive rows — right is used up, left is thrown away — and deliberately ignores mouse pointers. Every action it triggers is also reachable as a real button, because a pantry you can only tick off with a finger is not operable with a keyboard or a screen reader — a stock row taps into the item detail, and an archive row (which has no detail page) taps into a sheet holding the same two actions.
+Primitives (shadcn/ui-based, plus the design's own `chip`, `switch`, `sheet` and `picker`) live in
+`src/components/ui/`; feature components are flat under `src/components/`. Conventions worth keeping:
+
+- **One rendering for every irreversible question**: `confirm-dialog.tsx` (its confirm button prints
+  `text-background`, not white — `--danger` is light salmon in dark mode).
+- **A restock is a new packet, not a bigger number**: _Nachgekauft_ asks for the new expiry date
+  first (`DateSheet`, only the closing button commits) and posts via `restockItem`
+  (`src/lib/item-actions.ts`); `findMergeTarget` decides whether it merges or becomes its own row.
+- **Swipe gestures are never the only way**: `useSwipeActions` drives stock and archive rows and
+  ignores mouse pointers; every action is also reachable as a real button.
+- **Toasts are inverted** (`ui/sonner.tsx`); Sonner's own rules are two attribute selectors deep, so
+  overrides need Tailwind's `!`.
+- **The top inset lives in `layout.tsx`** — pages add only their own `pt-2`, never a second top gap
+  (`RouteModal`'s `fullscreen` variant repeats it, being portalled outside the layout).
+
+**Titles and icons**: `src/lib/metadata.ts` holds the app strings and `TITLE_TEMPLATE`, set as the
+root layout's `title.template`. A segment setting its own `title` stops the parent template below it
+(`settings/layout.tsx` repeats it), and Client Component pages cannot export `metadata` at all —
+each has a `layout.tsx` carrying only the title; `public/manifest.json` repeats the strings by hand.
+Deliberately no `metadataBase` and no OG image: the public address is only known at runtime
+(`BETTER_AUTH_URL`), so a build-time read would bake `localhost` into every image. All icons are
+generated from the one leaf path in `brand-mark.tsx` (`npm run icons`) in three non-interchangeable
+cuts — `icon-*.png` rounded, `maskable-*.png` full-bleed at 40 %, `apple-icon.png` opaque.
 
 ## Deployment
 
-Docker image (`Dockerfile`, `compose.yaml`), single container with a mounted `data/` volume for the SQLite DB. Env vars are documented in `.env.example` (VAPID keys, `INTERNAL_CRON`, `CRON_SECRET`, better-auth secret/URL, optional OIDC config, `ALLOWED_DEV_ORIGINS` for cross-origin dev access).
+Single Docker container (`Dockerfile`, `compose.yaml`), `data/` volume for the SQLite DB, env vars
+documented in `.env.example`.

@@ -114,6 +114,20 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    // Ohne updateEmailWithoutVerification waere die Adresse hier unaenderbar:
+    // better-auth laesst eine E-Mail-Aenderung sonst nur ueber einen
+    // Bestaetigungslink zu, und dieses Projekt verschickt keine Mails -- es
+    // gibt kein SMTP, keinen Versanddienst, nichts. Die Ausnahme greift genau
+    // solange emailVerified false ist, und das ist hier bei jedem Konto der
+    // Fall, weil nichts das Flag je setzt. Wer spaeter eine Verifikation
+    // nachruestet, nimmt diesem Pfad still den Boden weg -- dann muss die
+    // Aenderung ueber sendChangeEmailConfirmation laufen.
+    //
+    // Abgesichert ist sie trotzdem: POST /api/account/email verlangt vorher
+    // das aktuelle Passwort, und ohne Passwort-Konto (SSO) ist sie gesperrt.
+    changeEmail: { enabled: true, updateEmailWithoutVerification: true },
+  },
   databaseHooks: {
     user: {
       create: {
