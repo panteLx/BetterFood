@@ -4,7 +4,7 @@ import { items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { InventoryList } from "@/components/inventory-list";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, getPlacesForList } from "@/lib/data";
+import { getCategoriesForList, getListsWithCounts, getPlacesForList } from "@/lib/data";
 
 /**
  * Der vollstaendige Vorrat, getrennt von der Startseite.
@@ -41,7 +41,7 @@ async function ResolvedInventory({
   const session = await requireSession();
   const listId = await requireActiveList(session.user.id);
 
-  const [{ filter }, activeItems, allCategories, allPlaces] = await Promise.all([
+  const [{ filter }, activeItems, allCategories, allPlaces, myLists] = await Promise.all([
     searchParams,
     db
       .select()
@@ -50,6 +50,7 @@ async function ResolvedInventory({
       .orderBy(items.expiryDate),
     getCategoriesForList(listId),
     getPlacesForList(listId),
+    getListsWithCounts(session.user.id),
   ]);
 
   return (
@@ -63,6 +64,8 @@ async function ResolvedInventory({
       categories={allCategories}
       places={allPlaces}
       initialStatus={filter === "bald" || filter === "abgelaufen" ? filter : "alle"}
+      lists={myLists}
+      activeListId={listId}
     />
   );
 }

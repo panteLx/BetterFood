@@ -12,15 +12,15 @@ export function Providers({ children }: { children: ReactNode }) {
       <PushSync />
       {/* Ohne Offset legte sich der Toast ueber die Navigationsleiste und
           den zentralen Hinzufuegen-Button -- die Hauptaktion der App war
-          waehrend jeder Rueckmeldung nicht erreichbar. Der Wert deckt
-          Leistenhoehe, den ueberstehenden FAB und die Safe Area ab -- und
-          rechnet dabei mit demselben max(), mit dem die Leiste selbst ihre
-          untere Polsterung bildet. */}
+          waehrend jeder Rueckmeldung nicht erreichbar. 6rem sind die Hoehe
+          der schwebenden Insel (64px) samt ihrem Abstand nach unten (16px)
+          und ein wenig Luft darueber -- eine Safe Area kommt nicht dazu,
+          weil die Insel selbst keine mehr einrechnet. */}
       <Toaster
         position="bottom-center"
-        offset={{ bottom: "calc(4.5rem + max(env(safe-area-inset-bottom),1.25rem))" }}
+        offset={{ bottom: "6rem" }}
         mobileOffset={{
-          bottom: "calc(4.5rem + max(env(safe-area-inset-bottom),1.25rem))",
+          bottom: "6rem",
           left: "1rem",
           right: "1rem",
         }}
