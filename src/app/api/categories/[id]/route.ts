@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { categoriesTag, forgetProductsInCategory } from "@/lib/data";
+import { categoriesTag, forgetProductsInCategory, resolvePlace } from "@/lib/data";
 
 export async function PATCH(
   req: NextRequest,
@@ -15,9 +15,15 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { label, shelfLifeDays } = body as { label?: string; shelfLifeDays?: number };
+  const { label, shelfLifeDays, defaultPlaceId } = body as {
+    label?: string;
+    shelfLifeDays?: number;
+    // null heisst ausdruecklich "kein Standardort", undefined heisst
+    // "nicht angefasst" -- dieselbe Unterscheidung wie bei /api/knowledge.
+    defaultPlaceId?: number | null;
+  };
 
-  const update: { label?: string; shelfLifeDays?: number } = {};
+  const update: { label?: string; shelfLifeDays?: number; defaultPlaceId?: number | null } = {};
 
   if (label !== undefined) {
     if (!label.trim()) {
@@ -34,6 +40,14 @@ export async function PATCH(
       );
     }
     update.shelfLifeDays = Math.round(shelfLifeDays);
+  }
+
+  if (defaultPlaceId !== undefined) {
+    const place = await resolvePlace(defaultPlaceId, listId);
+    if (place === "invalid") {
+      return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
+    }
+    update.defaultPlaceId = place;
   }
 
   if (Object.keys(update).length === 0) {

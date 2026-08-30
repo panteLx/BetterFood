@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { categories, places, productKnowledge } from "@/db/schema";
+import { categories, productKnowledge } from "@/db/schema";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
+import { resolvePlace } from "@/lib/data";
 import { normalizeProductName } from "@/lib/utils";
 
 /**
@@ -110,19 +111,11 @@ export async function PATCH(
   // eine -- ein Produkt, das einmal im falschen Fach gelandet ist, schlug
   // dieses Fach danach fuer immer wieder vor.
   if (placeId !== undefined) {
-    if (placeId === null) {
-      update.placeId = null;
-    } else {
-      const placeRow = await db
-        .select({ id: places.id })
-        .from(places)
-        .where(and(eq(places.id, placeId), eq(places.listId, listId)))
-        .get();
-      if (!placeRow) {
-        return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
-      }
-      update.placeId = placeRow.id;
+    const place = await resolvePlace(placeId, listId);
+    if (place === "invalid") {
+      return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
     }
+    update.placeId = place;
   }
 
   if (

@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash2, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -27,12 +28,19 @@ import {
  * Entweder mit `trigger` (der Dialog verwaltet sich selbst) oder mit
  * `open`/`onOpenChange` (wenn der Ausloeser woanders liegt, etwa in einer
  * Wischgeste).
+ *
+ * `tone` faerbt Symbol und Knopf um, mehr nicht. Es gibt eine zweite Sorte
+ * Rueckfrage, die nichts zerstoert, sondern etwas Unvollstaendiges bestaetigt
+ * ("nur 28 von 34 Artikeln uebernehmen?"). Sie in Rot zu stellen waere
+ * gelogen, ihr einen eigenen Dialog danebenzustellen schlimmer -- also
+ * dieselbe Frageform in der Primaerfarbe.
  */
 export function ConfirmDialog({
   open,
   onOpenChange,
   trigger,
   icon: Icon = Trash2,
+  tone = "danger",
   title,
   description,
   confirmLabel,
@@ -42,6 +50,7 @@ export function ConfirmDialog({
   onOpenChange?: (open: boolean) => void;
   trigger?: React.ReactElement;
   icon?: LucideIcon;
+  tone?: "danger" | "primary";
   title: React.ReactNode;
   description: React.ReactNode;
   confirmLabel: string;
@@ -53,7 +62,14 @@ export function ConfirmDialog({
       <AlertDialogPortal>
         <AlertDialogBackdrop className="bg-(--scrim)" />
         <AlertDialogPopup className="max-w-[340px] items-center gap-0 rounded-2xl border-0 bg-card p-6 text-center text-foreground shadow-card">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-[16px] bg-danger-tint text-danger">
+          <span
+            className={cn(
+              "flex size-14 shrink-0 items-center justify-center rounded-[16px]",
+              tone === "danger"
+                ? "bg-danger-tint text-danger"
+                : "bg-primary-tint text-primary",
+            )}
+          >
             <Icon className="size-6" strokeWidth={1.9} />
           </span>
           <AlertDialogTitle className="mt-4 text-[19px] leading-snug font-extrabold text-balance">
@@ -67,7 +83,12 @@ export function ConfirmDialog({
               Im Hellmodus ist der Unterschied zu Weiss nicht zu sehen. */}
           <AlertDialogClose
             onClick={onConfirm}
-            className="mt-5 h-13 w-full rounded-[16px] bg-danger text-[15px] font-bold text-background outline-none focus-visible:ring-3 focus-visible:ring-danger/40"
+            className={cn(
+              "mt-5 h-13 w-full rounded-[16px] text-[15px] font-bold outline-none focus-visible:ring-3",
+              tone === "danger"
+                ? "bg-danger text-background focus-visible:ring-danger/40"
+                : "bg-primary text-primary-foreground focus-visible:ring-ring/50",
+            )}
           >
             {confirmLabel}
           </AlertDialogClose>

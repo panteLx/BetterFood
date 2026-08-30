@@ -2,42 +2,34 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  Check,
-  ChevronDown,
-  Pencil,
-  Refrigerator,
-  Search,
-  Tags,
-  Trash2,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Check, Pencil, Refrigerator, Search, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tab, TabBar } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
+import { PickerButton, PickerOption } from "@/components/ui/picker";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { CategoryManager } from "@/components/category-manager";
-import { PlaceManager, type PlaceWithCount } from "@/components/place-manager";
+import { SortingManager, type PlaceWithCount } from "@/components/sorting-manager";
 import { normalizeProductName } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 import type { Category, ProductKnowledge } from "@/db/schema";
 
-type Tabs = "produkte" | "kategorien" | "orte";
+type Tabs = "sortierung" | "produkte";
 
+// Zwei Reiter, nicht drei: Faecher und Kategorien beantworten dieselbe Frage
+// ("wohin gehoert was?") und standen vorher als zwei Listen nebeneinander,
+// die sich gegenseitig zitierten.
 const TABS: { value: Tabs; label: string }[] = [
+  { value: "sortierung", label: "Sortierung" },
   { value: "produkte", label: "Produkte" },
-  { value: "kategorien", label: "Kategorien" },
-  { value: "orte", label: "Orte" },
 ];
 
 /**
- * Die Wissensdatenbank einer Liste: welche Produkte kennt sie, in welche
- * Kategorie gehoert jedes davon, und in welchen Faechern liegt der Vorrat.
+ * Die Wissensdatenbank einer Liste: wie der Haushalt seinen Vorrat sortiert
+ * (Faecher und Kategorien) und was die Liste ueber einzelne Produkte gelernt
+ * hat.
  *
- * Alle drei stehen hier zusammen, weil sie dieselbe Frage beantworten --
- * getrennt waeren Kategorien in den Einstellungen und Produkte hier, obwohl
- * ein Produkt ohne seine Kategorie gar nichts aussagt.
+ * Beides steht hier zusammen, weil es dieselbe Frage beantwortet -- getrennt
+ * waeren Kategorien in den Einstellungen und Produkte hier, obwohl ein
+ * Produkt ohne seine Kategorie gar nichts aussagt.
  */
 export function KnowledgeManager({
   initialEntries,
@@ -48,7 +40,7 @@ export function KnowledgeManager({
   initialCategories: Category[];
   places: PlaceWithCount[];
 }) {
-  const [tab, setTab] = useState<Tabs>("produkte");
+  const [tab, setTab] = useState<Tabs>("sortierung");
   const [entries, setEntries] = useState(initialEntries);
   const [categories, setCategories] = useState(initialCategories);
   const [query, setQuery] = useState("");
@@ -201,14 +193,13 @@ export function KnowledgeManager({
         ))}
       </TabBar>
 
-      {tab === "kategorien" && (
-        <CategoryManager
+      {tab === "sortierung" && (
+        <SortingManager
           categories={categories}
+          places={places}
           onCategoriesChange={handleCategoriesChange}
         />
       )}
-
-      {tab === "orte" && <PlaceManager places={places} />}
 
       {tab === "produkte" && (
         <div className="flex flex-col gap-3">
@@ -418,74 +409,5 @@ export function KnowledgeManager({
         onConfirm={() => pendingForget && forget(pendingForget)}
       />
     </div>
-  );
-}
-
-/**
- * Ein Auswahlknopf in einer Produktzeile: Symbol, aktueller Wert, Pfeil.
- * Zweimal dieselbe Klassenkette nebeneinander wuerde sofort auseinanderlaufen.
- */
-function PickerButton({
-  icon: Icon,
-  label,
-  muted = false,
-  disabled,
-  onClick,
-  "aria-label": ariaLabel,
-}: {
-  icon: LucideIcon;
-  label: string;
-  /** Fuer "Kein Ort" -- ein fehlender Wert soll nicht wie ein gewaehlter aussehen. */
-  muted?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  "aria-label": string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      aria-label={ariaLabel}
-      className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[14px] border border-border bg-surface-2 px-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-    >
-      <Icon className="size-4 shrink-0 text-faint" strokeWidth={1.9} />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate text-sm font-semibold",
-          muted && "text-muted-foreground",
-        )}
-      >
-        {label}
-      </span>
-      <ChevronDown className="size-4 shrink-0 text-faint" strokeWidth={2.2} />
-    </button>
-  );
-}
-
-/** Eine Zeile in einem der beiden Auswahl-Blaetter. */
-function PickerOption({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-13 items-center gap-3 rounded-[18px] border px-3.5 text-left text-[15px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        selected
-          ? "border-primary bg-primary-tint text-primary"
-          : "border-border bg-surface-2",
-      )}
-    >
-      <span className="flex-1 truncate">{label}</span>
-      {selected && <Check className="size-5 shrink-0" strokeWidth={2.4} />}
-    </button>
   );
 }

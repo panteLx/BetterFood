@@ -68,6 +68,50 @@ export async function setQuantity(itemId: number, quantity: number) {
   );
 }
 
+/**
+ * Traegt eine nachgekaufte Packung ein.
+ *
+ * Bewusst ueber POST /api/items und nicht als "quantity + 1": eine frisch
+ * gekaufte Packung hat ein eigenes MHD, und eine hochgezaehlte Menge haette
+ * das der alten geerbt -- die neue Milch waere damit ab dem Tag als
+ * abgelaufen gemeldet worden, an dem die alte es war. Die Route entscheidet
+ * ueber findMergeTarget selbst, was daraus wird: bei gleichem MHD-Tag geht
+ * die Packung in der vorhandenen Zeile auf (dann ist die hochgezaehlte Menge
+ * richtig), sonst entsteht eine zweite Zeile mit eigenem Datum.
+ *
+ * Ort und Notiz wandern mit: sie beschreiben, wo das Produkt in diesem
+ * Haushalt liegt, und das aendert sich mit dem Nachkauf nicht.
+ */
+export async function restockItem(
+  item: {
+    id: number;
+    name: string;
+    category: string;
+    barcode: string | null;
+    placeId: number | null;
+    note: string | null;
+  },
+  expiryDate: Date,
+): Promise<{ id: number; merged: boolean }> {
+  const res = await expectOk(
+    await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: item.name,
+        category: item.category,
+        barcode: item.barcode ?? undefined,
+        placeId: item.placeId,
+        note: item.note,
+        quantity: 1,
+        expiryDate: expiryDate.toISOString(),
+      }),
+    }),
+  );
+  const row = (await res.json()) as { id: number; merged?: boolean };
+  return { id: row.id, merged: row.merged === true };
+}
+
 /** Blendet den Artikel aus -- die Zeile bleibt in der Datenbank (siehe DELETE-Route). */
 export async function hideItem(itemId: number) {
   await expectOk(await fetch(`/api/items/${itemId}`, { method: "DELETE" }));

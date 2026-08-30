@@ -35,6 +35,7 @@ const HIDDEN_PREFIXES = [
   "/edit",
   "/item",
   "/saved",
+  "/receipt",
 ];
 
 // Unterseiten von "Mehr": die Leiste soll dort weiterhin "Mehr" markieren,

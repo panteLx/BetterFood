@@ -13,6 +13,7 @@ import {
 import {
   listHasCategories,
   listHasPlaces,
+  applyDefaultCategoryPlaces,
   seedDefaultCategories,
   seedDefaultPlaces,
 } from "@/lib/data";
@@ -101,6 +102,9 @@ async function claimLegacyData(newUser: { id: string }, context: SignUpContext) 
   if (!(await listHasPlaces(list.id))) {
     await seedDefaultPlaces(list.id);
   }
+
+  // Erst wenn beides steht, laesst sich das eine aufs andere zeigen.
+  await applyDefaultCategoryPlaces(list.id);
 
   await db.update(user).set({ activeListId: list.id }).where(eq(user.id, newUser.id));
 }

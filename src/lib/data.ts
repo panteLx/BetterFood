@@ -6,6 +6,13 @@ import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
 import { normalizeProductName } from "@/lib/utils";
 
+/**
+ * Alles, worauf sich eine Abfrage absetzen laesst: die Datenbank selbst oder
+ * das tx-Objekt einer Transaktion. Funktionen, die beides annehmen, lassen
+ * sich in eine groessere Transaktion hineinreichen -- siehe rememberProduct.
+ */
+export type Executor = Omit<typeof db, "$client">;
+
 export function categoriesTag(listId: number) {
   return `categories:${listId}`;
 }
@@ -52,6 +59,44 @@ export async function seedDefaultCategories(listId: number) {
       listId,
     })),
   );
+}
+
+/**
+ * Setzt den Standardort jeder Standardkategorie auf das gleichnamige Fach
+ * der Liste -- Tiefkuehl aufs Gefrierfach, Konserven auf den
+ * Vorratsschrank (siehe DEFAULT_CATEGORIES.defaultPlace).
+ *
+ * Laeuft nach dem Seeden von Kategorien UND Faechern und ist deshalb
+ * unabhaengig davon, welches von beiden zuerst kam. Ruehrt nur Zeilen an,
+ * die noch keinen Standardort haben: wer ihn spaeter bewusst leert, bekommt
+ * ihn nicht beim naechsten Anlass zurueckgeschrieben. Bestehende Listen
+ * haben dieselbe Vorbelegung einmalig ueber die Migration 0010 bekommen.
+ */
+export async function applyDefaultCategoryPlaces(listId: number) {
+  const listPlaces = await db
+    .select({ id: places.id, name: places.name })
+    .from(places)
+    .where(eq(places.listId, listId));
+  if (listPlaces.length === 0) return;
+
+  const placeIdByName = new Map(listPlaces.map((place) => [place.name, place.id]));
+
+  for (const category of DEFAULT_CATEGORIES) {
+    if (!category.defaultPlace) continue;
+    const placeId = placeIdByName.get(category.defaultPlace);
+    if (placeId === undefined) continue;
+
+    await db
+      .update(categories)
+      .set({ defaultPlaceId: placeId })
+      .where(
+        and(
+          eq(categories.listId, listId),
+          eq(categories.key, category.key),
+          isNull(categories.defaultPlaceId),
+        ),
+      );
+  }
 }
 
 /** True, wenn die Liste (noch) keine einzige Kategorie hat. */
@@ -174,6 +219,28 @@ export async function seedDefaultPlaces(listId: number) {
   );
 }
 
+/**
+ * Prueft eine uebergebene Ort-ID gegen eine Liste. Liefert die ID, null
+ * (kein Ort gewaehlt) oder "invalid", wenn das Fach einer anderen Liste
+ * gehoert oder gar nicht existiert.
+ *
+ * Stand vorher wortgleich in drei Routen (Artikel, Wissensdatenbank,
+ * Kategorien) -- und eine Ort-ID quer ueber Listengrenzen durchzulassen ist
+ * genau die Art Fehler, die man nicht dreimal unabhaengig voneinander
+ * verhindern will.
+ */
+export async function resolvePlace(placeId: number | null | undefined, listId: number) {
+  if (placeId === undefined || placeId === null) return null;
+
+  const row = await db
+    .select({ id: places.id })
+    .from(places)
+    .where(and(eq(places.id, placeId), eq(places.listId, listId)))
+    .get();
+
+  return row ? row.id : ("invalid" as const);
+}
+
 /** True, wenn die Liste (noch) keinen einzigen Ort hat. */
 export async function listHasPlaces(listId: number) {
   const existing = await db
@@ -199,6 +266,10 @@ export async function backfillDefaultPlaces() {
   for (const list of allLists) {
     if (await listHasPlaces(list.id)) continue;
     await seedDefaultPlaces(list.id);
+    // Die Liste hatte bis eben keine Faecher, also konnte auch die Migration
+    // 0010 keiner Kategorie einen Standardort geben -- das wird hier
+    // nachgeholt, sobald es welche gibt.
+    await applyDefaultCategoryPlaces(list.id);
     seeded += 1;
   }
 
@@ -269,18 +340,37 @@ export async function lookupKnownProduct(
  * fuer das naechste Mal. Genau dieser Weg ist der Normalfall -- die Wissensdatenbank
  * unter /knowledge ist fuer die Faelle da, in denen der Artikel selbst
  * laengst weg ist.
+ *
+ * Bewusst synchron und mit optionalem Executor (wie reassignActiveListAway):
+ * der Rechnungsimport schreibt Dutzende Artikel in einer einzigen
+ * Transaktion, und better-sqlite3 verlangt, dass deren Rumpf vollstaendig
+ * synchron laeuft.
  */
-export async function rememberProduct(
+export function rememberProduct(
   listId: number,
-  product: { barcode?: string | null; name: string; category: string; placeId?: number | null },
+  product: {
+    barcode?: string | null;
+    name: string;
+    category: string;
+    placeId?: number | null;
+    /**
+     * Der Name, unter dem wiedererkannt werden soll, falls er vom
+     * Anzeigenamen abweicht. Gebraucht beim Rechnungsimport: dort begradigt
+     * der Nutzer "KAROTTE SNACK RL" zu "Karotten", der naechste Beleg
+     * schreibt aber wieder die Rohform -- ohne diesen Schluessel traefe er
+     * den Eintrag nie.
+     */
+    lookupName?: string;
+  },
+  executor: Executor = db,
 ) {
-  const nameKey = normalizeProductName(product.name);
+  const nameKey = normalizeProductName(product.lookupName ?? product.name);
   if (!nameKey) return;
 
   const barcode = product.barcode?.trim() || null;
   const now = new Date();
 
-  const existing = await db
+  const existing = executor
     .select({ id: productKnowledge.id })
     .from(productKnowledge)
     .where(
@@ -295,7 +385,7 @@ export async function rememberProduct(
     .get();
 
   if (existing) {
-    await db
+    executor
       .update(productKnowledge)
       .set({
         name: product.name,
@@ -304,20 +394,24 @@ export async function rememberProduct(
         placeId: product.placeId ?? null,
         updatedAt: now,
       })
-      .where(eq(productKnowledge.id, existing.id));
+      .where(eq(productKnowledge.id, existing.id))
+      .run();
     return;
   }
 
-  await db.insert(productKnowledge).values({
-    listId,
-    barcode,
-    nameKey,
-    name: product.name,
-    category: product.category,
-    placeId: product.placeId ?? null,
-    createdAt: now,
-    updatedAt: now,
-  });
+  executor
+    .insert(productKnowledge)
+    .values({
+      listId,
+      barcode,
+      nameKey,
+      name: product.name,
+      category: product.category,
+      placeId: product.placeId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
 }
 
 /** Alle gelernten Produkte einer Liste, alphabetisch. */
