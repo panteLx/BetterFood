@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
+
+export const metadata: Metadata = {
+  title: "Darstellung",
+};
 
 export default function AppearancePage() {
   return (

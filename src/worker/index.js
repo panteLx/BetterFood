@@ -12,13 +12,17 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Vorrat", body: event.data.text() };
+    payload = { title: "BetterFood", body: event.data.text() };
   }
 
   const options = {
     body: payload.body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/icons/icon-192.png",
+    // Das Badge (die kleine Marke in der Statusleiste) faerbt Android auf eine
+    // einfarbige Silhouette ein: alles Nicht-Transparente wird weiss. Das
+    // App-Icon ergab dort einen grauen Klecks, deshalb ein eigenes Zeichen
+    // ohne Hintergrund.
+    badge: "/icons/badge-96.png",
     // tag: eine neue Meldung derselben Liste ersetzt die vorherige, statt sich
     // zu stapeln. renotify bleibt aus, damit das Ersetzen still passiert und
     // dieselbe Ware den Nutzer nicht taeglich neu anstupst.
@@ -39,7 +43,7 @@ self.addEventListener("push", (event) => {
     ];
   }
 
-  event.waitUntil(self.registration.showNotification(payload.title || "Vorrat", options));
+  event.waitUntil(self.registration.showNotification(payload.title || "BetterFood", options));
 });
 
 async function respondFromNotification(action, itemId) {

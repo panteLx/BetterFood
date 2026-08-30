@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { db } from "@/db";
 import { items } from "@/db/schema";
@@ -5,6 +6,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { InventoryList } from "@/components/inventory-list";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getListsWithCounts, getPlacesForList } from "@/lib/data";
+
+export const metadata: Metadata = {
+  title: "Vorrat",
+  description: "Der vollständige Vorrat – durchsuchbar, filterbar und nach Ablauf, Ort oder Kategorie gruppiert.",
+};
 
 /**
  * Der vollstaendige Vorrat, getrennt von der Startseite.

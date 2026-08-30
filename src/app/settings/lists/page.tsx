@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { ListManager } from "@/components/list-manager";
+
+export const metadata: Metadata = {
+  title: "Listen",
+};
 
 export default function ListsPage() {
   return (

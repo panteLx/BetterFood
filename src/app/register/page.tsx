@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { RegisterForm } from "@/components/register-form";
 import { getOidcDisplayName } from "@/lib/oidc";
+
+export const metadata: Metadata = {
+  title: "Konto erstellen",
+  description: "Lege ein Konto an und starte mit der ersten Vorratsliste deines Haushalts.",
+};
 
 async function RegisterFormSlot() {
   const ssoName = await getOidcDisplayName();

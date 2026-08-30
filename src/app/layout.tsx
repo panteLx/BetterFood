@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Manrope } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { BottomNavGate } from "@/components/bottom-nav-gate";
+import { APP_DESCRIPTION, APP_NAME, APP_TITLE, TITLE_TEMPLATE } from "@/lib/metadata";
 import "./globals.css";
 
 // Manrope traegt die gesamte Typografie: die Oberflaeche setzt Ueberschriften
@@ -22,13 +23,49 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vorrat – Lebensmittel-Tracker",
-  description: "Behalte den Überblick, welche Lebensmittel bald ablaufen.",
+  // template greift auf jeder Unterseite, die ihren eigenen Titel setzt:
+  // "Vorrat · BetterFood". default steht auf der Startseite und ueberall,
+  // wo keiner gesetzt ist.
+  title: {
+    default: APP_TITLE,
+    template: TITLE_TEMPLATE,
+  },
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
   manifest: "/manifest.json",
+  // Eine selbst gehostete Speisekammer gehoert in keinen Suchindex: hinter
+  // /login steht ohnehin nichts Oeffentliches, und die Anmeldeseite selbst
+  // hat niemandem etwas zu sagen, der sie nicht schon kennt.
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false },
+  },
+  // Ohne Bild und ohne metadataBase: die oeffentliche Adresse der Instanz
+  // kennt erst der laufende Container (BETTER_AUTH_URL), und ein zur Bauzeit
+  // eingebackenes localhost waere in jedem Docker-Image falsch -- derselbe
+  // Fehler, den schon der SSO-Knopf einmal hatte.
+  openGraph: {
+    type: "website",
+    locale: "de_DE",
+    siteName: APP_NAME,
+    title: APP_TITLE,
+    description: APP_DESCRIPTION,
+  },
+  formatDetection: {
+    // Ohne das macht iOS aus jeder EAN und jedem Datum einen Anruf- oder
+    // Kalenderlink.
+    telephone: false,
+    date: false,
+    address: false,
+    email: false,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Vorrat",
+    // Der Name unter dem Icon auf dem iOS-Home-Bildschirm.
+    title: APP_NAME,
   },
 };
 

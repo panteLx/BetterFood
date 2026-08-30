@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { db } from "@/db";
 import { lists } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -5,6 +6,11 @@ import { SubPageHeader } from "@/components/sub-page-header";
 import { KnowledgeManager } from "@/components/knowledge-manager";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { getCategoriesForList, getKnowledgeForList, getPlacesWithCounts } from "@/lib/data";
+
+export const metadata: Metadata = {
+  title: "Datenbank",
+  description: "Kategorien, Fächer und die gelernte Einsortierung deiner Produkte.",
+};
 
 export default async function KnowledgePage() {
   const session = await requireSession();

@@ -1,10 +1,39 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { categories, items, places, user } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { ItemDetail } from "@/components/item-detail";
 import { requireSession, requireActiveList } from "@/lib/session";
+
+/**
+ * Der Artikel gibt der Seite ihren Titel: im Verlauf und in der
+ * Tab-Uebersicht stehen sonst zehnmal "BetterFood" nebeneinander, und keiner
+ * davon sagt, welcher Artikel gemeint war.
+ *
+ * Die Abfrage laeuft ueber dieselbe Listengrenze wie die Seite -- ein Titel
+ * darf nicht verraten, wie ein Artikel in einer fremden Liste heisst. Findet
+ * sie nichts, bleibt es beim Standardtitel; das notFound() faellt in der
+ * Seite selbst.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
+  const { id } = await params;
+
+  const row = await db
+    .select({ name: items.name })
+    .from(items)
+    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
+    .get();
+
+  return row ? { title: row.name } : {};
+}
 
 // "await params" muss unterhalb einer <Suspense>-Grenze passieren, sonst
 // blockiert die Navigation komplett den Server-Render (Next 16 "Instant
