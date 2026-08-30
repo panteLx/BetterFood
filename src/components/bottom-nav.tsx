@@ -82,8 +82,12 @@ export function BottomNav() {
     return pathname.startsWith(href);
   }
 
+  // pb als max(...), nicht als Summe: der Home-Indikator-Inset ist auf dem
+  // Geraet schon 34px, und zusammen mit einem eigenen Abstand stand die
+  // Leiste ueber einer leeren Handbreit Flaeche. Der Wert im max() ist nur
+  // der Ersatz fuer den Browser-Tab, wo der Inset 0 ist.
   return (
-    <nav className="sticky bottom-0 z-30 flex shrink-0 items-start justify-between border-t border-border bg-card px-2.5 pt-2.5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+    <nav className="sticky bottom-0 z-30 flex shrink-0 items-start justify-between border-t border-border bg-card px-2.5 pt-2.5 pb-[max(env(safe-area-inset-bottom),1.25rem)]">
       <div className="flex flex-1">
         {LEFT_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={isActive(item.href)} />

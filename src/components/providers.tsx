@@ -13,11 +13,17 @@ export function Providers({ children }: { children: ReactNode }) {
       {/* Ohne Offset legte sich der Toast ueber die Navigationsleiste und
           den zentralen Hinzufuegen-Button -- die Hauptaktion der App war
           waehrend jeder Rueckmeldung nicht erreichbar. Der Wert deckt
-          Leistenhoehe, den ueberstehenden FAB und die Safe Area ab. */}
+          Leistenhoehe, den ueberstehenden FAB und die Safe Area ab -- und
+          rechnet dabei mit demselben max(), mit dem die Leiste selbst ihre
+          untere Polsterung bildet. */}
       <Toaster
         position="bottom-center"
-        offset={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom))" }}
-        mobileOffset={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom))", left: "1rem", right: "1rem" }}
+        offset={{ bottom: "calc(4.5rem + max(env(safe-area-inset-bottom),1.25rem))" }}
+        mobileOffset={{
+          bottom: "calc(4.5rem + max(env(safe-area-inset-bottom),1.25rem))",
+          left: "1rem",
+          right: "1rem",
+        }}
       />
     </ThemeProvider>
   );

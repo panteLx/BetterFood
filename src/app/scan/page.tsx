@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserMultiFormatReader, HTMLCanvasElementLuminanceSource } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
 import {
   BarcodeFormat,
@@ -13,6 +13,30 @@ import {
   NotFoundException,
 } from "@zxing/library";
 import { Flashlight, FlashlightOff, X } from "lucide-react";
+
+// @zxing/browser meldet fuer sein Canvas-Bild "Drehen wird unterstuetzt",
+// kann es aber nicht: HTMLCanvasElementLuminanceSource initialisiert
+// tempCanvasElement nie, und getTempCanvasElement() prueft mit
+// "null === this.tempCanvasElement" -- bei undefined greift der Zweig nicht,
+// die Methode liefert undefined zurueck und rotate() wirft
+// "Could not create a Canvas element.".
+//
+// Der OneDReader betritt diesen Pfad bei jedem Frame, den er nicht lesen
+// konnte, sobald TRY_HARDER gesetzt ist (OneDReader.decode: tryHarder &&
+// image.isRotateSupported()). Der MultiFormatReader faengt den Fehler ab,
+// haelt ihn aber fuer unerwartet und schreibt eine Warnung -- daher die
+// Konsolenflut auf /scan, obwohl der Scanner einwandfrei arbeitet.
+//
+// Deshalb hier die ehrliche Antwort: gedreht werden kann nicht. Damit
+// ueberspringt der Reader den Zweig, statt ihn jedes Mal krachen zu lassen.
+// Gekostet hat er ohnehin nichts -- selbst mit erzeugtem Canvas taeuscht
+// rotate() nur: es tauscht den Puffer aus, laesst width/height der
+// LuminanceSource aber unveraendert, das gedrehte Bild waere also gar nicht
+// lesbar. TRY_HARDER bleibt gesetzt, denn seinen zweiten Effekt -- deutlich
+// dichter abgetastete Bildzeilen -- liefert es weiterhin.
+HTMLCanvasElementLuminanceSource.prototype.isRotateSupported = function () {
+  return false;
+};
 
 // Ohne Hints probiert der MultiFormatReader pro Frame saemtliche Formate durch
 // -- QR, Micro-QR, Aztec, DataMatrix, PDF417 und alle 1D-Varianten. Auf
@@ -67,11 +91,56 @@ function isExpectedDecodeError(err: unknown) {
 const MAX_SILENT_RESTARTS = 2;
 const MAX_STARTUP_RESTARTS = 12;
 
+// Ein einzelner Treffer ist kein Beweis. Zwar traegt jeder dieser vier
+// Codes eine Pruefziffer, aber die faengt nur einen Teil der Lesefehler ab:
+// bei EAN-8 und UPC-E sind es acht bzw. sechs Stellen, sodass eine falsch
+// gelesene Ziffernfolge mit rund 1:10 trotzdem eine gueltige Pruefziffer
+// ergibt -- und weil der Decoder zehnmal in der Sekunde ueber ein
+// verwackeltes Bild laeuft, passiert dieses 1:10 im Alltag oft genug. Genau
+// das ist das "beim ersten Mal falsch, beim zweiten Mal richtig".
+//
+// Deshalb zaehlt hier nicht der erste Treffer, sondern der wiederholte:
+// derselbe Code muss mehrfach hintereinander herauskommen. Ein Lesefehler
+// ist zufaellig und faellt beim naechsten Frame anders aus, der echte Code
+// dagegen bleibt derselbe. Die kurzen Formate brauchen einen Treffer mehr,
+// weil ihre Pruefziffer weniger absichert.
+const REQUIRED_MATCHES = 2;
+const REQUIRED_MATCHES_SHORT = 3;
+
+// Die Serie muss zusammenhaengen: liegt zwischen zwei gleichen Treffern zu
+// viel Zeit, war der zweite ein neuer Scan und kein Beleg fuer den ersten.
+const MATCH_WINDOW_MS = 2000;
+
+// delayBetweenScanSuccess ist die Pause NACH einem Treffer -- mit dem
+// Vorgabewert 500ms haette jede Bestaetigung eine halbe Sekunde gekostet.
+// Auf 100ms gesenkt liegt die Serie innerhalb eines Wimpernschlags, der
+// bestaetigte Scan fuehlt sich also so schnell an wie vorher der
+// ungepruefte. delayBetweenScanAttempts bleibt bei der Vorgabe: das ist die
+// Pause zwischen erfolglosen Versuchen, und die haelt das Telefon kuehl.
+const READER_OPTIONS = {
+  delayBetweenScanAttempts: 500,
+  delayBetweenScanSuccess: 100,
+};
+
+// Je hoeher aufgeloest das Bild, desto mehr Pixel liegen auf einem Strich --
+// und ein Strichcode, dessen schmalste Linie nur ein bis zwei Pixel breit
+// ist, ist die eigentliche Quelle der Fehllesungen. Ohne Angabe liefern
+// viele Kameras 640x480; "ideal" erzwingt nichts, sondern nimmt das
+// naechstbeste, was das Geraet kann.
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: "environment",
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+};
+
+type MatchStreak = { text: string | null; format: BarcodeFormat | null; count: number; at: number };
+
 export default function ScanPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const scannedRef = useRef(false);
+  const streakRef = useRef<MatchStreak>({ text: null, format: null, count: 0, at: 0 });
   const silentRestartsRef = useRef(0);
   const startupRestartsRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +160,7 @@ export default function ScanPage() {
     // frische Scan-Session.
     let active = true;
     scannedRef.current = false;
+    streakRef.current = { text: null, format: null, count: 0, at: 0 };
     silentRestartsRef.current = 0;
     startupRestartsRef.current = 0;
 
@@ -107,18 +177,43 @@ export default function ScanPage() {
       // frischen Torch-Zustand.
       setTorchOn(false);
       setTorchAvailable(false);
-      const reader = new BrowserMultiFormatReader(SCAN_HINTS);
+      const reader = new BrowserMultiFormatReader(SCAN_HINTS, READER_OPTIONS);
 
       reader
         .decodeFromConstraints(
-          { video: { facingMode: "environment" } },
+          { video: VIDEO_CONSTRAINTS },
           videoRef.current ?? undefined,
           (result, err) => {
             if (!active || scannedRef.current) return;
             if (result) {
+              const text = result.getText();
+              const format = result.getBarcodeFormat();
+              const now = Date.now();
+              const streak = streakRef.current;
+
+              // Derselbe Code wie eben: die Serie waechst. Ein anderer Code
+              // -- oder eine zu lange Pause -- setzt sie auf diesen Treffer
+              // zurueck, statt zwei unabhaengige Lesungen zu addieren.
+              const continues =
+                streak.text === text &&
+                streak.format === format &&
+                now - streak.at <= MATCH_WINDOW_MS;
+              streakRef.current = {
+                text,
+                format,
+                count: continues ? streak.count + 1 : 1,
+                at: now,
+              };
+
+              const required =
+                format === BarcodeFormat.EAN_8 || format === BarcodeFormat.UPC_E
+                  ? REQUIRED_MATCHES_SHORT
+                  : REQUIRED_MATCHES;
+              if (streakRef.current.count < required) return;
+
               scannedRef.current = true;
               controlsRef.current?.stop();
-              router.push(`/confirm?barcode=${encodeURIComponent(result.getText())}&via=scan`);
+              router.push(`/confirm?barcode=${encodeURIComponent(text)}&via=scan`);
               return;
             }
             if (err && !isExpectedDecodeError(err)) {
@@ -194,8 +289,12 @@ export default function ScanPage() {
     }
   }
 
+  // Die Kamera ist der Inhalt dieses Screens, nicht ein Element darin: der
+  // Abstand aus dem Layout wird hier zurueckgenommen, damit das Bild bis an
+  // die Fensterkante laeuft. Den Inset braucht dann nur noch die Kopfzeile,
+  // damit ihre Knoepfe nicht unter der Statusleiste liegen.
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden bg-[#0b0f0c] text-white">
+    <div className="relative -mt-[max(env(safe-area-inset-top),1.75rem)] flex flex-1 flex-col overflow-hidden bg-[#0b0f0c] text-white">
       {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
           iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
           object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
@@ -228,7 +327,7 @@ export default function ScanPage() {
         }`}
       />
 
-      <div className="relative flex items-center justify-between px-5 pt-3">
+      <div className="relative flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top),0.75rem)]">
         <button
           type="button"
           onClick={() => router.push("/")}
@@ -282,7 +381,7 @@ export default function ScanPage() {
       {/* Der Ausweg gehoert auf diesen Screen: wer hier steht, hat einen Code
           vor sich, den die Kamera nicht liest. Ihn ueber den zentralen
           Hinzufuegen-Button suchen zu lassen, hilft in dem Moment niemandem. */}
-      <div className="relative flex flex-col gap-2.5 px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+      <div className="relative flex flex-col gap-2.5 px-5 pb-[max(env(safe-area-inset-bottom),2.5rem)]">
         <Link
           href="/scan-ean"
           className="flex h-13 items-center justify-center rounded-[17px] border border-white/25 bg-white/10 text-[15px] font-semibold text-white backdrop-blur-sm"

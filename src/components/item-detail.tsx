@@ -48,7 +48,20 @@ export function ItemDetail({
 }) {
   const router = useRouter();
   const [quantity, setLocalQuantity] = useState(item.quantity);
+  const [prevItemQuantity, setPrevItemQuantity] = useState(item.quantity);
   const [busy, setBusy] = useState(false);
+
+  // Die Menge wird optimistisch im Client gefuehrt, damit ein Tipp sofort
+  // sichtbar ist. Sobald der Server eine andere Zahl liefert -- nach dem
+  // router.refresh() eines Rueckgaengig, oder weil jemand anderes an
+  // derselben Liste etwas geaendert hat --, gewinnt sie. Ohne diesen
+  // Abgleich blieb der Zaehler nach dem Zuruecknehmen eines Verbrauchs auf
+  // dem verringerten Wert stehen, bis die Seite neu geladen wurde: der
+  // useState-Initialwert laeuft nur beim ersten Rendern.
+  if (item.quantity !== prevItemQuantity) {
+    setPrevItemQuantity(item.quantity);
+    setLocalQuantity(item.quantity);
+  }
 
   const isClient = useIsClient();
   const days = isClient ? daysUntil(item.expiryDate) : 0;
@@ -86,6 +99,7 @@ export function ItemDetail({
             onClick: async () => {
               try {
                 await undoResolve(undo, before);
+                setLocalQuantity(before);
                 toast.success("Wiederhergestellt");
               } catch {
                 toast.error("Rückgängig machen hat nicht geklappt.");
@@ -250,7 +264,7 @@ export function ItemDetail({
         )}
       </div>
 
-      <div className="sticky bottom-0 flex flex-col gap-2.5 border-t border-border bg-card px-5 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 flex flex-col gap-2.5 border-t border-border bg-card px-5 pt-3.5 pb-[max(env(safe-area-inset-bottom),1rem)]">
         <button
           type="button"
           disabled={busy}

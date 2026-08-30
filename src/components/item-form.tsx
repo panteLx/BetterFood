@@ -661,7 +661,7 @@ export function ItemForm({
         )}
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-[max(env(safe-area-inset-bottom),1rem)]">
         <button
           type="button"
           onClick={handleSave}
