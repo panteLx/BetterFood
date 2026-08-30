@@ -62,6 +62,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   allowedDevOrigins,
   serverExternalPackages: ["better-sqlite3"],
+  // Der Docker-Runner bekommt nur `.next/standalone`: Next spurt beim Build
+  // nach, welche Dateien die Routen tatsaechlich laden, und legt genau die
+  // plus einen minimalen `server.js` dort ab. Vorher wanderte das komplette
+  // Arbeitsverzeichnis ins Image -- inklusive devDependencies (sharp,
+  // TypeScript, ESLint) und `.next/cache`, die zur Laufzeit niemand anfasst.
+  //
+  // `public/` und `.next/static` kopiert Next dabei bewusst nicht mit (sie
+  // gehoeren normalerweise vor ein CDN); das Dockerfile holt sie nach, sonst
+  // fehlen Service Worker, Manifest und alle Client-Bundles.
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   async headers() {

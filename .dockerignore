@@ -1,9 +1,17 @@
 node_modules
 .next
 .git
+.github
 data/*.db
 data/*.db-*
 .env
 .env.local
 *.tsbuildinfo
 README.md
+AGENTS.md
+CLAUDE.md
+.claude
+.vscode
+Dockerfile
+.dockerignore
+compose.yaml
