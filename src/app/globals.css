@@ -54,7 +54,14 @@
   --color-danger: var(--danger);
   --color-danger-tint: var(--danger-tint);
 
+  /* Tiefe ist im Dunkelmodus ein eigenes Material: der Schatten allein
+     traegt dort nichts, die helle Oberkante schon. Deshalb liegen alle vier
+     Stufen als Tokens hier und nicht als shadow-[...] in den Komponenten. */
   --shadow-card: var(--shadow-elevated);
+  --shadow-raise: var(--shadow-hairline);
+  --shadow-nav: var(--shadow-navbar);
+  --shadow-action: var(--shadow-add-button);
+  --shadow-fab: var(--shadow-add-fab);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -101,6 +108,12 @@
   --danger-tint: #f9e4df;
   --scrim: rgb(20 32 24 / 0.42);
   --shadow-elevated: 0 1px 2px rgb(20 35 25 / 0.05), 0 10px 26px rgb(20 35 25 / 0.07);
+  /* Im Hellen heben sich die Vorratszeilen ueber ihren Rand ab, sie brauchen
+     keine zusaetzliche Kante. */
+  --shadow-hairline: none;
+  --shadow-navbar: 0 8px 28px rgb(0 0 0 / 0.14);
+  --shadow-add-button: 0 4px 12px rgb(30 80 50 / 0.28);
+  --shadow-add-fab: 0 10px 28px rgb(30 80 50 / 0.34);
 
   --chart-1: #37714c;
   --chart-2: #a9701a;
@@ -119,51 +132,72 @@
 }
 
 .dark {
-  /* Kein reines Schwarz: gedaempfte Gruentoene halten die drei Ablauf-Farben
-     auch nachts unterscheidbar. */
-  --background: #0e1310;
-  --foreground: #e9efe9;
-  --card: #171e19;
-  --card-foreground: #e9efe9;
-  --popover: #171e19;
-  --popover-foreground: #e9efe9;
-  --primary: #74c48d;
-  --primary-foreground: #0e1310;
-  --secondary: #1e2721;
-  --secondary-foreground: #e9efe9;
-  --muted: #1e2721;
-  --muted-foreground: #96a597;
-  --accent: #1c2e22;
-  --accent-foreground: #74c48d;
-  --destructive: #e88e78;
-  --border: rgb(255 255 255 / 0.1);
-  --input: rgb(255 255 255 / 0.1);
-  --ring: #74c48d;
+  /* Die Farbtoene stammen aus dem Hellmodus, nur Saettigung und Helligkeit
+     sind fuer dunklen Grund gestimmt: die Flaechen liegen auf demselben
+     Gruengrau wie dort die Schrift (#151c17), der Akzent auf demselben Ton
+     wie #37714c. Der alte Dunkelmodus kippte ins Olive, weil er dieselbe
+     Gruenmenge bei doppelter Saettigung trug. */
+  --background: #0b0d0c;
+  --foreground: #ebefec;
+  --card: #171b18;
+  --card-foreground: #ebefec;
+  /* Eine Stufe ueber der Karte: Sheets und Dialoge liegen ueber ihr und
+     duerfen nicht denselben Wert tragen, sonst verschwindet die Kante. */
+  --popover: #1c211e;
+  --popover-foreground: #ebefec;
+  --primary: #4dc779;
+  --primary-foreground: #082111;
+  --secondary: #222824;
+  --secondary-foreground: #ebefec;
+  --muted: #222824;
+  --muted-foreground: #9bab9e;
+  --accent: #0f2417;
+  --accent-foreground: #4dc779;
+  --destructive: #df7968;
+  /* Deckend und im Farbton, nicht Weiss mit Alpha: ueber einer getoenten
+     Flaeche wird aus Weiss ein grauer Strich, der den Farbton zerlegt. */
+  --border: #313a34;
+  --input: #313a34;
+  --ring: #4dc779;
 
-  --surface-2: #1e2721;
-  --faint: #6d7b70;
-  --primary-tint: #1c2e22;
-  --primary-inv: #2c5c3e;
-  --warning: #e2aa5e;
-  --warning-tint: #2f2718;
-  --danger: #e88e78;
-  --danger-tint: #32201c;
-  --scrim: rgb(0 0 0 / 0.6);
-  --shadow-elevated: 0 1px 2px rgb(0 0 0 / 0.45);
+  --surface-2: #222824;
+  --faint: #849487;
+  --primary-tint: #0f2417;
+  /* Der Toast ist invertiert, seine Flaeche also hell -- der Akzent darauf ist
+     hier dunkel, genau andersherum als im Hellmodus. */
+  --primary-inv: #1a7039;
+  --warning: #e1a347;
+  --warning-tint: #281c0b;
+  --danger: #df7968;
+  --danger-tint: #2c1511;
+  --scrim: rgb(5 8 6 / 0.66);
+  /* Tiefe entsteht nachts nicht durch den Schatten -- der ist auf dunklem
+     Grund fast unsichtbar -- sondern durch die helle Oberkante. Der Schatten
+     darunter loest die Karte nur vom Grund. */
+  --shadow-elevated:
+    inset 0 1px 0 rgb(255 255 255 / 0.055), 0 1px 2px rgb(0 0 0 / 0.55),
+    0 12px 32px rgb(0 0 0 / 0.42);
+  --shadow-hairline: inset 0 1px 0 rgb(255 255 255 / 0.055);
+  --shadow-navbar:
+    inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 34px rgb(0 0 0 / 0.55);
+  --shadow-add-button:
+    0 4px 14px rgb(77 199 121 / 0.22), 0 1px 4px rgb(0 0 0 / 0.45);
+  --shadow-add-fab:
+    0 10px 30px rgb(77 199 121 / 0.28), 0 2px 8px rgb(0 0 0 / 0.5);
 
-  --chart-1: #74c48d;
-  --chart-2: #e2aa5e;
-  --chart-3: #e88e78;
-  --chart-4: #96a597;
-  --chart-5: #6d7b70;
-  --sidebar: #171e19;
-  --sidebar-foreground: #e9efe9;
-  --sidebar-primary: #74c48d;
-  --sidebar-primary-foreground: #0e1310;
-  --sidebar-accent: #1c2e22;
-  --sidebar-accent-foreground: #74c48d;
-  --sidebar-border: rgb(255 255 255 / 0.1);
-  --sidebar-ring: #74c48d;
+  --chart-1: #4dc779;
+  --chart-2: #e1a347;
+  --chart-3: #df7968;
+  --chart-4: #9bab9e;
+  --chart-5: #849487;
+  --sidebar: #171b18;
+  --sidebar-foreground: #ebefec;
+  --sidebar-primary: #4dc779;
+  --sidebar-primary-foreground: #082111;
+  --sidebar-accent: #0f2417;
+  --sidebar-accent-foreground: #4dc779;
+  --sidebar-border: #313a34;
+  --sidebar-ring: #4dc779;
 }
 
 @keyframes bf-pop {

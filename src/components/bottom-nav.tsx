@@ -148,7 +148,7 @@ export function BottomNav() {
             Rechteckform, die der Hinzufuegen-Knopf und die Auswahl in seinem
             Sheet schon haben -- rund genug fuer eine Insel, eckig genug, um
             neben den Karten der App nicht wie ein Fremdkoerper zu wirken. */}
-        <div className="pointer-events-auto flex items-center justify-between rounded-[22px] border border-border bg-card/85 px-3 py-2.5 shadow-[0_8px_28px_rgb(0_0_0/0.14)] backdrop-blur-xl">
+        <div className="pointer-events-auto flex items-center justify-between rounded-[22px] border border-border bg-card/85 px-3 py-2.5 shadow-nav backdrop-blur-xl">
           {LEFT_ITEMS.map((item) => (
             <NavLink key={item.href} {...item} active={isActive(item.href)} />
           ))}
@@ -171,7 +171,7 @@ export function BottomNav() {
       >
         <AddActionSheet
           className={cn(
-            "pointer-events-auto size-14 rounded-[18px] shadow-[0_10px_28px_rgb(30_80_50/0.34)] transition-[transform,opacity] duration-300 ease-out",
+            "pointer-events-auto size-14 rounded-[18px] shadow-fab transition-[transform,opacity] duration-300 ease-out",
             !hidden && "pointer-events-none translate-y-4 scale-90 opacity-0",
           )}
         />

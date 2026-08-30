@@ -356,7 +356,7 @@ export default function ScanPage() {
         {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
             bleibt genau der Ausschnitt hell, in dem der Code liegen soll. */}
         <div className="relative h-48 w-[270px] overflow-hidden rounded-[26px] shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_0_0_2000px_rgb(0_0_0/0.42)]">
-          <span className="absolute inset-x-4 top-4 h-[3px] animate-scan rounded-sm bg-[#74c48d] shadow-[0_0_18px_#74c48d]" />
+          <span className="absolute inset-x-4 top-4 h-[3px] animate-scan rounded-sm bg-[#4dc779] shadow-[0_0_18px_#4dc779]" />
         </div>
         <p className="text-center text-[15px] leading-relaxed font-semibold text-balance text-white/90">
           Halte den Barcode ins Feld.

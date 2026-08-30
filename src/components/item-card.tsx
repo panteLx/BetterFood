@@ -106,7 +106,7 @@ export function ItemCard({
           offset === 0 ? undefined : { transform: `translateX(${offset}px)` }
         }
         className={cn(
-          "relative flex touch-pan-y items-center rounded-[20px] border border-l-3 border-border bg-card select-none",
+          "relative flex touch-pan-y items-center rounded-[20px] border border-l-3 border-border bg-card shadow-raise select-none",
           styles.border,
           dragging ? "transition-none" : "transition-transform duration-200",
         )}
