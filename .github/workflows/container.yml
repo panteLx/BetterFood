@@ -11,6 +11,12 @@ on:
       - main
   workflow_dispatch:
 
+# Ein zweiter Push auf denselben Branch macht den laufenden Build ueberfluessig.
+# Tags bleiben aussen vor: ein Release soll nie abgebrochen werden.
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
 env:
   REGISTRY: ghcr.io
 
@@ -29,7 +35,17 @@ jobs:
       - name: Normalize image name
         id: image
         shell: bash
-        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          # Ohne Anmeldung an ghcr.io -- Pull Requests aus Forks -- gibt es
+          # keinen Schreibzugriff auf den Cache. Lesen geht trotzdem, das
+          # Paket ist oeffentlich.
+          if [ "${{ github.event_name }}" != "pull_request" ] || \
+             [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            echo "cache-writable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache-writable=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -65,7 +81,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Der Cache liegt als eigenes Paket in derselben Registry, nicht im
+          # GitHub-Actions-Cache. Zwei Gruende: das Hochladen dauerte dort
+          # 55 s von 165 s Gesamtzeit, und der Actions-Cache ist nach Branch
+          # getrennt -- der Build auf main nach dem Merge konnte den Cache des
+          # gerade gemergten PR nicht lesen und lief jedes Mal komplett neu.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache
+          cache-to: ${{ steps.image.outputs.cache-writable == 'true' && format('type=registry,ref={0}/{1}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true', env.REGISTRY, steps.image.outputs.name) || '' }}
           provenance: mode=max
           sbom: true
