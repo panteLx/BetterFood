@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Check,
   ChevronLeft,
+  Home,
   Minus,
   Plus,
   ScanBarcode,
@@ -17,6 +18,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { DateCalendar } from "@/components/date-calendar";
 import { EmptyState } from "@/components/empty-state";
 import { SectionLabel } from "@/components/section-label";
+import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -306,18 +308,41 @@ function ReviewFlow({
   return (
     <div className="flex flex-1 flex-col gap-3.5 px-5 pt-2 pb-8">
       <div className="flex flex-col gap-2.5">
-        {index > 0 && (
-          <button
-            type="button"
-            onClick={() => router.push(`/review/${index - 1}`)}
-            className="inline-flex h-[30px] w-fit items-center gap-1 rounded-[10px] border border-border bg-card pr-3 pl-2 text-[12px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <ChevronLeft className="size-3.5" strokeWidth={2.4} />
-            Voriger Artikel
-          </button>
-        )}
+        {/* Der Prüf-Flow blendet die Navigationsleiste aus (bottom-nav.tsx,
+            HIDDEN_PREFIXES) -- ohne diesen Knopf war die Startseite von hier
+            aus nur über den Zurück-Schritt des Browsers erreichbar. Er führt
+            fest auf "/" und nicht über router.back(): zurück heißt hier "ein
+            Artikel früher", und dafür steht der Chip rechts daneben.
 
-        <h1 className="text-[20px] leading-tight font-extrabold">Kurz prüfen</h1>
+            Der Batch bleibt liegen. Wer den Einkauf halb geprüft verlässt,
+            findet ihn beim nächsten Besuch von /review wieder -- verloren
+            geht er erst mit dem Tab. */}
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="ghost"
+            size="icon-touch"
+            aria-label="Zur Startseite"
+            onClick={() => router.push("/")}
+            className="-ml-2 rounded-2xl"
+          >
+            <Home className="size-5" />
+          </Button>
+
+          <h1 className="min-w-0 flex-1 text-[20px] leading-tight font-extrabold">
+            Kurz prüfen
+          </h1>
+
+          {index > 0 && (
+            <button
+              type="button"
+              onClick={() => router.push(`/review/${index - 1}`)}
+              className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card pr-3 pl-2 text-[12px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <ChevronLeft className="size-3.5" strokeWidth={2.4} />
+              Voriger Artikel
+            </button>
+          )}
+        </div>
 
         {/* Der Zaehler steht nur, solange noch etwas offen ist. Am Ende las
             sich dieselbe Zeile als "Alle 34 geprüft · 34 geprüft" -- die
@@ -339,8 +364,24 @@ function ReviewFlow({
             Fortschritt ist hier abzählbar, und die Lücken sagen, wie viele
             Griffe noch bevorstehen. Die Farbe unterscheidet außerdem
             "übernommen" von "übersprungen" -- eine gefüllte Leiste könnte das
-            nicht. */}
-        <div className="flex h-1 gap-1" aria-hidden="true">
+            nicht.
+
+            Die Farben der ersten Fassung waren im Hellmodus keine: --track
+            ist #eef2ec auf einem Grund von #f2f4f0 (Kontrast 1.02) und
+            --primary-tint #e6f0e8 (1.04). Beim ersten Artikel ist noch nichts
+            entschieden, also bestand die Leiste ausschließlich aus diesen
+            beiden Tönen -- sie war schlicht unsichtbar, und der Test der
+            Runde 8 hat sie folgerichtig nicht als Fortschritt erkannt. Im
+            Dunkeln fiel es nicht auf, weil --track dort #313632 auf #191b1a
+            ist. Deshalb jetzt durchgehend Töne mit Deckkraft statt der
+            vorgemischten Flächenfarben: die offene Spur trägt den
+            Text-Grauton, der laufende Artikel den Primärton, und beide
+            behalten ihren Abstand zum Grund in beiden Themes.
+
+            6px statt 4px und 2px Lücke statt 4px, weil die Farbe Fläche
+            braucht: bei 34 Positionen blieben von der Breite sonst zwei
+            Drittel Lücke. */}
+        <div className="flex h-1.5 gap-0.5" aria-hidden="true">
           {batch.map((item, position) => (
             <span
               key={item.id}
@@ -351,8 +392,8 @@ function ReviewFlow({
                   : item.status === "skipped"
                     ? "bg-faint"
                     : position === index
-                      ? "bg-primary-tint"
-                      : "bg-track",
+                      ? "bg-primary/50"
+                      : "bg-faint/25",
               )}
             />
           ))}
@@ -673,6 +714,23 @@ function StepCard({
             </button>
           )}
         </div>
+
+        {/* Der Steuersatz-Verdacht gehört in den Schritt, nicht vor ihn: die
+            Zeile lief bis eben bereits übersprungen in den Batch und stand
+            erst am Ende unter "Übersprungen". Bei 34 Positionen liest dort
+            niemand mehr gegen, und der Testlauf verlor auf genau diesem Weg
+            einen Energydrink -- 19 % Mehrwertsteuer, trotzdem ein
+            Lebensmittel. Jetzt wird die Zeile abgefragt wie jede andere und
+            trägt nur ihren Hinweis mit. */}
+        {entry.foodDoubt && (
+          <p className="mt-2.5 flex items-start gap-1.5 rounded-[12px] bg-warning-tint px-2.5 py-2 text-[12px] leading-snug font-semibold text-warning">
+            <TriangleAlert className="mt-px size-3.5 shrink-0" strokeWidth={2.4} />
+            <span>
+              19 % Mehrwertsteuer — laut Beleg vermutlich kein Lebensmittel.
+              Getränke tragen den Satz allerdings auch.
+            </span>
+          </p>
+        )}
 
         {categoryRow ? (
           <>

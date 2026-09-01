@@ -65,8 +65,10 @@ export type ReceiptDraftLine = {
   /**
    * Steuerklasse laut Beleg. Waehlt nichts ab, sondern stellt eine Frage:
    * eine unbekannte Zeile mit "A" (19 %) geht als `foodDoubt` in den Batch
-   * und steht am Ende des Pruef-Flows unter "Uebersprungen", mit der
-   * Begruendung "Vermutlich kein Lebensmittel" und dem Weg zurueck.
+   * und wird im Pruef-Flow abgefragt wie jede andere -- nur mit dem Hinweis
+   * "vermutlich kein Lebensmittel" im Schritt. Uebersprungen wird sie nicht
+   * mehr vorab: 19 % tragen auch Limonaden, und der Testlauf verlor so einen
+   * Energydrink, den niemand am Ende unter 34 Namen wieder herausfischt.
    */
   vatClass: string | null;
   category: string | null;

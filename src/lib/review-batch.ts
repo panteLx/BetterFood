@@ -46,11 +46,10 @@
  * - Der Rechnungsimport setzt zusätzlich `rawName` (die Schreibweise vom
  *   Beleg, aus der `POST /api/items/import` den Alias in `product_knowledge`
  *   lernt), `purchasedAt`, `sourceQuantity` und `foodDoubt`. `barcode` ist
- *   dort `null`, Belegzeilen haben keinen. Er ist außerdem der einzige
- *   Schreiber, der `status` schon setzt -- eine Zeile mit `foodDoubt` kommt
- *   bereits `skipped` herein.
- * - Ansonsten ist der Prüf-Flow der einzige, der `expiryDate` und `status`
- *   schreibt.
+ *   dort `null`, Belegzeilen haben keinen.
+ * - `expiryDate` und `status` schreibt ausschließlich der Prüf-Flow. Auch
+ *   eine Zeile mit `foodDoubt` kommt `pending` herein: der Verdacht ist ein
+ *   Hinweis, keine Entscheidung.
  *
  * ## `purchasedAt`
  *
@@ -111,11 +110,14 @@ export type BatchEntry = {
    * Der Beleg legt nahe, dass das kein Lebensmittel ist: 19 % Mehrwertsteuer
    * an einer Zeile, die diese Liste noch nicht kennt.
    *
-   * Der Eintrag kommt damit bereits `skipped` in den Batch und taucht erst
-   * am Ende des Prüf-Flows wieder auf -- in der Übersprungen-Liste, mit
-   * Begründung und dem vorhandenen „Doch übernehmen". Ein Verdacht ist keine
-   * Frage, die den Durchlauf unterbrechen sollte: Klopapier und Spülmittel
-   * kosten sonst je einen eigenen Schritt, bevor der erste Joghurt drankommt.
+   * Ein Hinweis und keine Vorauswahl. Der erste Anlauf ließ solche Zeilen
+   * bereits `skipped` in den Batch laufen, damit Klopapier und Spülmittel
+   * keinen eigenen Schritt kosten -- nur trifft der Steuersatz eben auch
+   * jede Limonade. Der Testlauf fand einen Energydrink, der so unbemerkt
+   * aus dem Einkauf fiel: übersprungene Zeilen stehen erst am Ende und
+   * niemand liest dort 34 Namen gegen. Ein vergessener Artikel kostet mehr
+   * als ein abzuwählender, also kommt die Zeile `pending` herein und trägt
+   * ihren Verdacht sichtbar im Schritt.
    */
   foodDoubt: boolean;
   /**
@@ -154,8 +156,13 @@ export type NewBatchEntry = Partial<Omit<BatchEntry, "id" | "source">> & {
  * einen Vorgabewert --, aber die Regel oben gilt trotzdem: ein halber Einkauf
  * aus dem Stand vor dem Deploy ist die schlechtere Hinterlassenschaft als ein
  * leerer Batch, und diese Klasse von Fehlern soll gar nicht erst entstehen.
+ *
+ * v3: die Form ist dieselbe, die Bedeutung nicht -- eine Zeile mit
+ * `foodDoubt` kommt seither `pending` statt `skipped` herein. Ein v2-Batch
+ * trüge genau die Vorauswahl weiter, die hier abgeschafft wird, und zwar
+ * unsichtbar. Deshalb auch hier eine neue Nummer.
  */
-export const REVIEW_BATCH_KEY = "bf.review-batch.v2";
+export const REVIEW_BATCH_KEY = "bf.review-batch.v3";
 
 /**
  * Mehr Positionen nimmt `POST /api/items/import` ohnehin nicht an (MAX_ITEMS

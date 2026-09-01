@@ -61,10 +61,10 @@ export function ReceiptImport() {
    * Der Verdacht, dass eine Zeile gar kein Lebensmittel ist: 19 %
    * Mehrwertsteuer an einem Produkt, das diese Liste noch nicht kennt.
    *
-   * Der Steuersatz wählt nichts mehr vor -- 19 % sind meistens Drogerie oder
+   * Der Steuersatz wählt nichts vor -- 19 % sind meistens Drogerie oder
    * Haushalt, aber eben auch jede Limonade, und ein vergessener Artikel
-   * kostet mehr als ein abzuwählender. Er stellt nur noch eine Frage, und
-   * auch das nur, solange die Liste das Produkt nicht kennt: ab dem ersten
+   * kostet mehr als ein abzuwählender. Er stellt nur eine Frage, und auch
+   * das nur, solange die Liste das Produkt nicht kennt: ab dem ersten
    * Import ist sie beantwortet.
    */
   function looksInedible(line: ReceiptDraftLine): boolean {
@@ -127,13 +127,13 @@ export function ReceiptImport() {
         category: line.category,
         placeId: line.placeId,
         purchasedAt,
+        // Nur der Hinweis, nicht die Entscheidung: `status` bleibt bei der
+        // Vorgabe "pending", und der Prüf-Flow zeigt den Verdacht im Schritt.
+        // Der erste Anlauf ließ die Zeile bereits übersprungen herein --
+        // dann steht sie am Ende unter 34 Namen in der Übersprungen-Liste,
+        // und der Testlauf verlor auf genau diesem Weg einen Energydrink,
+        // der 19 % trägt und trotzdem ein Lebensmittel ist.
         foodDoubt: looksInedible(line),
-        // Der Verdacht unterbricht den Durchlauf nicht: die Zeile kommt
-        // bereits übersprungen herein und steht am Ende in der
-        // Übersprungen-Liste, mit Begründung und "Doch übernehmen". Klopapier
-        // und Spülmittel kosten sonst je einen eigenen Schritt, bevor der
-        // erste Joghurt drankommt.
-        status: looksInedible(line) ? "skipped" : "pending",
       }),
     );
 
@@ -141,9 +141,9 @@ export function ReceiptImport() {
     writeBatch(batch);
     setDraft(null);
 
-    // Auf den ersten offenen Eintrag und nicht stur auf /review/0: der könnte
-    // eine der übersprungenen Verdachtszeilen sein, und der Flow begänne mit
-    // einem Artikel, über den schon entschieden ist.
+    // Auf den ersten offenen Eintrag und nicht stur auf /review/0: liegt
+    // schon ein durchgeprüfter Scan-Batch davor, begänne der Flow sonst bei
+    // einem Artikel, über den längst entschieden ist.
     const first = batch.findIndex((entry) => entry.status === "pending");
     router.push(`/review/${first >= 0 ? first : batch.length}`);
   }
@@ -210,7 +210,6 @@ export function ReceiptImport() {
   }
 
   const doubtful = draft.lines.filter(looksInedible).length;
-  const toCheck = draft.lines.length - doubtful;
 
   return (
     <>
@@ -293,10 +292,10 @@ export function ReceiptImport() {
         {doubtful > 0 && (
           <p className="text-[12px] leading-relaxed font-medium text-faint">
             {doubtful === 1
-              ? "Eine Zeile sieht nach Drogerie oder Haushalt aus und bleibt zunächst draußen"
-              : `${doubtful} Zeilen sehen nach Drogerie oder Haushalt aus und bleiben zunächst draußen`}{" "}
-            — am Ende des Prüfens stehen sie unter „Übersprungen“ und lassen
-            sich von dort übernehmen.
+              ? "Eine Zeile trägt 19 % Mehrwertsteuer und ist als „vermutlich kein Lebensmittel“ markiert"
+              : `${doubtful} Zeilen tragen 19 % Mehrwertsteuer und sind als „vermutlich kein Lebensmittel“ markiert`}{" "}
+            — abgefragt werden sie trotzdem, der Hinweis steht dann im Schritt
+            dabei.
           </p>
         )}
         <Button
@@ -304,7 +303,9 @@ export function ReceiptImport() {
           onClick={() => handOver(draft)}
         >
           <Check className="size-4.5" strokeWidth={2.4} />
-          {toCheck === 1 ? "1 Artikel prüfen" : `${toCheck} Artikel prüfen`}
+          {draft.lines.length === 1
+            ? "1 Artikel prüfen"
+            : `${draft.lines.length} Artikel prüfen`}
         </Button>
       </div>
     </>
