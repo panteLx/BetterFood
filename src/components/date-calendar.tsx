@@ -38,9 +38,7 @@ export function DateCalendar({
    *
    * Ein bestätigter Tag ist gefüllt, ein vorgeschlagener nur geringelt. Der
    * Unterschied trägt eine echte Aussage -- "das ist der Richtwert der
-   * Kategorie" gegen "das hast du so gewählt" --, und deshalb hat der
-   * Vorschlag denselben Ring, mit dem der Kalender auch den heutigen Tag
-   * markiert: beides heißt "beachtenswert, aber nicht ausgewählt".
+   * Kategorie" gegen "das hast du so gewählt".
    */
   confirmed?: boolean;
 }) {
@@ -160,14 +158,20 @@ export function DateCalendar({
                 !inMonth && "opacity-35",
                 isPast && "cursor-default text-faint",
                 isValue && confirmed && "bg-primary text-primary-foreground",
-                // Der Ring markiert zweierlei: den heutigen Tag und einen noch
-                // unbestätigten Vorschlag. Beides heißt dasselbe -- schau hin,
-                // aber es ist nicht deine Wahl -- und fällt in dem einen Fall,
-                // in dem der Vorschlag auf heute liegt, zu Recht zusammen.
-                // Welches Datum tatsächlich gespeichert wird, sagt ohnehin die
-                // Ergebniszeile unter dem Kalender.
-                ((isValue && !confirmed) || (isToday && !isValue)) &&
+                // Der primärfarbene Ring gehört immer dem Tag, der gespeichert
+                // würde. Im Blatt (confirmed) ist das nur der heutige Tag als
+                // Orientierung, im Prüfschritt der unbestätigte Richtwert.
+                ((isValue && !confirmed) || (isToday && !isValue && confirmed)) &&
                   "font-extrabold ring-[1.5px] ring-primary ring-inset",
+                // Im Prüfschritt stehen Richtwert und heutiger Tag nebeneinander
+                // im selben Raster. Trügen beide denselben Ring, hieße dieselbe
+                // Markierung an zwei Stellen zweierlei, und man könnte dem
+                // Kalender nicht mehr ansehen, welcher der beiden Tage das MHD
+                // wird -- genau das zeigte der erste Screenshot-Durchlauf am
+                // 01.09.2026, wo der 1. und der 8. September identisch aussahen.
+                // Heute bleibt deshalb markiert, aber leiser.
+                isToday && !isValue && !confirmed &&
+                  "font-bold ring-[1.5px] ring-border ring-inset",
               )}
             >
               {date.getDate()}
