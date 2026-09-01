@@ -10,6 +10,7 @@ import {
   StockIllustration,
   SwipeIllustration,
 } from "@/components/onboarding-illustrations";
+import { DEMO_FOOTNOTE } from "@/lib/demo-data";
 import { cn, withRedirect } from "@/lib/utils";
 
 const SLIDES = [
@@ -38,9 +39,13 @@ const SLIDES = [
 /**
  * Splash und Onboarding vor der ersten Anmeldung.
  *
- * Beide Wege hier heraus fuehren auf die Registrierung: die Einfuehrung
+ * Der Hauptweg hier heraus fuehrt auf die Registrierung: die Einfuehrung
  * erklaert, wofuer man ein Konto anlegt, und endet deshalb genau dort. Wer
- * schon eins hat, findet den Weg zum Anmelden darunter.
+ * schon eins hat, findet den Weg zum Anmelden darunter. Seit dem letzten
+ * Schritt steht daneben die Demo unter /demo -- fuer alle, denen vier
+ * Illustrationen die Frage "und wie sieht das mit echten Artikeln aus?" nicht
+ * beantworten. Sie ist rein lesend und fuehrt am Ende ebenfalls auf
+ * /register.
  *
  * Der Merker dafuer, dass das erledigt ist, wird nicht hier gesetzt, sondern
  * mit der ersten erfolgreichen Anmeldung im Proxy -- siehe WELCOME_COOKIE.
@@ -102,13 +107,21 @@ function Welcome() {
         </div>
         <div className="flex flex-col gap-3">
           <h1 className="text-[27px] leading-tight text-balance">{slide.title}</h1>
-          <p className="text-[15px] leading-relaxed font-medium text-balance text-muted-foreground">
+          {/* Maße aus 8h: 14,5px/500 auf 1,55 Zeilenhöhe, auf 280px begrenzt.
+              Die Begrenzung ist der eigentliche Punkt -- in der 390px-Spalte
+              lief der Satz sonst über die volle Breite und damit über die
+              Zeilenlänge hinaus, ab der ein Fließtext in dieser Größe
+              schwerer zu lesen wird als eine Überschrift. Sie gilt auf allen
+              vier Schritten und nicht nur auf dem letzten: die Schritte
+              blättern ineinander, und ein Absatz, der beim Weiterblättern
+              seine Breite wechselt, sieht aus wie ein Fehler. */}
+          <p className="max-w-[280px] text-[14.5px] leading-[1.55] font-medium text-balance text-muted-foreground">
             {slide.body}
           </p>
         </div>
       </div>
 
-      <div className="mb-6 flex items-center justify-center gap-1.5" aria-hidden="true">
+      <div className="flex items-center justify-center gap-1.5" aria-hidden="true">
         {SLIDES.map((entry, index) => (
           <span
             key={entry.title}
@@ -120,23 +133,51 @@ function Welcome() {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={() => (isLast ? finish() : setStep(step + 1))}
-        className="h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground"
-      >
-        {isLast ? "Konto erstellen" : "Weiter"}
-      </button>
+      {/* Knopfgruppe aus 8h: 36px unter der Punkt-Navigation, 10px zwischen
+          den Zeilen. */}
+      <div className="mt-9 flex flex-col gap-2.5">
+        <button
+          type="button"
+          onClick={() => (isLast ? finish() : setStep(step + 1))}
+          className="h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground"
+        >
+          {isLast ? "Konto erstellen" : "Weiter"}
+        </button>
 
-      {/* Wer schon ein Konto hat, ist auf einem neuen Geraet trotzdem hier
-          gelandet -- ohne diesen Weg fuehrte der einzige Knopf ihn zur
-          Registrierung mit einer bereits vergebenen E-Mail. */}
-      <Link
-        href={withRedirect("/login", redirect)}
-        className="mt-1 flex h-11 items-center justify-center text-sm font-semibold text-muted-foreground"
-      >
-        Ich habe schon ein Konto
-      </Link>
+        {/* Der zweite Weg, und nur auf dem letzten Schritt: bis hierher
+            erklärt die Einführung, wofür die App gut ist, danach steht die
+            Frage "und wie sieht das aus?" -- die Demo beantwortet sie, ohne
+            vorher nach einer E-Mail-Adresse zu fragen. Auf den Schritten
+            davor stünde sie im Weg, weil dort noch "Weiter" die gemeinte
+            Handlung ist.
+
+            Der Fußnotensatz gehört dazu und nicht in die Demo allein: Er ist
+            die einzige Stelle, an der vor dem Tippen steht, dass dort ein
+            erfundener Vorrat wartet und kein eigener. */}
+        {isLast && (
+          <>
+            <Link
+              href="/demo"
+              className="flex h-14 items-center justify-center rounded-[18px] border border-border bg-card text-base font-bold"
+            >
+              Mit Demo-Vorrat ausprobieren
+            </Link>
+            <p className="text-center text-[12px] leading-snug font-semibold text-balance text-faint">
+              {DEMO_FOOTNOTE}
+            </p>
+          </>
+        )}
+
+        {/* Wer schon ein Konto hat, ist auf einem neuen Geraet trotzdem hier
+            gelandet -- ohne diesen Weg fuehrte der einzige Knopf ihn zur
+            Registrierung mit einer bereits vergebenen E-Mail. */}
+        <Link
+          href={withRedirect("/login", redirect)}
+          className="flex h-11 items-center justify-center text-sm font-semibold text-muted-foreground"
+        >
+          Ich habe schon ein Konto
+        </Link>
+      </div>
     </div>
   );
 }
