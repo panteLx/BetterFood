@@ -45,9 +45,12 @@
  *   `expiryDate` bleibt `null` -- beides gehört dem Prüf-Flow.
  * - Der Rechnungsimport setzt zusätzlich `rawName` (die Schreibweise vom
  *   Beleg, aus der `POST /api/items/import` den Alias in `product_knowledge`
- *   lernt) und `purchasedAt`. `barcode` ist dort `null`, Belegzeilen haben
- *   keinen.
- * - Der Prüf-Flow ist der einzige, der `expiryDate` und `status` schreibt.
+ *   lernt), `purchasedAt`, `sourceQuantity` und `foodDoubt`. `barcode` ist
+ *   dort `null`, Belegzeilen haben keinen. Er ist außerdem der einzige
+ *   Schreiber, der `status` schon setzt -- eine Zeile mit `foodDoubt` kommt
+ *   bereits `skipped` herein.
+ * - Ansonsten ist der Prüf-Flow der einzige, der `expiryDate` und `status`
+ *   schreibt.
  *
  * ## `purchasedAt`
  *
@@ -94,6 +97,28 @@ export type BatchEntry = {
   /** Immer >= 1. Derselbe Barcode ein zweites Mal erhöht diese Zahl. */
   quantity: number;
   /**
+   * Die Menge, wie die Quelle sie gemeldet hat -- `null` beim Scan, wo es
+   * keine gibt (dort zählt der Nutzer selbst, indem er ein zweites Mal
+   * scannt).
+   *
+   * Steht daneben, sobald `quantity` davon abweicht: „laut Beleg 6×" neben
+   * einer korrigierten 4 sagt, dass die Abweichung Absicht war und nicht ein
+   * Vertipper. Ohne diesen Bezug ließe sich eine falsch erkannte Menge nicht
+   * von einer bewusst geänderten unterscheiden.
+   */
+  sourceQuantity: number | null;
+  /**
+   * Der Beleg legt nahe, dass das kein Lebensmittel ist: 19 % Mehrwertsteuer
+   * an einer Zeile, die diese Liste noch nicht kennt.
+   *
+   * Der Eintrag kommt damit bereits `skipped` in den Batch und taucht erst
+   * am Ende des Prüf-Flows wieder auf -- in der Übersprungen-Liste, mit
+   * Begründung und dem vorhandenen „Doch übernehmen". Ein Verdacht ist keine
+   * Frage, die den Durchlauf unterbrechen sollte: Klopapier und Spülmittel
+   * kosten sonst je einen eigenen Schritt, bevor der erste Joghurt drankommt.
+   */
+  foodDoubt: boolean;
+  /**
    * Treffer in `product_knowledge` dieser Liste -- also "diese Liste hat das
    * schon einmal einsortiert". **Nicht** "bei Open Food Facts gefunden":
    * OFF liefert nur einen Namen, keine Einordnung, und ein dort bekanntes
@@ -123,8 +148,14 @@ export type NewBatchEntry = Partial<Omit<BatchEntry, "id" | "source">> & {
  * String. Ändert sich die Form der Einträge, bekommt der Schlüssel eine neue
  * Nummer -- ein Nutzer mit offenem Tab über ein Deploy hinweg bekommt dann
  * einen leeren Batch statt halb gelesener Einträge.
+ *
+ * v2: `sourceQuantity` und `foodDoubt` kamen mit dem Rechnungsimport dazu.
+ * `parseEntry` läse einen v1-Eintrag zwar fehlerfrei -- beide Felder haben
+ * einen Vorgabewert --, aber die Regel oben gilt trotzdem: ein halber Einkauf
+ * aus dem Stand vor dem Deploy ist die schlechtere Hinterlassenschaft als ein
+ * leerer Batch, und diese Klasse von Fehlern soll gar nicht erst entstehen.
  */
-export const REVIEW_BATCH_KEY = "bf.review-batch.v1";
+export const REVIEW_BATCH_KEY = "bf.review-batch.v2";
 
 /**
  * Mehr Positionen nimmt `POST /api/items/import` ohnehin nicht an (MAX_ITEMS
@@ -173,6 +204,8 @@ function parseEntry(raw: unknown): BatchEntry | null {
     name: value.name,
     rawName: nullableString(value.rawName),
     quantity: Number.isFinite(quantity) ? Math.min(Math.max(quantity, 1), MAX_QUANTITY) : 1,
+    sourceQuantity: typeof value.sourceQuantity === "number" ? value.sourceQuantity : null,
+    foodDoubt: value.foodDoubt === true,
     known: value.known === true,
     category: nullableString(value.category),
     placeId: typeof value.placeId === "number" ? value.placeId : null,
@@ -331,6 +364,8 @@ export function createEntry(input: NewBatchEntry): BatchEntry {
     name: input.name ?? "",
     rawName: input.rawName ?? null,
     quantity: Math.min(Math.max(Math.round(input.quantity ?? 1), 1), MAX_QUANTITY),
+    sourceQuantity: input.sourceQuantity ?? null,
+    foodDoubt: input.foodDoubt ?? false,
     known: input.known ?? false,
     category: input.category ?? null,
     placeId: input.placeId ?? null,

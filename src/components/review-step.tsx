@@ -3,7 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ScanBarcode } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  Minus,
+  Plus,
+  ScanBarcode,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { CategoryIcon } from "@/components/category-icon";
 import { DateCalendar } from "@/components/date-calendar";
@@ -260,9 +268,11 @@ function ReviewFlow({
       router.refresh();
       // replace statt push: der Prüf-Flow ist abgearbeitet, ein Schritt
       // zurück führte nur auf einen leeren Batch.
+      // Der Weg zurück ist der, auf dem der Einkauf hereinkam: nach einem
+      // Beleg der nächste Beleg, nach einem Scan die Kamera.
       router.replace(
         `/saved?name=${encodeURIComponent(summary)}&method=${
-          batch[0]?.source === "scan" ? "scan" : "manual"
+          batch[0]?.source === "receipt" ? "receipt" : "scan"
         }`,
       );
     } catch (caught) {
@@ -309,10 +319,20 @@ function ReviewFlow({
 
         <h1 className="text-[20px] leading-tight font-extrabold">Kurz prüfen</h1>
 
+        {/* Der Zaehler steht nur, solange noch etwas offen ist. Am Ende las
+            sich dieselbe Zeile als "Alle 34 geprüft · 34 geprüft" -- die
+            Bilanz danach sagt ohnehin genauer, was uebernommen und was
+            uebersprungen wurde. */}
         <p className="text-[12.5px] font-bold text-muted-foreground">
-          {entry ? `Artikel ${index + 1} von ${batch.length}` : `Alle ${batch.length} geprüft`}
-          {" · "}
-          <span className="text-primary">{decidedCount} geprüft</span>
+          {entry ? (
+            <>
+              {`Artikel ${index + 1} von ${batch.length}`}
+              {" · "}
+              <span className="text-primary">{decidedCount} geprüft</span>
+            </>
+          ) : (
+            `Alle ${batch.length} geprüft`
+          )}
         </p>
 
         {/* Ein Segment je Artikel statt einer durchgehenden Leiste: der
@@ -376,8 +396,16 @@ function ReviewFlow({
 type StepPatch = {
   category: string | null;
   placeId: number | null;
+  /** Nur gesetzt, wenn der Nutzer den Namen in diesem Schritt geändert hat. */
+  name?: string;
+  /** Die Schreibweise, unter der die Zeile hereinkam -- siehe `renameTo`. */
+  rawName?: string | null;
+  quantity?: number;
   expiryDate?: string | null;
 };
+
+/** Kein Artikel kommt öfter als das vor -- derselbe Deckel wie im Batch. */
+const MAX_QUANTITY = 999;
 
 function StepCard({
   entry,
@@ -407,6 +435,13 @@ function StepCard({
       null,
   );
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [name, setName] = useState(entry.name);
+  const [quantity, setQuantity] = useState(entry.quantity);
+  // Der Umbenennen-Entwurf steht neben `name` und nicht darin: "Abbrechen"
+  // muss zum vorigen Namen zurückkommen, und ein leer getipptes Feld darf
+  // den Artikel nicht namenlos machen.
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(entry.name);
 
   const categoryRow = categories.find((row) => row.key === category) ?? null;
   const shelfLife = categoryRow?.shelfLifeDays ?? DEFAULT_SHELF_LIFE_DAYS;
@@ -431,6 +466,20 @@ function StepCard({
     return key < todayKey ? todayKey : key;
   }
 
+  /**
+   * Ob ein Sprung überhaupt noch etwas ausdrückt.
+   *
+   * Bei einer Rechnung vom 24. August landen "+3 Tg" und "+1 Wo" beide vor
+   * heute, werden beide auf heute geklemmt -- und standen dann beide
+   * hervorgehoben da, als hätte der Nutzer zwei Werte gleichzeitig gewählt.
+   * Genau die Doppeldeutigkeit, die der Test der Runde 8 schon am
+   * Kalender-Ring gefunden hat. Ein Sprung, der nichts anderes sagen kann als
+   * "heute", ist keine Wahl, und ein toter Knopf soll auch tot aussehen.
+   */
+  function jumpIsPast(days: number): boolean {
+    return toDateInputValue(addDays(days, reference)) < todayKey;
+  }
+
   const suggestion = jumpTarget(shelfLife);
 
   const [date, setDate] = useState(entry.expiryDate ?? suggestion);
@@ -452,7 +501,34 @@ function StepCard({
   const selected = fromDateInputValue(date);
   const days = daysUntil(selected, today);
   const place = places.find((row) => row.id === placeId) ?? null;
-  const patch: StepPatch = { category, placeId };
+
+  /**
+   * Der Name, wie er hereinkam -- und damit der Alias, den
+   * `POST /api/items/import` in `product_knowledge` schreibt.
+   *
+   * Beim Beleg steht er schon da (`rawName` ist dort die Schreibweise vom
+   * Papier). Beim Scan ist er leer, und der Anzeigename kommt von Open Food
+   * Facts: wer "ja! Vollmilch 3,5% 1l" zu "Vollmilch" begradigt, soll beim
+   * nächsten Scan desselben Barcodes seine eigene Schreibweise wiedersehen,
+   * und dafür muss die alte als Alias mitgehen. `??` und nicht `||`: eine
+   * zweite Umbenennung im selben Schritt darf die erste nicht überschreiben.
+   */
+  const originalName = entry.rawName ?? entry.name;
+  const renamed = name.trim() !== entry.name;
+
+  const patch: StepPatch = {
+    category,
+    placeId,
+    quantity,
+    ...(renamed ? { name: name.trim(), rawName: originalName } : {}),
+  };
+
+  /** Übernimmt den Entwurf aus dem Eingabefeld; ein leerer bleibt wirkungslos. */
+  function commitRename() {
+    const trimmed = draftName.trim();
+    if (trimmed) setName(trimmed);
+    setEditingName(false);
+  }
 
   function chooseCategory(next: Category) {
     setCategory(next.key);
@@ -470,19 +546,123 @@ function StepCard({
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-primary-tint text-primary">
             <CategoryIcon categoryKey={category ?? "sonstiges"} className="size-6" />
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[17px] leading-tight font-extrabold tracking-[-0.01em]">
-              {entry.name || entry.barcode || "Unbenannt"}
-              {entry.quantity > 1 && (
-                <span className="ml-2 text-muted-foreground">×{entry.quantity}</span>
-              )}
-            </p>
-            <p className="mt-0.5 truncate text-[12.5px] font-semibold text-faint">
-              {categoryRow
+
+          {editingName ? (
+            <>
+              <input
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") commitRename();
+                  if (event.key === "Escape") setEditingName(false);
+                }}
+                autoFocus
+                aria-label="Name des Artikels"
+                className="h-10 min-w-0 flex-1 rounded-[12px] border border-primary bg-surface-2 px-2.5 text-[15px] font-bold outline-none"
+              />
+              <button
+                type="button"
+                aria-label="Namen übernehmen"
+                onClick={commitRename}
+                className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Check className="size-4" strokeWidth={2.6} />
+              </button>
+              <button
+                type="button"
+                aria-label="Umbenennen abbrechen"
+                onClick={() => setEditingName(false)}
+                className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-surface-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <X className="size-4" strokeWidth={2.4} />
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Der Name ist selbst der Knopf, wie im Rechnungsimport, aus
+                  dem dieser Schritt ihn geerbt hat: ein Stift daneben wäre
+                  ein zweites Ziel für dieselbe Absicht. Er ist der
+                  Schlüssel, unter dem die Liste das Produkt wiedererkennt --
+                  "KAROTTE SNACK RL" jetzt zu begradigen ist billiger, als es
+                  bei jedem künftigen Einkauf erneut vorgeschlagen zu
+                  bekommen.
+
+                  Zwei Zeilen und kein Abschnitt: seit der Stepper rechts
+                  steht, blieben von "REWE Beste Wahl Pesto Alla Genovese mit
+                  Basilikum und Käse 190g" noch neunzehn Zeichen übrig -- und
+                  auf dem Kategorie-Schritt ist der Name das Einzige, woran
+                  der Artikel zu erkennen ist. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftName(name);
+                  setEditingName(true);
+                }}
+                aria-label={`${name || entry.barcode || "Artikel"} umbenennen`}
+                className="line-clamp-2 min-w-0 flex-1 rounded-[10px] text-left text-[17px] leading-tight font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {name || entry.barcode || "Unbenannt"}
+              </button>
+
+              {/* Der Stepper und nicht nur ein "×3": eine falsch erkannte
+                  Belegmenge war bis hierher nicht mehr zu korrigieren, und im
+                  Vorrat steht sie danach als drei Flaschen, die es nie gab. */}
+              <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-[12px] border border-border bg-surface-2 px-1">
+                <button
+                  type="button"
+                  aria-label="Menge verringern"
+                  disabled={quantity <= 1}
+                  onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                  className="flex size-7 items-center justify-center rounded-[9px] text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                >
+                  <Minus className="size-3.5" strokeWidth={2.6} />
+                </button>
+                <span
+                  aria-label={`Menge ${quantity}`}
+                  className="min-w-6 text-center font-mono text-[13px] font-bold"
+                >
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Menge erhöhen"
+                  disabled={quantity >= MAX_QUANTITY}
+                  onClick={() =>
+                    setQuantity((current) => Math.min(MAX_QUANTITY, current + 1))
+                  }
+                  className="flex size-7 items-center justify-center rounded-[9px] text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                >
+                  <Plus className="size-3.5" strokeWidth={2.6} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Die Einordnung steht in einer eigenen Zeile unter dem Namen, seit
+            der Stepper den Platz rechts daneben belegt. Was der Beleg
+            zusätzlich hergab -- Gewicht als Notiz, und die gemeldete Menge,
+            sobald sie von der eingestellten abweicht -- hängt hier mit dran:
+            es beantwortet "warum steht da 4 und nicht 6?" an der Stelle, an
+            der die Frage aufkommt. */}
+        <div className="mt-2 flex items-center gap-2">
+          {/* Umbrechend statt abschneidend: mit Kategorie, Fach, Gewicht und
+              Belegmenge stehen hier bis zu vier Angaben, und die letzte --
+              „laut Beleg 1×“ -- ist die einzige, die eine Abweichung
+              erklaert. Sie war die erste, die wegfiel. */}
+          <p className="line-clamp-2 min-w-0 flex-1 text-[12.5px] font-semibold text-faint">
+            {[
+              categoryRow
                 ? [categoryRow.label, place?.name].filter(Boolean).join(" · ")
-                : "Noch nicht einsortiert"}
-            </p>
-          </div>
+                : "Noch nicht einsortiert",
+              entry.note,
+              entry.sourceQuantity !== null && entry.sourceQuantity !== quantity
+                ? `laut Beleg ${entry.sourceQuantity}×`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
           {categoryRow && (
             <button
               type="button"
@@ -518,11 +698,13 @@ function StepCard({
               <div className="flex border-b border-border">
                 {JUMPS.map((jump, position) => {
                   const target = jumpTarget(jump.days);
+                  const past = jumpIsPast(jump.days);
                   return (
                     <button
                       key={jump.days}
                       type="button"
-                      aria-pressed={target === date}
+                      disabled={past}
+                      aria-pressed={!past && target === date}
                       onClick={() => {
                         setDate(target);
                         // Ein Sprung ist eine Wahl. Wer "+1 Wo" antippt, hat den
@@ -535,9 +717,11 @@ function StepCard({
                       className={cn(
                         "min-w-0 flex-1 py-[9px] font-mono text-[11.5px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                         position > 0 && "border-l border-border",
-                        target === date
-                          ? "bg-primary-tint font-bold text-primary"
-                          : "font-semibold text-muted-foreground",
+                        past
+                          ? "font-semibold text-faint opacity-50"
+                          : target === date
+                            ? "bg-primary-tint font-bold text-primary"
+                            : "font-semibold text-muted-foreground",
                       )}
                     >
                       {jump.label}
@@ -782,9 +966,22 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
           {/* Mit der Menge, genau wie in der Fertig-Liste: wer zwei Flaschen
               Milch gescannt und dann übersprungen hat, muss sehen, dass beide
               draußen bleiben -- "Vollmilch" allein liest sich wie eine. */}
-          <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-faint line-through">
-            {entry.name}
-            {entry.quantity > 1 && <span className="ml-1.5">×{entry.quantity}</span>}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-bold text-faint line-through">
+              {entry.name}
+              {entry.quantity > 1 && <span className="ml-1.5">×{entry.quantity}</span>}
+            </span>
+            {/* Die einzige Zeile hier, die nicht der Nutzer selbst
+                verursacht hat: sie stand schon übersprungen da, als er
+                ankam. Ohne die Begründung sähe das nach einem Fehler des
+                Einlesens aus -- nach einer Zeile, die die App verschluckt
+                hat, statt nach einer Frage, die sie stellt. */}
+            {entry.foodDoubt && (
+              <span className="mt-0.5 flex items-center gap-1 text-[11.5px] leading-tight font-semibold text-warning">
+                <TriangleAlert className="size-3 shrink-0" strokeWidth={2.4} />
+                Vermutlich kein Lebensmittel
+              </span>
+            )}
           </span>
           <button
             type="button"
