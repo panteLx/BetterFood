@@ -47,7 +47,7 @@ export function ArchiveStats({ items }: { items: Item[] }) {
           </div>
 
           <div
-            className="flex h-2.5 overflow-hidden rounded-md bg-danger-tint"
+            className="flex h-2.5 overflow-hidden rounded-md bg-track"
             role="img"
             aria-label={`${quota} Prozent gerettet`}
           >

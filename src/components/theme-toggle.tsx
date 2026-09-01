@@ -6,14 +6,19 @@ import { useIsClient } from "@/lib/use-is-client";
 import { cn } from "@/lib/utils";
 
 /**
- * Zwei Vorschaukarten statt dreier Textknoepfe.
+ * Zwei Vorschaukarten statt dreier Textknöpfe.
  *
- * "Hell / Dunkel / System" nebeneinander liess offen, wie das Ergebnis
- * aussieht -- gerade bei einem dunklen Modus, der bewusst kein reines
+ * "Hell / Dunkel / System" nebeneinander ließ offen, wie das Ergebnis
+ * aussieht — gerade bei einem dunklen Modus, der bewusst kein reines
  * Schwarz verwendet. Die Systemeinstellung ist deshalb keine dritte
  * gleichwertige Option mehr, sondern ein Schalter darunter: sie ist kein
  * eigenes Aussehen, sondern die Entscheidung, sie jemand anderem zu
- * ueberlassen.
+ * überlassen.
+ *
+ * Die Werte unten sind Kopien aus globals.css und müssen mit jeder
+ * Palettenänderung mitgezogen werden — sie stehen hier als Literale, weil
+ * die Vorschau beide Paletten gleichzeitig zeigt und deshalb keine der
+ * beiden über die Tokens des gerade aktiven Modus beziehen kann.
  */
 const THEMES = [
   {
@@ -26,9 +31,9 @@ const THEMES = [
   {
     value: "dark",
     label: "Dunkel",
-    surface: "#0e1310",
-    accent: "#74c48d",
-    card: "#1e2721",
+    surface: "#191b1a",
+    accent: "#8cc9a4",
+    card: "#232624",
   },
 ] as const;
 
