@@ -11,7 +11,22 @@ import { WELCOME_COOKIE, WELCOME_COOKIE_MAX_AGE } from "@/lib/welcome";
 // bisher leitete der Proxy den Aufruf nach /login um, die Route lief nie und
 // die Erinnerungen blieben aus. Ungeschuetzt ist sie deshalb nicht -- sie
 // prueft ihr eigenes Bearer-Token (CRON_SECRET).
-const PUBLIC_PREFIXES = ["/login", "/register", "/welcome", "/api/auth", "/api/cron"];
+//
+// /demo ist die einzige Seite ohne requireSession(). Sie darf das, weil sie
+// die Datenbank gar nicht anfasst: ihr Vorrat steht fest in demo-data.ts und
+// ist fuer jeden Besucher derselbe. Die Regel "jede Route prueft zusaetzlich
+// selbst" bleibt damit unangetastet -- hier gibt es nichts zu pruefen, weil
+// es nichts Fremdes zu sehen gibt. Die Seite ist ausserdem rein lesend: sie
+// setzt keinen einzigen Schreibzugriff ab, und die Origin-Pruefung ueber
+// UNSAFE_METHODS bleibt fuer alles unter /api ohnehin unveraendert bestehen.
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/welcome",
+  "/demo",
+  "/api/auth",
+  "/api/cron",
+];
 
 // Eine Allowlist echter Asset-Endungen. Vorher stand hier /\.[a-zA-Z0-9]+$/ --
 // also "irgendein Punkt im letzten Segment", und damit war jeder Pfad, der so
