@@ -224,3 +224,199 @@ export function computeSavings(
 
   return { moneySavedCents, co2SavedGrams };
 }
+
+/**
+ * Die acht Abzeichen -- rein aus dem Archiv gerechnet, ohne eigene Tabelle.
+ *
+ * Eine Zwischenstufe mit Absicht: die Anforderung "Badges/Erfolge" steht seit
+ * der ersten Design-Runde, ein echtes Abzeichen-System mit Zeitstempel je
+ * Nutzer kommt in einem eigenen Branch. Bis dahin liegen die Belege ohnehin
+ * schon im Archiv, es hat sie nur niemand gezählt.
+ */
+export type BadgeId =
+  | "first_save"
+  | "streak_7"
+  | "streak_30"
+  | "monthly_goal"
+  | "saved_50"
+  | "waste_free_4_weeks"
+  | "saved_100"
+  | "one_year";
+
+export type Badge = {
+  id: BadgeId;
+  label: string;
+  /** Wofür es vergeben wird -- steht in der aufgeklappten Übersicht. */
+  requirement: string;
+  /**
+   * Wann es erreicht wurde, oder null, solange es das nicht ist. Das Datum
+   * wird aus dem Archiv rekonstruiert und nicht festgehalten; es kann sich
+   * deshalb ändern, wenn der Nutzer einen alten Eintrag rückgängig macht.
+   */
+  earnedAt: Date | null;
+};
+
+/** Tage zwischen zwei lokalen Mitternachten, sommerzeitfest gerundet. */
+function dayDiff(later: number, earlier: number): number {
+  return Math.round((later - earlier) / 86_400_000);
+}
+
+/**
+ * Der Tag, an dem der erste ausreichend lange Lauf ohne Verschwendung seine
+ * Länge erreicht hat -- oder null, wenn es ihn nie gab.
+ *
+ * Bewusst der längste Lauf der Vergangenheit und nicht die laufende Serie aus
+ * `streakDays`: ein Abzeichen ist eine Medaille, und eine Medaille nimmt man
+ * niemandem wieder weg. Mit der laufenden Serie wäre "30 Tage Serie" am Tag
+ * nach dem einen weggeworfenen Joghurt spurlos verschwunden -- der Nutzer
+ * hätte den Erfolg gehabt und stünde vor einer leeren Fußzeile.
+ *
+ * Gerechnet wird über die Eimer zwischen der ersten Aktivität und heute; ein
+ * Tag ohne jeden Eintrag zählt als sauber, genau wie in `streakDays`. Der
+ * Deckel von 4000 Schritten (gut elf Jahre in Tagen) hält die Schleife auch
+ * dann endlich, wenn ein von Hand gesetztes `resolved_at` weit in der
+ * Vergangenheit liegt.
+ */
+function firstCleanRun(
+  wastedBuckets: Set<number>,
+  firstBucket: number | null,
+  lastBucket: Date,
+  stepDays: number,
+  needed: number,
+): Date | null {
+  if (firstBucket === null) return null;
+
+  let cursor = new Date(firstBucket);
+  let run = 0;
+  for (let step = 0; step < 4000 && cursor.getTime() <= lastBucket.getTime(); step += 1) {
+    run = wastedBuckets.has(cursor.getTime()) ? 0 : run + 1;
+    if (run >= needed) return cursor;
+    cursor = shiftDays(cursor, stepDays);
+  }
+  return null;
+}
+
+/**
+ * Welche Abzeichen erreicht sind und seit wann.
+ *
+ * Die Reihenfolge im Ergebnis ist die des Entwurfs (grob nach Schwierigkeit),
+ * nicht die des Erreichens -- die Fußzeile der Startseite sortiert selbst
+ * nach `earnedAt`, die aufgeklappte Übersicht will die feste Reihe.
+ *
+ * `monthlyGoal` kommt von außen, weil das Ziel eine Einstellung des Nutzers
+ * ist und keine Eigenschaft des Archivs.
+ */
+export function computeBadges(
+  entries: ResolvedEntry[],
+  now: Date,
+  monthlyGoal: number,
+): Badge[] {
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const today = startOfDay(now);
+
+  const wastedDays = new Set<number>();
+  const wastedWeeks = new Set<number>();
+  let firstDay: number | null = null;
+  let firstWeek: number | null = null;
+  let firstSave: Date | null = null;
+  let savedThisMonth = 0;
+  let wastedThisMonth = 0;
+
+  // Die aufgebrauchten Artikel in Reihenfolge: die Mengenschwellen (50, 100)
+  // brauchen den Zeitpunkt, an dem die Summe die Marke überschritten hat,
+  // nicht nur die Endsumme.
+  const saves: { at: Date; quantity: number }[] = [];
+
+  for (const entry of entries) {
+    if (!entry.resolvedAt) continue;
+    const day = startOfDay(entry.resolvedAt).getTime();
+    const week = startOfWeek(entry.resolvedAt).getTime();
+    if (firstDay === null || day < firstDay) firstDay = day;
+    if (firstWeek === null || week < firstWeek) firstWeek = week;
+
+    if (entry.status === "thrown_away") {
+      wastedDays.add(day);
+      wastedWeeks.add(week);
+      if (entry.resolvedAt >= monthStart) wastedThisMonth += entry.quantity;
+    } else if (entry.status === "used") {
+      if (firstSave === null || entry.resolvedAt < firstSave) firstSave = entry.resolvedAt;
+      if (entry.resolvedAt >= monthStart) savedThisMonth += entry.quantity;
+      saves.push({ at: entry.resolvedAt, quantity: entry.quantity });
+    }
+  }
+
+  saves.sort((a, b) => a.at.getTime() - b.at.getTime());
+  const savedAt = (threshold: number): Date | null => {
+    let sum = 0;
+    for (const save of saves) {
+      sum += save.quantity;
+      if (sum >= threshold) return save.at;
+    }
+    return null;
+  };
+
+  const monthTotal = savedThisMonth + wastedThisMonth;
+  const quota = monthTotal > 0 ? Math.round((savedThisMonth / monthTotal) * 100) : null;
+
+  // Ein Jahr ab der ersten Aktivität, nicht ab der Registrierung: das Archiv
+  // weiß nichts über das Konto, und wer die App ein Jahr lang benutzt hat,
+  // hat sie an ihrem ersten Tag auch benutzt.
+  const anniversary =
+    firstDay !== null && dayDiff(today.getTime(), firstDay) >= 365
+      ? shiftDays(new Date(firstDay), 365)
+      : null;
+
+  return [
+    {
+      id: "first_save",
+      label: "Erste Rettung",
+      requirement: "Den ersten Artikel aufgebraucht statt weggeworfen",
+      earnedAt: firstSave,
+    },
+    {
+      id: "streak_7",
+      label: "7 Tage Serie",
+      requirement: "Eine Woche am Stück ohne etwas wegzuwerfen",
+      earnedAt: firstCleanRun(wastedDays, firstDay, today, 1, 7),
+    },
+    {
+      id: "streak_30",
+      label: "30 Tage Serie",
+      requirement: "Einen ganzen Monat am Stück ohne Verschwendung",
+      earnedAt: firstCleanRun(wastedDays, firstDay, today, 1, 30),
+    },
+    {
+      id: "monthly_goal",
+      // Das einzige Abzeichen, das den laufenden Monat betrifft -- und damit
+      // das einzige, das wieder verschwinden kann. Das ist hier richtig: das
+      // Monatsziel ist eine Zwischenbilanz, kein erreichter Meilenstein.
+      label: "Monatsziel erreicht",
+      requirement: `In diesem Monat mindestens ${monthlyGoal} % gerettet`,
+      earnedAt: quota !== null && quota >= monthlyGoal ? now : null,
+    },
+    {
+      id: "saved_50",
+      label: "50 gerettet",
+      requirement: "Insgesamt 50 Artikel aufgebraucht",
+      earnedAt: savedAt(50),
+    },
+    {
+      id: "waste_free_4_weeks",
+      label: "4 saubere Wochen",
+      requirement: "Vier Kalenderwochen in Folge ohne Verschwendung",
+      earnedAt: firstCleanRun(wastedWeeks, firstWeek, startOfWeek(now), 7, 4),
+    },
+    {
+      id: "saved_100",
+      label: "100 gerettet",
+      requirement: "Insgesamt 100 Artikel aufgebraucht",
+      earnedAt: savedAt(100),
+    },
+    {
+      id: "one_year",
+      label: "Ein Jahr dabei",
+      requirement: "Seit einem Jahr im Einsatz",
+      earnedAt: anniversary,
+    },
+  ];
+}
