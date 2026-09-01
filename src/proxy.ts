@@ -112,11 +112,25 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const sessionCookie = getSessionCookie(request);
+
+  // Einfuehrung und Demo-Vorschau sind Antworten auf die Frage "wofuer soll ich
+  // hier ein Konto anlegen?". Wer eines hat, hat sie beantwortet: die vier
+  // Slides waeren dann eine Werbung fuer etwas, das er bereits besitzt, und der
+  // Demo-Vorrat acht erfundene Artikel, die neben seinen echten stehen und sich
+  // nicht anfassen lassen. Beides fuehrt zurueck auf die Startseite.
+  //
+  // Vor der Allowlist und nicht danach, weil /welcome und /demo dort stehen --
+  // sonst waere die oeffentliche Ausnahme staerker als diese Regel. /login und
+  // /register bleiben bewusst erreichbar: das Konto zu wechseln ist etwas, das
+  // ein angemeldeter Nutzer legitim will.
+  if (sessionCookie && (pathname.startsWith("/welcome") || pathname.startsWith("/demo"))) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
-
-  const sessionCookie = getSessionCookie(request);
 
   if (sessionCookie) {
     // Ab hier gibt es ein Konto -- die Einfuehrung hat ihren Zweck erfuellt

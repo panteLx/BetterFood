@@ -27,6 +27,7 @@ export function DateCalendar({
   onChange,
   today,
   confirmed = true,
+  markToday = true,
 }: {
   /** yyyy-mm-dd, wie im Formular gehalten. */
   value: string;
@@ -41,6 +42,19 @@ export function DateCalendar({
    * Kategorie" gegen "das hast du so gewählt".
    */
   confirmed?: boolean;
+  /**
+   * Ob der heutige Tag seinen eigenen Ring bekommt.
+   *
+   * Im Blatt ja: dort ist er die einzige Orientierung im Raster. Im Prüfschritt
+   * nein -- dort trägt der unbestätigte Richtwert bereits einen Ring, und zwei
+   * gleich aussehende Ringe im selben Monat sagen nicht mehr, welcher der
+   * beiden Tage das MHD wird. Genau das zeigte der Screenshot-Durchlauf am
+   * 01.09.2026, wo der 1. und der 8. September identisch aussahen. Ein zweiter
+   * Ringstil wäre die falsche Antwort gewesen: die Vergangenheit ist im
+   * Kalender ohnehin ausgegraut, heute ist damit sichtbar der erste wählbare
+   * Tag und braucht keine eigene Marke.
+   */
+  markToday?: boolean;
 }) {
   const selected = useMemo(
     () => (value ? fromDateInputValue(value) : today),
@@ -158,20 +172,12 @@ export function DateCalendar({
                 !inMonth && "opacity-35",
                 isPast && "cursor-default text-faint",
                 isValue && confirmed && "bg-primary text-primary-foreground",
-                // Der primärfarbene Ring gehört immer dem Tag, der gespeichert
-                // würde. Im Blatt (confirmed) ist das nur der heutige Tag als
-                // Orientierung, im Prüfschritt der unbestätigte Richtwert.
-                ((isValue && !confirmed) || (isToday && !isValue && confirmed)) &&
+                // Ein Ring, eine Bedeutung: "beachtenswert, aber nicht deine
+                // Wahl". Im Blatt trägt ihn der heutige Tag, im Prüfschritt der
+                // unbestätigte Richtwert -- nie beide zugleich, dafür sorgt
+                // markToday.
+                ((isValue && !confirmed) || (isToday && !isValue && markToday)) &&
                   "font-extrabold ring-[1.5px] ring-primary ring-inset",
-                // Im Prüfschritt stehen Richtwert und heutiger Tag nebeneinander
-                // im selben Raster. Trügen beide denselben Ring, hieße dieselbe
-                // Markierung an zwei Stellen zweierlei, und man könnte dem
-                // Kalender nicht mehr ansehen, welcher der beiden Tage das MHD
-                // wird -- genau das zeigte der erste Screenshot-Durchlauf am
-                // 01.09.2026, wo der 1. und der 8. September identisch aussahen.
-                // Heute bleibt deshalb markiert, aber leiser.
-                isToday && !isValue && !confirmed &&
-                  "font-bold ring-[1.5px] ring-border ring-inset",
               )}
             >
               {date.getDate()}

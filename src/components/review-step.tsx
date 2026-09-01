@@ -151,6 +151,12 @@ function ReviewFlow({
   const [committing, setCommitting] = useState(false);
 
   const doneCount = batch.filter((entry) => entry.status === "done").length;
+  // Der Zähler in der Kopfzeile zählt entschiedene Artikel, nicht nur
+  // übernommene. Die Segmentleiste färbt ein übersprungenes Segment ein, der
+  // Zähler zählte es aber nicht mit -- "Artikel 2 von 2 · 0 fertig" bei einem
+  // halb gefüllten Balken war der Widerspruch, den der Test der Runde 8
+  // gefunden hat. Beide sprechen jetzt von derselben Menge.
+  const decidedCount = batch.filter((entry) => entry.status !== "pending").length;
   const entry = batch[index] ?? null;
 
   /**
@@ -306,7 +312,7 @@ function ReviewFlow({
         <p className="text-[12.5px] font-bold text-muted-foreground">
           {entry ? `Artikel ${index + 1} von ${batch.length}` : `Alle ${batch.length} geprüft`}
           {" · "}
-          <span className="text-primary">{doneCount} fertig</span>
+          <span className="text-primary">{decidedCount} geprüft</span>
         </p>
 
         {/* Ein Segment je Artikel statt einer durchgehenden Leiste: der
@@ -389,7 +395,17 @@ function StepCard({
   onSkip: (patch: StepPatch) => void;
 }) {
   const [category, setCategory] = useState<string | null>(entry.category);
-  const [placeId, setPlaceId] = useState<number | null>(entry.placeId);
+  // Ein bekanntes Produkt bringt seine Kategorie mit, aber nicht zwingend einen
+  // Ort: `product_knowledge` lernt den Ort erst, wenn er beim Anlegen dastand,
+  // und ein aufgelöstes Fach fällt in /api/items/known einzeln weg. Ohne diesen
+  // Rückfall landete so ein Artikel ortlos im Vorrat, obwohl seine Kategorie
+  // ein Standardfach kennt -- der Rückfall lief bisher nur, wenn der Nutzer die
+  // Kategorie selbst antippte, also gerade bei bekannten Produkten nie.
+  const [placeId, setPlaceId] = useState<number | null>(
+    entry.placeId ??
+      categories.find((row) => row.key === entry.category)?.defaultPlaceId ??
+      null,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const categoryRow = categories.find((row) => row.key === category) ?? null;
@@ -489,7 +505,16 @@ function StepCard({
               </span>
             </div>
 
-            <div className="mt-2.5 overflow-hidden rounded-[16px] border border-border">
+            {/* Woran die Sprünge rechnen, muss dastehen. "+3 Tg" neben einem
+                Richtwert von 7 Tagen liest sich sonst als "drei Tage auf den
+                Richtwert drauf", gemeint sind aber drei Tage ab heute -- beim
+                Rechnungsimport ab dem Kaufdatum, weil die Ware da schon im
+                Regal lag. */}
+            <p className="mt-2.5 text-[11px] font-semibold text-faint">
+              {entry.purchasedAt ? "Sprünge ab Kaufdatum" : "Sprünge ab heute"}
+            </p>
+
+            <div className="mt-1.5 overflow-hidden rounded-[16px] border border-border">
               <div className="flex border-b border-border">
                 {JUMPS.map((jump, position) => {
                   const target = jumpTarget(jump.days);
@@ -500,9 +525,12 @@ function StepCard({
                       aria-pressed={target === date}
                       onClick={() => {
                         setDate(target);
-                        // Ein Sprung ist eine Blätterbewegung, keine Antwort:
-                        // der Tag bleibt geringelt, bis der Nutzer ihn antippt.
-                        setConfirmed(false);
+                        // Ein Sprung ist eine Wahl. Wer "+1 Wo" antippt, hat den
+                        // Tag genauso benannt, als hätte er ihn im Raster
+                        // getroffen -- der Ring bleibt damit dem einen Zustand
+                        // vorbehalten, in dem noch gar nichts entschieden ist:
+                        // dem unangetasteten Richtwert.
+                        setConfirmed(true);
                       }}
                       className={cn(
                         "min-w-0 flex-1 py-[9px] font-mono text-[11.5px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -526,6 +554,7 @@ function StepCard({
                   }}
                   today={today}
                   confirmed={confirmed}
+                  markToday={false}
                 />
               </div>
             </div>
@@ -750,8 +779,12 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
           {/* Durchgestrichen und nicht ausgeblendet: übersprungen heißt "nicht
               in den Vorrat und nicht in die Produkt-DB", nicht "war nie da" --
               und die Rücknahme braucht etwas, worauf sie zeigen kann. */}
+          {/* Mit der Menge, genau wie in der Fertig-Liste: wer zwei Flaschen
+              Milch gescannt und dann übersprungen hat, muss sehen, dass beide
+              draußen bleiben -- "Vollmilch" allein liest sich wie eine. */}
           <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-faint line-through">
             {entry.name}
+            {entry.quantity > 1 && <span className="ml-1.5">×{entry.quantity}</span>}
           </span>
           <button
             type="button"

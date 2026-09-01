@@ -239,7 +239,6 @@ export type BadgeId =
   | "streak_30"
   | "monthly_goal"
   | "saved_50"
-  | "waste_free_4_weeks"
   | "saved_100"
   | "one_year";
 
@@ -315,9 +314,7 @@ export function computeBadges(
   const today = startOfDay(now);
 
   const wastedDays = new Set<number>();
-  const wastedWeeks = new Set<number>();
   let firstDay: number | null = null;
-  let firstWeek: number | null = null;
   let firstSave: Date | null = null;
   let savedThisMonth = 0;
   let wastedThisMonth = 0;
@@ -330,13 +327,10 @@ export function computeBadges(
   for (const entry of entries) {
     if (!entry.resolvedAt) continue;
     const day = startOfDay(entry.resolvedAt).getTime();
-    const week = startOfWeek(entry.resolvedAt).getTime();
     if (firstDay === null || day < firstDay) firstDay = day;
-    if (firstWeek === null || week < firstWeek) firstWeek = week;
 
     if (entry.status === "thrown_away") {
       wastedDays.add(day);
-      wastedWeeks.add(week);
       if (entry.resolvedAt >= monthStart) wastedThisMonth += entry.quantity;
     } else if (entry.status === "used") {
       if (firstSave === null || entry.resolvedAt < firstSave) firstSave = entry.resolvedAt;
@@ -400,12 +394,12 @@ export function computeBadges(
       requirement: "Insgesamt 50 Artikel aufgebraucht",
       earnedAt: savedAt(50),
     },
-    {
-      id: "waste_free_4_weeks",
-      label: "4 saubere Wochen",
-      requirement: "Vier Kalenderwochen in Folge ohne Verschwendung",
-      earnedAt: firstCleanRun(wastedWeeks, firstWeek, startOfWeek(now), 7, 4),
-    },
+    // Hier stand bis zum Test der Runde 8 ein Abzeichen "4 saubere Wochen"
+    // (vier Kalenderwochen in Folge ohne Verschwendung). Formal ist das etwas
+    // anderes als "30 Tage Serie" -- Wochenraster statt 30 zusammenhängender
+    // Tage --, als Aussage an den Nutzer aber dasselbe, und zwei Medaillen für
+    // eine Leistung entwerten beide. Die Wochen-Serie bleibt als Zahl im
+    // Archiv (`wasteFreeWeeks`) erhalten, nur das Abzeichen ist weg.
     {
       id: "saved_100",
       label: "100 gerettet",
