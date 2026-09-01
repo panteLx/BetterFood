@@ -9,6 +9,11 @@ import {
   NOTIFICATION_TIMES,
   type NotificationTime,
 } from "@/lib/notification-settings";
+import {
+  MONTHLY_GOAL_KEY,
+  isValidMonthlyGoal,
+  parseMonthlyGoal,
+} from "@/lib/monthly-goal";
 
 export async function GET() {
   const session = await requireSession();
@@ -19,7 +24,7 @@ export async function GET() {
     .where(
       and(
         eq(settings.userId, session.user.id),
-        inArray(settings.key, Object.values(NOTIFICATION_KEYS)),
+        inArray(settings.key, [...Object.values(NOTIFICATION_KEYS), MONTHLY_GOAL_KEY]),
       ),
     );
 
@@ -36,15 +41,20 @@ export async function GET() {
       byKey.get(NOTIFICATION_KEYS.weeklySummary) === undefined
         ? DEFAULT_NOTIFICATION_SETTINGS.weeklySummary
         : byKey.get(NOTIFICATION_KEYS.weeklySummary) === "1",
+    // Kein eigener Endpunkt: das Monatsziel ist dieselbe Sorte
+    // Nutzereinstellung und liegt in derselben Tabelle. Ein zweiter Aufruf
+    // fuer eine zweite Zeile waere ein Umweg um nichts.
+    monthlyGoal: parseMonthlyGoal(byKey.get(MONTHLY_GOAL_KEY)),
   });
 }
 
 export async function PUT(req: NextRequest) {
   const session = await requireSession();
-  const { leadDays, time, weeklySummary } = (await req.json()) as {
+  const { leadDays, time, weeklySummary, monthlyGoal } = (await req.json()) as {
     leadDays?: number;
     time?: string;
     weeklySummary?: boolean;
+    monthlyGoal?: number;
   };
 
   const updates: { key: string; value: string }[] = [];
@@ -65,6 +75,16 @@ export async function PUT(req: NextRequest) {
 
   if (weeklySummary !== undefined) {
     updates.push({ key: NOTIFICATION_KEYS.weeklySummary, value: weeklySummary ? "1" : "0" });
+  }
+
+  if (monthlyGoal !== undefined) {
+    if (!isValidMonthlyGoal(monthlyGoal)) {
+      return NextResponse.json(
+        { error: "Monatsziel muss zwischen 1 und 100 liegen" },
+        { status: 400 },
+      );
+    }
+    updates.push({ key: MONTHLY_GOAL_KEY, value: String(Math.round(monthlyGoal)) });
   }
 
   if (updates.length === 0) {
