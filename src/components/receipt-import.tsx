@@ -113,7 +113,23 @@ export function ReceiptImport() {
     // durchweg zwei Tage zu lange Haltbarkeiten.
     const purchasedAt = toDateInputValue(new Date(receipt.referenceDate));
 
-    const entries = receipt.lines.map((line) =>
+    // Die Verdachtszeilen zuerst, der Rest in Belegreihenfolge.
+    //
+    // Sie sind die einzigen, bei denen eine Entscheidung ansteht, die der
+    // Beleg nicht schon getroffen hat -- und sie stehen im Papier verstreut,
+    // also mitten im Durchlauf. Bei 34 Positionen entscheidet man die
+    // zwanzigste nicht mehr mit derselben Aufmerksamkeit wie die zweite; der
+    // Testlauf verlor auf genau diesem Weg einen Energydrink. Vorn gestellt
+    // sind sie beantwortet, bevor die Routine einsetzt.
+    //
+    // Nur hier, nicht in der Übersicht darüber: die dient dem Abgleich mit
+    // dem Papier, und dafür muss ihre Reihenfolge die des Belegs bleiben.
+    const ordered = [
+      ...receipt.lines.filter(looksInedible),
+      ...receipt.lines.filter((line) => !looksInedible(line)),
+    ];
+
+    const entries = ordered.map((line) =>
       createEntry({
         source: "receipt",
         name: line.name,
@@ -294,8 +310,8 @@ export function ReceiptImport() {
             {doubtful === 1
               ? "Eine Zeile trägt 19 % Mehrwertsteuer und ist als „vermutlich kein Lebensmittel“ markiert"
               : `${doubtful} Zeilen tragen 19 % Mehrwertsteuer und sind als „vermutlich kein Lebensmittel“ markiert`}{" "}
-            — abgefragt werden sie trotzdem, der Hinweis steht dann im Schritt
-            dabei.
+            — abgefragt werden sie trotzdem, und zwar zuerst, mit dem Hinweis
+            im Schritt.
           </p>
         )}
         <Button

@@ -331,21 +331,6 @@ export default function ScanPage() {
     // Hidden->Visible-Wechsel erneut, also gibt jeder Besuch hier eine
     // frische Scan-Session.
     let active = true;
-    // Jeder Kamerastart bekommt eine Nummer, und nur der hoechste zaehlt.
-    //
-    // Ohne sie liefen nach einem Neustart zwei Leser nebeneinander: die
-    // Decoder-Schleife von @zxing/browser beginnt bereits, bevor
-    // decodeFromConstraints sein Versprechen einloest (scan() ruft loop()
-    // synchron auf), ein Fehler im allerersten Frame loeste also einen
-    // Neustart aus, waehrend controlsRef noch leer war. Der alte Leser
-    // meldete danach weiter Fehler, verbrauchte das Neustart-Budget des
-    // neuen und haengte seinen Stream an dasselbe <video> -- am Ende stand
-    // die Fehlermeldung auf einem schwarzen Sucher, und die Kamera blieb an,
-    // weil zu keinem der verwaisten Streams noch ein stop() gehoerte.
-    //
-    // Ein Leser, dessen Nummer nicht mehr die aktuelle ist, haelt sich beim
-    // naechsten Rueckruf selbst an.
-    let generation = 0;
     let restartTimeoutId: ReturnType<typeof setTimeout> | undefined;
     streakRef.current = { text: null, format: null, count: 0, at: 0 };
     lastHitRef.current = { text: null, at: 0 };
@@ -359,7 +344,6 @@ export default function ScanPage() {
 
     function startScanning() {
       if (!active) return;
-      const mine = (generation += 1);
       setError(null);
       setVideoReady(false);
       // Jeder (Neu-)Start bekommt einen frischen Stream, also auch einen
@@ -372,11 +356,8 @@ export default function ScanPage() {
         .decodeFromConstraints(
           { video: VIDEO_CONSTRAINTS },
           videoRef.current ?? undefined,
-          (result, err, controls) => {
-            if (!active || mine !== generation) {
-              stopReader(controls);
-              return;
-            }
+          (result, err) => {
+            if (!active) return;
             if (result) {
               const text = result.getText();
               const format = result.getBarcodeFormat();
@@ -418,6 +399,8 @@ export default function ScanPage() {
               // Der Scanner laeuft weiter: kein stop(), kein router.push.
               // Genau das ist der Batch-Scan -- gesammelt wird jetzt,
               // geprueft wird danach in /review.
+              // Ein gelesener Code beweist, dass die Kamera laeuft.
+              clearScanError();
               if (!repeat) captureBarcode(text);
               return;
             }
@@ -433,14 +416,7 @@ export default function ScanPage() {
                 } else {
                   silentRestartsRef.current += 1;
                 }
-                // Erst entwerten, dann anhalten: bis der neue Leser laeuft,
-                // vergehen 250ms, und in denen feuert die Schleife dieses
-                // Lesers sonst weiter -- jeder Frame ein weiterer Neustart.
-                // Angehalten wird ausserdem der Leser, dessen Rueckruf das
-                // hier ausgeloest hat, und nicht der zufaellig in controlsRef
-                // stehende: die beiden waren nicht immer derselbe.
-                generation += 1;
-                stopReader(controls);
+                controlsRef.current?.stop();
                 restartTimeoutId = setTimeout(() => {
                   if (active) startScanning();
                 }, 250);
@@ -451,8 +427,8 @@ export default function ScanPage() {
           },
         )
         .then((controls) => {
-          if (!active || mine !== generation) {
-            stopReader(controls);
+          if (!active) {
+            controls.stop();
           } else {
             controlsRef.current = controls;
             // Vorratsschrank und Kuehlschrank sind dunkel. switchTorch ist in
@@ -463,7 +439,7 @@ export default function ScanPage() {
         })
         .catch((err: Error) => {
           console.error("Camera start error:", err);
-          if (active && mine === generation) {
+          if (active) {
             setError(
               err.name === "NotAllowedError"
                 ? "Kamera-Zugriff wurde verweigert. Bitte in den Browser-Einstellungen erlauben."
@@ -481,7 +457,6 @@ export default function ScanPage() {
 
     return () => {
       active = false;
-      generation += 1;
       clearTimeout(timeoutId);
       clearTimeout(restartTimeoutId);
       stopReader(controlsRef.current);
@@ -505,6 +480,28 @@ export default function ScanPage() {
 
   function handleRetry() {
     setRetrySession((s) => s + 1);
+  }
+
+  /**
+   * Nimmt eine Fehlermeldung zurueck, sobald sie widerlegt ist.
+   *
+   * Sie wurde bisher nur beim Start geloescht. Ein Startholpern -- auf
+   * iPhones meldet das Video "playing", bevor videoWidth einen Wert hat --
+   * verbrauchte also das Neustart-Budget, setzte die Meldung, und der Leser,
+   * der danach einwandfrei lief, nahm sie nie zurueck: der Testlauf zeigte
+   * "Fehler beim Scannen" ueber einer Ablage, in der gerade ein frisch
+   * gelesener Barcode stand. Ein laufendes Bild und ein erkannter Code sind
+   * der Gegenbeweis, und beide melden sich hier.
+   *
+   * Der funktionale Updater ist kein Zierrat: React bricht ab, wenn er
+   * denselben Wert zurueckgibt, also kostet der Aufruf im Normalfall -- kein
+   * Fehler gesetzt -- kein zusaetzliches Rendern, obwohl er bei jedem
+   * Treffer kommt.
+   */
+  function clearScanError() {
+    setError((current) => (current === null ? current : null));
+    silentRestartsRef.current = 0;
+    startupRestartsRef.current = 0;
   }
 
   async function toggleTorch() {
@@ -547,7 +544,12 @@ export default function ScanPage() {
           // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
           // aufdecken.
           requestAnimationFrame(() => {
-            requestAnimationFrame(() => setVideoReady(true));
+            requestAnimationFrame(() => {
+              setVideoReady(true);
+              // Das Bild steht -- was beim Start schiefging, ist damit
+              // erledigt und darf nicht als Fehler stehenbleiben.
+              clearScanError();
+            });
           });
         }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${

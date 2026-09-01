@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Manrope } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { BottomNavGate } from "@/components/bottom-nav-gate";
+import { ReviewBatchGuard } from "@/components/review-batch-guard";
 import { APP_DESCRIPTION, APP_NAME, APP_TITLE, TITLE_TEMPLATE } from "@/lib/metadata";
 import "./globals.css";
 
@@ -100,6 +101,18 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>
+          {/* Gibt nichts aus, sieht aber jede Navigation: verwirft den
+              Pruef-Batch, sobald der Nutzer /review verlaesst.
+
+              Im Suspense wie die Navigationsleiste: usePathname ist unter
+              cacheComponents Laufzeitwissen und bricht den Prerender jeder
+              Route ab, wenn es ungeschuetzt im Layout steht ("Next.js
+              encountered URL data usePathname() in a Client Component
+              outside of <Suspense>"). Der Fallback ist null, weil die
+              Komponente selbst nichts ausgibt. */}
+          <Suspense fallback={null}>
+            <ReviewBatchGuard />
+          </Suspense>
           {/* Die Safe Area oben gehoert an genau eine Stelle: als
               installierte PWA laeuft der Inhalt sonst unter der Statusleiste
               des Geraets durch, und jede Seite muesste denselben Abstand
