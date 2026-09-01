@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BrowserMultiFormatReader, HTMLCanvasElementLuminanceSource } from "@zxing/browser";
+import {
+  BrowserCodeReader,
+  BrowserMultiFormatReader,
+  HTMLCanvasElementLuminanceSource,
+} from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
 import {
   BarcodeFormat,
@@ -159,6 +163,20 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
   height: { ideal: 720 },
 };
 
+/**
+ * Haelt einen Leser an, ohne dass sein Versprechen unbehandelt liegenbleibt.
+ *
+ * `IScannerControls.stop` ist als `void` typisiert, ist auf einem Geraet mit
+ * Licht aber asynchron: @zxing/browser haengt dort ein `switchTorch(false)`
+ * an (BrowserCodeReader.decodeFromStream). Ein `applyConstraints` auf einer
+ * bereits gestoppten Spur lehnt ab -- und das landete als unbehandelte
+ * Ablehnung in der Konsole, ausgerechnet beim Verlassen des Screens.
+ */
+function stopReader(controls: IScannerControls | null | undefined): void {
+  if (!controls) return;
+  void Promise.resolve(controls.stop() as unknown).catch(() => {});
+}
+
 type MatchStreak = { text: string | null; format: BarcodeFormat | null; count: number; at: number };
 
 export default function ScanPage() {
@@ -191,6 +209,13 @@ export default function ScanPage() {
   // also noch den Stand von vor der Pruefung -- genau der Bug, den /confirm
   // mit der Produkt-DB schon einmal hatte.
   const batch = useBatch();
+  // Der Prüf-Batch ist geteilt: der Rechnungsimport schreibt in denselben
+  // Speicher, damit Scan und Beleg in einem Durchlauf geprueft werden. Die
+  // Ablage hier zeigt trotzdem nur, was die Kamera gelesen hat -- eine
+  // unfertige Rechnung stand sonst mit 33 Zeilen unter "Erfasst", also als
+  // waeren das gerade erkannte Barcodes. Belegzeilen haben gar keinen.
+  const scanned = batch.filter((entry) => entry.source === "scan");
+  const fromReceipt = batch.length - scanned.length;
   // Zeilen, deren Abfrage noch laeuft. Bewusst nicht im Batch selbst: das ist
   // Anzeigezustand dieses Screens und geht den Pruef-Flow nichts an.
   const [resolving, setResolving] = useState<string[]>([]);
@@ -306,6 +331,7 @@ export default function ScanPage() {
     // Hidden->Visible-Wechsel erneut, also gibt jeder Besuch hier eine
     // frische Scan-Session.
     let active = true;
+    let restartTimeoutId: ReturnType<typeof setTimeout> | undefined;
     streakRef.current = { text: null, format: null, count: 0, at: 0 };
     lastHitRef.current = { text: null, at: 0 };
     silentRestartsRef.current = 0;
@@ -373,6 +399,8 @@ export default function ScanPage() {
               // Der Scanner laeuft weiter: kein stop(), kein router.push.
               // Genau das ist der Batch-Scan -- gesammelt wird jetzt,
               // geprueft wird danach in /review.
+              // Ein gelesener Code beweist, dass die Kamera laeuft.
+              clearScanError();
               if (!repeat) captureBarcode(text);
               return;
             }
@@ -389,7 +417,7 @@ export default function ScanPage() {
                   silentRestartsRef.current += 1;
                 }
                 controlsRef.current?.stop();
-                setTimeout(() => {
+                restartTimeoutId = setTimeout(() => {
                   if (active) startScanning();
                 }, 250);
               } else {
@@ -430,12 +458,50 @@ export default function ScanPage() {
     return () => {
       active = false;
       clearTimeout(timeoutId);
-      controlsRef.current?.stop();
+      clearTimeout(restartTimeoutId);
+      stopReader(controlsRef.current);
+      controlsRef.current = null;
+      // Der Griff, der wirklich loslaesst.
+      //
+      // React raeumt diesen Effect auch auf, wenn Cache Components den
+      // Screen nur per <Activity> versteckt (node_modules/next/dist/docs/
+      // 01-app/02-guides/preserving-ui-state.md, "Effect and media
+      // cleanup") -- der Zeitpunkt stimmte also, das stop() darueber traf
+      // aber nur den zuletzt eingetragenen Leser. @zxing/browser fuehrt
+      // ueber BrowserCodeReader.streamTracker Buch ueber JEDEN Stream, den
+      // sein getUserMedia geoeffnet hat; releaseAllStreams beendet deren
+      // Spuren. Damit erlischt die Kameraleuchte auch dann, wenn oben
+      // trotz allem noch etwas durchgerutscht ist -- und der naechste
+      // Besuch findet ein freies Geraet vor statt eines, das noch belegt
+      // ist und ein schwarzes Bild liefert.
+      BrowserCodeReader.releaseAllStreams();
     };
   }, [captureBarcode, retrySession]);
 
   function handleRetry() {
     setRetrySession((s) => s + 1);
+  }
+
+  /**
+   * Nimmt eine Fehlermeldung zurueck, sobald sie widerlegt ist.
+   *
+   * Sie wurde bisher nur beim Start geloescht. Ein Startholpern -- auf
+   * iPhones meldet das Video "playing", bevor videoWidth einen Wert hat --
+   * verbrauchte also das Neustart-Budget, setzte die Meldung, und der Leser,
+   * der danach einwandfrei lief, nahm sie nie zurueck: der Testlauf zeigte
+   * "Fehler beim Scannen" ueber einer Ablage, in der gerade ein frisch
+   * gelesener Barcode stand. Ein laufendes Bild und ein erkannter Code sind
+   * der Gegenbeweis, und beide melden sich hier.
+   *
+   * Der funktionale Updater ist kein Zierrat: React bricht ab, wenn er
+   * denselben Wert zurueckgibt, also kostet der Aufruf im Normalfall -- kein
+   * Fehler gesetzt -- kein zusaetzliches Rendern, obwohl er bei jedem
+   * Treffer kommt.
+   */
+  function clearScanError() {
+    setError((current) => (current === null ? current : null));
+    silentRestartsRef.current = 0;
+    startupRestartsRef.current = 0;
   }
 
   async function toggleTorch() {
@@ -478,7 +544,12 @@ export default function ScanPage() {
           // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
           // aufdecken.
           requestAnimationFrame(() => {
-            requestAnimationFrame(() => setVideoReady(true));
+            requestAnimationFrame(() => {
+              setVideoReady(true);
+              // Das Bild steht -- was beim Start schiefging, ist damit
+              // erledigt und darf nicht als Fehler stehenbleiben.
+              clearScanError();
+            });
           });
         }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
@@ -555,7 +626,12 @@ export default function ScanPage() {
       <div className="relative flex flex-col gap-2.5 px-5 pb-[max(env(safe-area-inset-bottom),2.5rem)]">
         {batch.length > 0 ? (
           <>
-            {/* Die Ablage liegt ueber dem Kamerabild, und dagegen hilft keine
+            {/* Nur die eigenen Treffer: der Rechnungsimport schreibt in
+                denselben Batch, und dessen Zeilen standen hier als waeren sie
+                gerade gelesen worden -- mit "bekannt"/"neu" daneben, obwohl
+                Belegzeilen gar keinen Barcode haben.
+
+                Die Ablage liegt ueber dem Kamerabild, und dagegen hilft keine
                 Flaechenfarbe aus der Palette: --card waere entweder
                 undurchsichtig (dann ist das Sucherbild weg) oder als
                 --card/85 vom Video her unberechenbar hell. Der Entwurf misst
@@ -563,59 +639,68 @@ export default function ScanPage() {
                 Weiss-Kante -- eine Abdunklung, kein Farbwert, und in Tailwind
                 genau bg-black/50 + border-white/12. Die Ausnahme steht so im
                 Plan (Abschnitt "Batch-Ablage (8e)"). */}
-            <div className="rounded-xl border border-white/12 bg-black/50 p-3.5 backdrop-blur-[8px]">
-              <p className="text-[11px] font-bold tracking-[0.08em] text-white/55 uppercase">
-                Erfasst
-              </p>
-              {/* max-h statt fester Hoehe: nach dem Wocheneinkauf stehen hier
-                  zwanzig Zeilen, und der Sucher darf darunter nicht
-                  verschwinden. aria-live, damit ein Screenreader den Treffer
-                  meldet -- sehen kann man ihn beim Scannen ohnehin nicht,
-                  weil das Telefon auf die Packung zeigt. */}
-              <ul
-                ref={trayRef}
-                aria-live="polite"
-                className="mt-2.5 max-h-[30vh] space-y-1 overflow-y-auto"
-              >
-                {batch.map((entry) => (
-                  <li
-                    key={entry.id}
-                    data-entry-id={entry.id}
-                    className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-[14px] font-semibold ${
-                      entry.id === lastTouchedId ? "bg-white/8" : ""
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                    {entry.quantity > 1 && (
-                      <span className="shrink-0 text-white/55">×{entry.quantity}</span>
-                    )}
-                    {/* "bekannt"/"neu" meint product_knowledge dieser Liste,
-                        nicht Open Food Facts: OFF kennt fast jeden Barcode,
-                        sagt aber nichts darueber, ob DIESER Haushalt das
-                        Produkt schon einmal einsortiert hat -- und nur das
-                        entscheidet, ob der Pruef-Flow gleich nach der
-                        Kategorie fragen muss. */}
-                    <span
-                      className={`shrink-0 text-[12px] font-semibold ${
-                        resolving.includes(entry.id)
-                          ? "text-white/35"
-                          : entry.known
-                            ? "text-white/55"
-                            : "text-warning"
+            {scanned.length > 0 && (
+              <div className="rounded-xl border border-white/12 bg-black/50 p-3.5 backdrop-blur-[8px]">
+                <p className="text-[11px] font-bold tracking-[0.08em] text-white/55 uppercase">
+                  Erfasst
+                </p>
+                {/* max-h statt fester Hoehe: nach dem Wocheneinkauf stehen hier
+                    zwanzig Zeilen, und der Sucher darf darunter nicht
+                    verschwinden. aria-live, damit ein Screenreader den Treffer
+                    meldet -- sehen kann man ihn beim Scannen ohnehin nicht,
+                    weil das Telefon auf die Packung zeigt. */}
+                <ul
+                  ref={trayRef}
+                  aria-live="polite"
+                  className="mt-2.5 max-h-[30vh] space-y-1 overflow-y-auto"
+                >
+                  {scanned.map((entry) => (
+                    <li
+                      key={entry.id}
+                      data-entry-id={entry.id}
+                      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-[14px] font-semibold ${
+                        entry.id === lastTouchedId ? "bg-white/8" : ""
                       }`}
                     >
-                      {resolving.includes(entry.id) ? "…" : entry.known ? "bekannt" : "neu"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {/* /review gibt es noch nicht -- die Route kommt mit dem
-                Pruef-Flow. prefetch={false}, damit der Router sie nicht schon
-                beim Rendern anfordert und sich einen 404 einfaengt. */}
+                      <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                      {entry.quantity > 1 && (
+                        <span className="shrink-0 text-white/55">×{entry.quantity}</span>
+                      )}
+                      {/* "bekannt"/"neu" meint product_knowledge dieser Liste,
+                          nicht Open Food Facts: OFF kennt fast jeden Barcode,
+                          sagt aber nichts darueber, ob DIESER Haushalt das
+                          Produkt schon einmal einsortiert hat -- und nur das
+                          entscheidet, ob der Pruef-Flow gleich nach der
+                          Kategorie fragen muss. */}
+                      <span
+                        className={`shrink-0 text-[12px] font-semibold ${
+                          resolving.includes(entry.id)
+                            ? "text-white/35"
+                            : entry.known
+                              ? "text-white/55"
+                              : "text-warning"
+                        }`}
+                      >
+                        {resolving.includes(entry.id) ? "…" : entry.known ? "bekannt" : "neu"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Eine angefangene Rechnung liegt im selben Batch und wird
+                gleich mitgeprueft -- verschwiegen ergaebe der Knopf darunter
+                keinen Sinn, der zaehlt naemlich alles. */}
+            {fromReceipt > 0 && (
+              <p className="px-1 text-[12.5px] leading-snug font-semibold text-white/55">
+                Aus einer Rechnung warten noch {fromReceipt} Artikel auf die
+                Prüfung.
+              </p>
+            )}
+
             <Link
               href="/review/0"
-              prefetch={false}
               className="bg-primary text-primary-foreground flex h-13 items-center justify-center rounded-[16px] text-[15px] font-extrabold"
             >
               {batch.length} Artikel prüfen

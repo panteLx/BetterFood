@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ReceiptImport } from "@/components/receipt-import";
 import { requireSession, requireActiveList } from "@/lib/session";
-import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "Rechnung",
@@ -9,17 +8,16 @@ export const metadata: Metadata = {
 };
 
 export default async function ReceiptPage() {
+  // Kategorien und Fächer holt sich seit Runde 8 der Prüf-Flow selbst: hier
+  // wird nur noch hochgeladen und angesehen, entschieden wird unter /review.
+  // Die Sitzungspflicht bleibt trotzdem -- der Parser schlägt beim Einlesen
+  // in `product_knowledge` dieser Liste nach.
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
-
-  const [allCategories, allPlaces] = await Promise.all([
-    getCategoriesForList(listId),
-    getPlacesForList(listId),
-  ]);
+  await requireActiveList(session.user.id);
 
   return (
     <div className="flex flex-1 flex-col gap-4 px-5 pt-2 pb-4">
-      <ReceiptImport categories={allCategories} places={allPlaces} />
+      <ReceiptImport />
     </div>
   );
 }

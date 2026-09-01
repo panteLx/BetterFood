@@ -45,9 +45,11 @@
  *   `expiryDate` bleibt `null` -- beides gehört dem Prüf-Flow.
  * - Der Rechnungsimport setzt zusätzlich `rawName` (die Schreibweise vom
  *   Beleg, aus der `POST /api/items/import` den Alias in `product_knowledge`
- *   lernt) und `purchasedAt`. `barcode` ist dort `null`, Belegzeilen haben
- *   keinen.
- * - Der Prüf-Flow ist der einzige, der `expiryDate` und `status` schreibt.
+ *   lernt), `purchasedAt`, `sourceQuantity` und `foodDoubt`. `barcode` ist
+ *   dort `null`, Belegzeilen haben keinen.
+ * - `expiryDate` und `status` schreibt ausschließlich der Prüf-Flow. Auch
+ *   eine Zeile mit `foodDoubt` kommt `pending` herein: der Verdacht ist ein
+ *   Hinweis, keine Entscheidung.
  *
  * ## `purchasedAt`
  *
@@ -94,6 +96,31 @@ export type BatchEntry = {
   /** Immer >= 1. Derselbe Barcode ein zweites Mal erhöht diese Zahl. */
   quantity: number;
   /**
+   * Die Menge, wie die Quelle sie gemeldet hat -- `null` beim Scan, wo es
+   * keine gibt (dort zählt der Nutzer selbst, indem er ein zweites Mal
+   * scannt).
+   *
+   * Steht daneben, sobald `quantity` davon abweicht: „laut Beleg 6×" neben
+   * einer korrigierten 4 sagt, dass die Abweichung Absicht war und nicht ein
+   * Vertipper. Ohne diesen Bezug ließe sich eine falsch erkannte Menge nicht
+   * von einer bewusst geänderten unterscheiden.
+   */
+  sourceQuantity: number | null;
+  /**
+   * Der Beleg legt nahe, dass das kein Lebensmittel ist: 19 % Mehrwertsteuer
+   * an einer Zeile, die diese Liste noch nicht kennt.
+   *
+   * Ein Hinweis und keine Vorauswahl. Der erste Anlauf ließ solche Zeilen
+   * bereits `skipped` in den Batch laufen, damit Klopapier und Spülmittel
+   * keinen eigenen Schritt kosten -- nur trifft der Steuersatz eben auch
+   * jede Limonade. Der Testlauf fand einen Energydrink, der so unbemerkt
+   * aus dem Einkauf fiel: übersprungene Zeilen stehen erst am Ende und
+   * niemand liest dort 34 Namen gegen. Ein vergessener Artikel kostet mehr
+   * als ein abzuwählender, also kommt die Zeile `pending` herein und trägt
+   * ihren Verdacht sichtbar im Schritt.
+   */
+  foodDoubt: boolean;
+  /**
    * Treffer in `product_knowledge` dieser Liste -- also "diese Liste hat das
    * schon einmal einsortiert". **Nicht** "bei Open Food Facts gefunden":
    * OFF liefert nur einen Namen, keine Einordnung, und ein dort bekanntes
@@ -123,8 +150,19 @@ export type NewBatchEntry = Partial<Omit<BatchEntry, "id" | "source">> & {
  * String. Ändert sich die Form der Einträge, bekommt der Schlüssel eine neue
  * Nummer -- ein Nutzer mit offenem Tab über ein Deploy hinweg bekommt dann
  * einen leeren Batch statt halb gelesener Einträge.
+ *
+ * v2: `sourceQuantity` und `foodDoubt` kamen mit dem Rechnungsimport dazu.
+ * `parseEntry` läse einen v1-Eintrag zwar fehlerfrei -- beide Felder haben
+ * einen Vorgabewert --, aber die Regel oben gilt trotzdem: ein halber Einkauf
+ * aus dem Stand vor dem Deploy ist die schlechtere Hinterlassenschaft als ein
+ * leerer Batch, und diese Klasse von Fehlern soll gar nicht erst entstehen.
+ *
+ * v3: die Form ist dieselbe, die Bedeutung nicht -- eine Zeile mit
+ * `foodDoubt` kommt seither `pending` statt `skipped` herein. Ein v2-Batch
+ * trüge genau die Vorauswahl weiter, die hier abgeschafft wird, und zwar
+ * unsichtbar. Deshalb auch hier eine neue Nummer.
  */
-export const REVIEW_BATCH_KEY = "bf.review-batch.v1";
+export const REVIEW_BATCH_KEY = "bf.review-batch.v3";
 
 /**
  * Mehr Positionen nimmt `POST /api/items/import` ohnehin nicht an (MAX_ITEMS
@@ -173,6 +211,8 @@ function parseEntry(raw: unknown): BatchEntry | null {
     name: value.name,
     rawName: nullableString(value.rawName),
     quantity: Number.isFinite(quantity) ? Math.min(Math.max(quantity, 1), MAX_QUANTITY) : 1,
+    sourceQuantity: typeof value.sourceQuantity === "number" ? value.sourceQuantity : null,
+    foodDoubt: value.foodDoubt === true,
     known: value.known === true,
     category: nullableString(value.category),
     placeId: typeof value.placeId === "number" ? value.placeId : null,
@@ -331,6 +371,8 @@ export function createEntry(input: NewBatchEntry): BatchEntry {
     name: input.name ?? "",
     rawName: input.rawName ?? null,
     quantity: Math.min(Math.max(Math.round(input.quantity ?? 1), 1), MAX_QUANTITY),
+    sourceQuantity: input.sourceQuantity ?? null,
+    foodDoubt: input.foodDoubt ?? false,
     known: input.known ?? false,
     category: input.category ?? null,
     placeId: input.placeId ?? null,
