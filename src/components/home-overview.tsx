@@ -80,7 +80,6 @@ const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
   streak_30: Zap,
   monthly_goal: Target,
   saved_50: Award,
-  waste_free_4_weeks: Leaf,
   saved_100: Trophy,
   one_year: CalendarCheck,
 };

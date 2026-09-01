@@ -78,10 +78,31 @@ export function parseEstimateInput(
  * Mit Komma, weil das Feld ein Textfeld ist und der Nutzer im selben Feld
  * auch mit Komma weiterschreibt. Ein Punkt stünde dort als einziges Zeichen
  * der Oberfläche in englischer Schreibweise.
+ *
+ * `minDecimals` erzwingt nachlaufende Nullen. Geld braucht sie -- "2,5 €" ist
+ * keine Schreibweise, die jemand auf einem Kassenbon findet, und genau das
+ * fiel im Test der Runde 8 an der Kategorieliste auf. Kilogramm brauchen sie
+ * nicht: "0,40 kg" behauptet eine Genauigkeit, die eine Schätzung nicht hat.
+ * Deshalb ein Parameter und nicht zwei Funktionen -- der Unterschied liegt in
+ * der Einheit, nicht im Zweck.
  */
-export function formatEstimateInput(value: number | null, factor: number): string {
+export function formatEstimateInput(
+  value: number | null,
+  factor: number,
+  minDecimals = 0,
+): string {
   if (value === null) return "";
-  return String(value / factor).replace(".", ",");
+  return (value / factor)
+    .toFixed(Math.max(minDecimals, decimalsOf(value, factor)))
+    .replace(".", ",");
+}
+
+/** Wie viele Nachkommastellen der Wert selbst braucht, höchstens drei. */
+function decimalsOf(value: number, factor: number): number {
+  for (let digits = 0; digits < 3; digits += 1) {
+    if (Number((value / factor).toFixed(digits)) === value / factor) return digits;
+  }
+  return 3;
 }
 
 /** Cent je Euro. */

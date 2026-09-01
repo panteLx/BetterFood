@@ -114,7 +114,7 @@ export function SortingManager({
     setFormLabel(category.label);
     setFormShelfLife(String(category.shelfLifeDays));
     setFormPlaceId(category.defaultPlaceId);
-    setFormPrice(formatEstimateInput(category.avgPriceCents, PRICE_FACTOR));
+    setFormPrice(formatEstimateInput(category.avgPriceCents, PRICE_FACTOR, 2));
     setFormCo2(formatEstimateInput(category.avgCo2Grams, CO2_FACTOR));
     setCategorySheet({ mode: "edit", category });
   }
@@ -570,7 +570,7 @@ function CategoryRow({
   const meta = [
     `${category.shelfLifeDays} Tage haltbar`,
     ...(category.avgPriceCents !== null
-      ? [`${formatEstimateInput(category.avgPriceCents, PRICE_FACTOR)} €`]
+      ? [`${formatEstimateInput(category.avgPriceCents, PRICE_FACTOR, 2)} €`]
       : []),
     ...(category.avgCo2Grams !== null
       ? [`${formatEstimateInput(category.avgCo2Grams, CO2_FACTOR)} kg`]
