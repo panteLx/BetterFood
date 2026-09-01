@@ -31,19 +31,19 @@ import type { Category, Place } from "@/db/schema";
 export type PlaceWithCount = Place & { itemCount: number };
 
 /**
- * Wie dieser Haushalt seinen Vorrat sortiert -- Faecher und Kategorien auf
+ * Wie dieser Haushalt seinen Vorrat sortiert -- Fächer und Kategorien auf
  * einem Blatt.
  *
- * Vorher waren das zwei Listen in zwei Reitern fuer eine einzige Beziehung:
+ * Vorher waren das zwei Listen in zwei Reitern für eine einzige Beziehung:
  * in der Kategorie stand ihr Fach, im Fach die Zahl der Artikel, und wer
  * wissen wollte, was wo landet, sprang zwischen beiden hin und her. Hier ist
- * das Fach die Ueberschrift und die Kategorie die Zeile darunter -- die
+ * das Fach die Überschrift und die Kategorie die Zeile darunter -- die
  * Zuordnung ist damit zu sehen statt nachzuschlagen, und eine Kategorie in
- * ein anderes Fach zu raeumen ist dieselbe Geste wie sie umzubenennen.
+ * ein anderes Fach zu räumen ist dieselbe Geste wie sie umzubenennen.
  *
- * Kategorien werden von aussen gehalten: auf derselben Seite haengt die
- * Produktliste an ihnen. Faecher kommen dagegen mitsamt ihrer Artikelzahl vom
- * Server und werden nach jeder Aenderung neu geladen.
+ * Kategorien werden von außen gehalten: auf derselben Seite hängt die
+ * Produktliste an ihnen. Fächer kommen dagegen mitsamt ihrer Artikelzahl vom
+ * Server und werden nach jeder Änderung neu geladen.
  */
 export function SortingManager({
   categories,
@@ -57,7 +57,7 @@ export function SortingManager({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
-  // Ein Blatt fuer beides: eine neue Kategorie und eine bestehende
+  // Ein Blatt für beides: eine neue Kategorie und eine bestehende
   // beantworten dieselben drei Fragen (Name, Haltbarkeit, Fach).
   const [categorySheet, setCategorySheet] = useState<
     { mode: "new"; placeId: number | null } | { mode: "edit"; category: Category } | null
@@ -79,10 +79,10 @@ export function SortingManager({
   /**
    * Die Kategorien, gruppiert nach ihrem Standardfach.
    *
-   * Ueber die Fachliste gruppiert und nicht ueber die Kategorien: zeigt eine
-   * Kategorie auf ein Fach, das es nicht mehr gibt -- der Client haelt nach
-   * dem Loeschen noch die alte Zeile, die Datenbank hat "ON DELETE SET NULL"
-   * laengst ausgefuehrt --, landet sie unter "Ohne Standardort" statt in
+   * Über die Fachliste gruppiert und nicht über die Kategorien: zeigt eine
+   * Kategorie auf ein Fach, das es nicht mehr gibt -- der Client hält nach
+   * dem Löschen noch die alte Zeile, die Datenbank hat "ON DELETE SET NULL"
+   * längst ausgeführt --, landet sie unter "Ohne Standardort" statt in
    * einer Karteileiche.
    */
   const groups = useMemo(() => {
@@ -103,8 +103,8 @@ export function SortingManager({
     setFormLabel("");
     setFormShelfLife("14");
     setFormPlaceId(placeId);
-    // Leer und nicht 0: ueber eine gerade erst erfundene Kategorie kann die
-    // App nichts schaetzen, und 0 waere eine Behauptung.
+    // Leer und nicht 0: über eine gerade erst erfundene Kategorie kann die
+    // App nichts schätzen, und 0 wäre eine Behauptung.
     setFormPrice("");
     setFormCo2("");
     setCategorySheet({ mode: "new", placeId });
@@ -197,7 +197,7 @@ export function SortingManager({
     }
   }
 
-  /** Faecher liegen samt Artikelzahl auf dem Server -- nach jeder Aenderung frisch holen. */
+  /** Fächer liegen samt Artikelzahl auf dem Server -- nach jeder Änderung frisch holen. */
   async function callPlace(input: string, init: RequestInit, success: string, failure: string) {
     setSaving(true);
     try {
@@ -301,8 +301,8 @@ export function SortingManager({
         </section>
       ))}
 
-      {/* Nur wenn es sie gibt: eine leere Ueberschrift "Ohne Standardort"
-          waere eine Frage, die niemand gestellt hat. */}
+      {/* Nur wenn es sie gibt: eine leere Überschrift "Ohne Standardort"
+          wäre eine Frage, die niemand gestellt hat. */}
       {groups.orphans.length > 0 && (
         <section className="flex flex-col gap-2">
           <header className="flex items-center gap-2.5 px-1">
@@ -372,11 +372,11 @@ export function SortingManager({
           </div>
 
           {/* Nebeneinander und nicht untereinander: es sind zwei Zahlen zu
-              derselben Frage ("was ist ein Artikel hier ungefaehr wert?"),
-              und einzeln untereinander waere das Blatt eine Formularwand.
-              Beide tragen ein eigenes sichtbares Label und nicht bloss einen
+              derselben Frage ("was ist ein Artikel hier ungefähr wert?"),
+              und einzeln untereinander wäre das Blatt eine Formularwand.
+              Beide tragen ein eigenes sichtbares Label und nicht bloß einen
               Platzhalter: sobald ein Wert drinsteht -- und nach dem Seed steht
-              ueberall einer drin -- verschwindet der Platzhalter, und zwei
+              überall einer drin -- verschwindet der Platzhalter, und zwei
               nackte Zahlen nebeneinander sagen nicht mehr, welche welche
               ist. */}
           <div className="flex flex-col gap-1.5">
@@ -385,9 +385,9 @@ export function SortingManager({
                 <Label htmlFor="categoryAvgPrice">Ø Preis in €</Label>
                 {/* type="text", nicht type="number": ein Zahlenfeld gibt bei
                     einer Eingabe, die es nicht versteht -- ein Komma reicht --
-                    ueber value den leeren String zurueck. Das ist von
-                    "bewusst geleert" nicht zu unterscheiden und haette einen
-                    bestehenden Schaetzwert stillschweigend geloescht, statt
+                    über value den leeren String zurück. Das ist von
+                    "bewusst geleert" nicht zu unterscheiden und hätte einen
+                    bestehenden Schätzwert stillschweigend gelöscht, statt
                     einen Fehler zu melden. inputMode holt trotzdem die
                     Zifferntastatur. */}
                 <Input
@@ -420,8 +420,8 @@ export function SortingManager({
             </p>
           </div>
 
-          {/* Die Faecher als Chips statt als zweitem Blatt: es sind drei bis
-              fuenf, und ein Blatt ueber einem Blatt waere ein Stapel fuer
+          {/* Die Fächer als Chips statt als zweitem Blatt: es sind drei bis
+              fünf, und ein Blatt über einem Blatt wäre ein Stapel für
               eine Frage, die in eine Zeile passt. */}
           {places.length > 0 && (
             <div className="flex flex-col gap-2">
@@ -437,7 +437,7 @@ export function SortingManager({
                     {place.name}
                   </Chip>
                 ))}
-                {/* Keiner ist eine gueltige Antwort: "Sonstiges" sagt ueber
+                {/* Keiner ist eine gültige Antwort: "Sonstiges" sagt über
                     das Fach nichts aus, und dann soll das Formular auch
                     nichts vorschlagen. */}
                 <Chip
@@ -512,9 +512,9 @@ export function SortingManager({
         </div>
       </Sheet>
 
-      {/* Eine Kategorie zu loeschen nimmt alles mit, was die Liste ueber die
+      {/* Eine Kategorie zu löschen nimmt alles mit, was die Liste über die
           Produkte darin gelernt hat -- das darf kein einzelner Fehlgriff
-          ausloesen. */}
+          auslösen. */}
       <ConfirmDialog
         open={pendingDeleteCategory !== null}
         onOpenChange={(open) => !open && setPendingDeleteCategory(null)}
@@ -540,7 +540,7 @@ export function SortingManager({
   );
 }
 
-/** Eine Kategorie in ihrem Fach -- die ganze Zeile oeffnet die Bearbeitung. */
+/** Eine Kategorie in ihrem Fach -- die ganze Zeile öffnet die Bearbeitung. */
 function CategoryRow({
   category,
   disabled,
@@ -550,6 +550,33 @@ function CategoryRow({
   disabled: boolean;
   onClick: () => void;
 }) {
+  // Haltbarkeit, Ø Preis und Ø CO₂ in einer Zeile. Bis eben stand hier nur die
+  // Haltbarkeit, obwohl die Kategorie seit den Schätzwerten drei gepflegte
+  // Eigenschaften trägt -- wer sie pflegt, sah der Liste also nicht an, welche
+  // Kategorie noch leer ist, und musste jede einzeln aufklappen.
+  //
+  // Fehlende Werte fallen weg, statt als "—" dazustehen: `null` heißt hier
+  // nicht "noch nicht gepflegt", sondern "diese Kategorie ist zu gemischt und
+  // zählt nicht mit" (siehe lib/estimates.ts). Ein Platzhalter würde einen
+  // gültigen Zustand als Lücke anmahnen und obendrein jede solche Zeile mit
+  // einem Zeichen füllen, das nichts aussagt.
+  //
+  // Formatiert über formatEstimateInput, also genau so, wie der Editor die
+  // Zahl beim Öffnen in sein Feld schreibt. Andernfalls stünde in der Liste
+  // eine andere Schreibweise derselben Zahl als im Formular darunter, und der
+  // Nutzer müsste nach dem Speichern prüfen, ob er versehentlich etwas
+  // verändert hat. Die Funktion schreibt so kurz wie möglich ("2,5 €", nicht
+  // "2,50 €") -- dieselbe Entscheidung wie im Feld, aus demselben Grund.
+  const meta = [
+    `${category.shelfLifeDays} Tage haltbar`,
+    ...(category.avgPriceCents !== null
+      ? [`${formatEstimateInput(category.avgPriceCents, PRICE_FACTOR)} €`]
+      : []),
+    ...(category.avgCo2Grams !== null
+      ? [`${formatEstimateInput(category.avgCo2Grams, CO2_FACTOR)} kg`]
+      : []),
+  ].join(" · ");
+
   return (
     <button
       type="button"
@@ -563,9 +590,7 @@ function CategoryRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] leading-tight font-bold">{category.label}</p>
-        <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
-          {category.shelfLifeDays} Tage haltbar
-        </p>
+        <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">{meta}</p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
     </button>
