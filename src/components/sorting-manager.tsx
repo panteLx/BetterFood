@@ -18,6 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CategoryIcon } from "@/components/category-icon";
+import {
+  CO2_FACTOR,
+  MAX_CO2_GRAMS,
+  MAX_PRICE_CENTS,
+  PRICE_FACTOR,
+  formatEstimateInput,
+  parseEstimateInput,
+} from "@/lib/estimates";
 import type { Category, Place } from "@/db/schema";
 
 export type PlaceWithCount = Place & { itemCount: number };
@@ -57,6 +65,10 @@ export function SortingManager({
   const [formLabel, setFormLabel] = useState("");
   const [formShelfLife, setFormShelfLife] = useState("14");
   const [formPlaceId, setFormPlaceId] = useState<number | null>(null);
+  // In Euro und Kilogramm, wie der Nutzer sie tippt -- die Umrechnung auf Cent
+  // und Gramm macht erst parseEstimateInput beim Speichern.
+  const [formPrice, setFormPrice] = useState("");
+  const [formCo2, setFormCo2] = useState("");
 
   const [placeSheet, setPlaceSheet] = useState<{ place: PlaceWithCount } | "new" | null>(null);
   const [placeName, setPlaceName] = useState("");
@@ -91,6 +103,10 @@ export function SortingManager({
     setFormLabel("");
     setFormShelfLife("14");
     setFormPlaceId(placeId);
+    // Leer und nicht 0: ueber eine gerade erst erfundene Kategorie kann die
+    // App nichts schaetzen, und 0 waere eine Behauptung.
+    setFormPrice("");
+    setFormCo2("");
     setCategorySheet({ mode: "new", placeId });
   }
 
@@ -98,6 +114,8 @@ export function SortingManager({
     setFormLabel(category.label);
     setFormShelfLife(String(category.shelfLifeDays));
     setFormPlaceId(category.defaultPlaceId);
+    setFormPrice(formatEstimateInput(category.avgPriceCents, PRICE_FACTOR));
+    setFormCo2(formatEstimateInput(category.avgCo2Grams, CO2_FACTOR));
     setCategorySheet({ mode: "edit", category });
   }
 
@@ -117,10 +135,23 @@ export function SortingManager({
       return;
     }
 
+    const price = parseEstimateInput(formPrice, PRICE_FACTOR, MAX_PRICE_CENTS);
+    if (price === "invalid") {
+      toast.error("Bitte einen gültigen Ø Preis eingeben.");
+      return;
+    }
+    const co2 = parseEstimateInput(formCo2, CO2_FACTOR, MAX_CO2_GRAMS);
+    if (co2 === "invalid") {
+      toast.error("Bitte einen gültigen Ø CO₂-Wert eingeben.");
+      return;
+    }
+
     const body = JSON.stringify({
       label: formLabel.trim(),
       shelfLifeDays: Math.round(days),
       defaultPlaceId: formPlaceId,
+      avgPriceCents: price,
+      avgCo2Grams: co2,
     });
 
     setSaving(true);
@@ -338,6 +369,55 @@ export function SortingManager({
               onChange={(event) => setFormShelfLife(event.target.value)}
               className="h-12 rounded-lg"
             />
+          </div>
+
+          {/* Nebeneinander und nicht untereinander: es sind zwei Zahlen zu
+              derselben Frage ("was ist ein Artikel hier ungefaehr wert?"),
+              und einzeln untereinander waere das Blatt eine Formularwand.
+              Beide tragen ein eigenes sichtbares Label und nicht bloss einen
+              Platzhalter: sobald ein Wert drinsteht -- und nach dem Seed steht
+              ueberall einer drin -- verschwindet der Platzhalter, und zwei
+              nackte Zahlen nebeneinander sagen nicht mehr, welche welche
+              ist. */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="categoryAvgPrice">Ø Preis in €</Label>
+                {/* type="text", nicht type="number": ein Zahlenfeld gibt bei
+                    einer Eingabe, die es nicht versteht -- ein Komma reicht --
+                    ueber value den leeren String zurueck. Das ist von
+                    "bewusst geleert" nicht zu unterscheiden und haette einen
+                    bestehenden Schaetzwert stillschweigend geloescht, statt
+                    einen Fehler zu melden. inputMode holt trotzdem die
+                    Zifferntastatur. */}
+                <Input
+                  id="categoryAvgPrice"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={formPrice}
+                  onChange={(event) => setFormPrice(event.target.value)}
+                  className="h-12 rounded-lg"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="categoryAvgCo2">Ø CO₂ in kg</Label>
+                <Input
+                  id="categoryAvgCo2"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={formCo2}
+                  onChange={(event) => setFormCo2(event.target.value)}
+                  className="h-12 rounded-lg"
+                />
+              </div>
+            </div>
+            <p className="text-xs leading-snug font-medium text-faint">
+              Je Artikel. Grundlage der Ersparnis auf der Startseite. Leer
+              lassen, wenn die Kategorie zu gemischt ist — sie zählt dann nicht
+              mit.
+            </p>
           </div>
 
           {/* Die Faecher als Chips statt als zweitem Blatt: es sind drei bis

@@ -11,25 +11,40 @@ export const DEFAULT_PLACES = ["Kühlschrank", "Gefrierfach", "Vorratsschrank"] 
  * Seed-Migration als Referenz gepflegt -- Nutzer koennen Kategorien danach
  * frei umbenennen, hinzufuegen oder loeschen.
  *
- * defaultPlace ist das Fach, in dem eine Kategorie ueblicherweise liegt --
+ * defaultPlace ist das Fach, in dem eine Kategorie üblicherweise liegt —
  * die Vorbelegung von categories.defaultPlaceId. Das ist keine Vermutung
- * ueber ein konkretes Produkt (die trifft weiterhin allein
- * product_knowledge), sondern eine Aussage ueber die app-eigenen Kategorien
- * und die app-eigenen Faecher: Tiefkuehl liegt im Gefrierfach, sonst waere
- * es keins. Unter /knowledge jederzeit aenderbar -- und "Sonstiges" bekommt
- * bewusst keins, weil die Kategorie ueber den Ort nichts aussagt.
+ * über ein konkretes Produkt (die trifft weiterhin allein
+ * product_knowledge), sondern eine Aussage über die app-eigenen Kategorien
+ * und die app-eigenen Fächer: Tiefkühl liegt im Gefrierfach, sonst wäre
+ * es keins. Unter /knowledge jederzeit änderbar — und "Sonstiges" bekommt
+ * bewusst keins, weil die Kategorie über den Ort nichts aussagt.
+ *
+ * avgPriceCents und avgCo2Grams schätzen, was ein durchschnittlicher Artikel
+ * dieser Kategorie wert ist — die Grundlage der Ersparnis-Zahlen auf der
+ * Startseite. Zugrunde liegt je eine typische Einkaufseinheit (Milch 500 g
+ * bzw. 1 l, Fleisch 400 g, Obst 500 g, Getränke 1 l) mal einem üblichen
+ * Lebenszyklus-Kennwert pro Kilogramm. Bewusst nach unten gerundet: eine zu
+ * niedrige Zahl untertreibt, eine zu hohe behauptet eine Ersparnis, die es
+ * nicht gab — und die zweite Sorte Fehler kostet das Vertrauen in alle
+ * anderen Zahlen der App gleich mit.
+ *
+ * "Sonstiges" bekommt keine Werte: eine Kategorie, die alles sein kann, kann
+ * nichts schätzen. null heißt hier "zählt nicht mit", nicht "kostet nichts".
+ * Beides ist im Kategorie-Editor überschreibbar; bestehende Listen haben
+ * dieselben Startwerte einmalig über die Migration 0012 bekommen.
  */
 export const DEFAULT_CATEGORIES = [
-  { key: "milchprodukte", label: "Milchprodukte", shelfLifeDays: 7, defaultPlace: "Kühlschrank" },
-  { key: "fleisch_fisch", label: "Fleisch & Fisch", shelfLifeDays: 3, defaultPlace: "Kühlschrank" },
-  { key: "obst_gemuese", label: "Obst & Gemüse", shelfLifeDays: 5, defaultPlace: "Kühlschrank" },
-  { key: "brot_backwaren", label: "Brot & Backwaren", shelfLifeDays: 4, defaultPlace: "Vorratsschrank" },
-  { key: "kuehlware_sonstig", label: "Kühlware (sonstig)", shelfLifeDays: 7, defaultPlace: "Kühlschrank" },
-  { key: "tiefkuehl", label: "Tiefkühl", shelfLifeDays: 180, defaultPlace: "Gefrierfach" },
-  { key: "konserven", label: "Konserven", shelfLifeDays: 365, defaultPlace: "Vorratsschrank" },
-  { key: "trockenwaren", label: "Trockenwaren", shelfLifeDays: 270, defaultPlace: "Vorratsschrank" },
-  { key: "getraenke", label: "Getränke", shelfLifeDays: 180, defaultPlace: "Vorratsschrank" },
-  { key: "sonstiges", label: "Sonstiges", shelfLifeDays: 14, defaultPlace: null },
+  // key, label, shelfLifeDays, defaultPlace, avgPriceCents, avgCo2Grams
+  { key: "milchprodukte", label: "Milchprodukte", shelfLifeDays: 7, defaultPlace: "Kühlschrank", avgPriceCents: 150, avgCo2Grams: 1400 },
+  { key: "fleisch_fisch", label: "Fleisch & Fisch", shelfLifeDays: 3, defaultPlace: "Kühlschrank", avgPriceCents: 500, avgCo2Grams: 2800 },
+  { key: "obst_gemuese", label: "Obst & Gemüse", shelfLifeDays: 5, defaultPlace: "Kühlschrank", avgPriceCents: 200, avgCo2Grams: 300 },
+  { key: "brot_backwaren", label: "Brot & Backwaren", shelfLifeDays: 4, defaultPlace: "Vorratsschrank", avgPriceCents: 250, avgCo2Grams: 400 },
+  { key: "kuehlware_sonstig", label: "Kühlware (sonstig)", shelfLifeDays: 7, defaultPlace: "Kühlschrank", avgPriceCents: 250, avgCo2Grams: 500 },
+  { key: "tiefkuehl", label: "Tiefkühl", shelfLifeDays: 180, defaultPlace: "Gefrierfach", avgPriceCents: 300, avgCo2Grams: 900 },
+  { key: "konserven", label: "Konserven", shelfLifeDays: 365, defaultPlace: "Vorratsschrank", avgPriceCents: 120, avgCo2Grams: 500 },
+  { key: "trockenwaren", label: "Trockenwaren", shelfLifeDays: 270, defaultPlace: "Vorratsschrank", avgPriceCents: 180, avgCo2Grams: 600 },
+  { key: "getraenke", label: "Getränke", shelfLifeDays: 180, defaultPlace: "Vorratsschrank", avgPriceCents: 120, avgCo2Grams: 400 },
+  { key: "sonstiges", label: "Sonstiges", shelfLifeDays: 14, defaultPlace: null, avgPriceCents: null, avgCo2Grams: null },
 ] as const;
 
 export function estimateExpiryDate(shelfLifeDays: number, from: Date = new Date()): Date {

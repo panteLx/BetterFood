@@ -100,6 +100,17 @@ export const categories = sqliteTable(
     defaultPlaceId: integer("default_place_id").references(() => places.id, {
       onDelete: "set null",
     }),
+    // Was ein durchschnittlicher Artikel dieser Kategorie kostet und an
+    // Treibhausgas gekostet hat. Beides in Ganzzahlen -- Cent und Gramm --,
+    // damit sich beim Summieren nichts verrechnet: 1,19 EUR als Fliesskomma
+    // summiert sich ueber hundert Artikel messbar daneben.
+    //
+    // NULL heisst ausdruecklich "diese Kategorie zaehlt nicht mit", nicht
+    // "null Euro". Sonstiges hat deshalb keinen Wert: eine Kategorie, die
+    // alles sein kann, kann nichts schaetzen. Die Ersparnis-Rechnung
+    // ueberspringt solche Eintraege, statt sie mit 0 zu verwaessern.
+    avgPriceCents: integer("avg_price_cents"),
+    avgCo2Grams: integer("avg_co2_grams"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     listId: integer("list_id").references(() => lists.id),
   },

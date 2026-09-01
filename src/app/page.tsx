@@ -19,10 +19,17 @@ export default async function HomePage() {
     getPlacesForList(listId),
     // Ohne Zeitfenster: der Stichtag liesse sich hier nur ueber new Date()
     // bilden, und ein solcher "unstable value" bricht den Prerender der Route
-    // ab. Drei Spalten pro abgehaktem Artikel sind guenstig genug, dass sich
-    // das Zurechtschneiden im Client lohnt.
+    // ab. Vier schmale Spalten pro abgehaktem Artikel sind guenstig genug,
+    // dass sich das Zurechtschneiden im Client lohnt.
     db
-      .select({ status: items.status, quantity: items.quantity, resolvedAt: items.resolvedAt })
+      .select({
+        status: items.status,
+        quantity: items.quantity,
+        resolvedAt: items.resolvedAt,
+        // Die vierte Spalte traegt die Ersparnis-Rechnung: ohne die Kategorie
+        // laesst sich einem abgehakten Artikel kein Schaetzwert zuordnen.
+        category: items.category,
+      })
       .from(items)
       .where(
         and(ne(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)),

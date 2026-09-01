@@ -1,9 +1,10 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { categories, items, listMembers, lists, places, productKnowledge } from "@/db/schema";
+import { categories, items, listMembers, lists, places, productKnowledge, settings } from "@/db/schema";
 import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
+import { MONTHLY_GOAL_KEY, parseMonthlyGoal } from "@/lib/monthly-goal";
 import { normalizeProductName } from "@/lib/utils";
 
 /**
@@ -55,6 +56,8 @@ export async function seedDefaultCategories(listId: number) {
       key: category.key,
       label: category.label,
       shelfLifeDays: category.shelfLifeDays,
+      avgPriceCents: category.avgPriceCents,
+      avgCo2Grams: category.avgCo2Grams,
       createdAt: now,
       listId,
     })),
@@ -135,6 +138,24 @@ export async function getPlacesForList(listId: number) {
  * Join ueber Artikel UND Mitglieder vervielfacht die Zeilen und zaehlt beides
  * falsch.
  */
+/**
+ * Das Monatsziel eines Nutzers, mit dem Standardwert als Rueckfallebene.
+ *
+ * Ohne "use cache": die settings-Zeile aendert sich ueber die
+ * Einstellungsseite und traegt keinen Tag, ueber den sich ein Cache
+ * verlaesslich raeumen liesse. Es ist eine Zeile ueber den Primaerschluessel
+ * -- guenstiger als jede Invalidierung, die man dafuer bauen wuerde.
+ */
+export async function getMonthlyGoal(userId: string) {
+  const row = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(and(eq(settings.userId, userId), eq(settings.key, MONTHLY_GOAL_KEY)))
+    .get();
+
+  return parseMonthlyGoal(row?.value);
+}
+
 export async function getListsWithCounts(userId: string) {
   const rows = await db
     .select({ id: lists.id, name: lists.name })

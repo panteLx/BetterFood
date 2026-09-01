@@ -8,10 +8,12 @@ import {
   Database,
   ListChecks,
   Moon,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { LEAD_DAY_OPTIONS } from "@/lib/notification-settings";
+import { parseMonthlyGoal } from "@/lib/monthly-goal";
 import { useIsClient } from "@/lib/use-is-client";
 import { useSession } from "@/lib/auth-client";
 
@@ -44,6 +46,12 @@ const ROWS: {
     value: (state) => state.leadDaysLabel,
   },
   {
+    href: "/settings/goal",
+    icon: Target,
+    label: "Monatsziel",
+    value: (state) => state.monthlyGoalLabel,
+  },
+  {
     href: "/settings/appearance",
     icon: Moon,
     label: "Darstellung",
@@ -65,6 +73,7 @@ const ROWS: {
 
 type SettingsSummary = {
   leadDaysLabel?: string;
+  monthlyGoalLabel?: string;
   themeLabel?: string;
   activeListName?: string;
 };
@@ -72,6 +81,7 @@ type SettingsSummary = {
 export default function SettingsPage() {
   const { data: session } = useSession();
   const [leadDaysLabel, setLeadDaysLabel] = useState<string>();
+  const [monthlyGoalLabel, setMonthlyGoalLabel] = useState<string>();
   const [activeListName, setActiveListName] = useState<string>();
 
   // Erst im Client: theme steht vor der Hydration nicht fest, und ein
@@ -92,12 +102,13 @@ export default function SettingsPage() {
 
     fetch("/api/settings")
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { leadDays?: number } | null) => {
+      .then((data: { leadDays?: number; monthlyGoal?: number } | null) => {
         if (!active || !data) return;
         const option = LEAD_DAY_OPTIONS.find(
           (entry) => entry.days === data.leadDays,
         );
         setLeadDaysLabel(option?.label ?? `${data.leadDays} Tage vorher`);
+        setMonthlyGoalLabel(`${parseMonthlyGoal(data.monthlyGoal)} %`);
       })
       .catch(() => {
         // Ohne Wert steht die Zeile eben nur mit ihrem Namen da -- ein
@@ -128,6 +139,7 @@ export default function SettingsPage() {
 
   const summary: SettingsSummary = {
     leadDaysLabel,
+    monthlyGoalLabel,
     themeLabel,
     activeListName,
   };
