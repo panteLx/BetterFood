@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryIcon } from "@/components/category-icon";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DateCalendar } from "@/components/date-calendar";
 import { EmptyState } from "@/components/empty-state";
 import { SectionLabel } from "@/components/section-label";
@@ -49,15 +50,6 @@ import type { Category, Place } from "@/db/schema";
  * kann.
  */
 const DEFAULT_SHELF_LIFE_DAYS = 14;
-
-/**
- * Wie viele Kategorien als Chips dastehen, bevor auf das Blatt verwiesen wird.
- *
- * Sechs sind zwei Zeilen -- genug, dass die übliche Wahl dabei ist, und wenig
- * genug, dass die Frage nicht wie ein Formular aussieht. Der Rest steht im
- * Blatt "Alle Kategorien", zusammen mit den Fächern.
- */
-const CATEGORY_CHIPS = 6;
 
 /**
  * Die fünf Sprünge über dem Kalender.
@@ -318,15 +310,41 @@ function ReviewFlow({
             findet ihn beim nächsten Besuch von /review wieder -- verloren
             geht er erst mit dem Tab. */}
         <div className="flex items-center gap-2.5">
-          <Button
-            variant="ghost"
-            size="icon-touch"
-            aria-label="Zur Startseite"
-            onClick={() => router.push("/")}
-            className="-ml-2 rounded-2xl"
-          >
-            <Home className="size-5" />
-          </Button>
+          {/* Mit Rückfrage, weil der Weg hier hinaus etwas wegwirft: der Batch
+              liegt bis zum Abschluss nur im sessionStorage, und der
+              ReviewBatchGuard verwirft ihn beim Verlassen von /review. Ohne
+              die Frage kostete ein Fehlgriff neben dem Kalender den ganzen
+              Einkauf -- und der Knopf sitzt oben links, also genau dort, wo
+              der Daumen sonst "zurück" erwartet.
+
+              Auch die bereits abgehakten Artikel sind dann weg: geschrieben
+              wird erst am Ende, in einem einzigen Import. Deshalb nennt der
+              Text die Gesamtzahl und nicht die der offenen. */}
+          <ConfirmDialog
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon-touch"
+                aria-label="Zur Startseite"
+                className="-ml-2 rounded-2xl"
+              >
+                <Home className="size-5" />
+              </Button>
+            }
+            icon={TriangleAlert}
+            title="Prüfen abbrechen?"
+            description={
+              <>
+                Nichts davon ist gespeichert
+                {batch.length === 1
+                  ? " — der Artikel dieses Durchlaufs wird verworfen"
+                  : ` — die ${batch.length} Artikel dieses Durchlaufs werden verworfen`}
+                . Eine Rechnung müsstest du danach neu einlesen.
+              </>
+            }
+            confirmLabel="Verwerfen"
+            onConfirm={() => router.push("/")}
+          />
 
           <h1 className="min-w-0 flex-1 text-[20px] leading-tight font-extrabold">
             Kurz prüfen
@@ -835,8 +853,17 @@ function StepCard({
             <p className="mt-1 text-[12.5px] font-semibold text-faint">
               Danach merkt sich die Liste die Einordnung für den nächsten Einkauf.
             </p>
+            {/* Alle Kategorien, nicht die ersten sechs mit einem Verweis auf
+                das Blatt dahinter. Die Abkürzung sollte die Frage klein
+                halten, kostete aber genau bei den Artikeln zwei Griffe mehr,
+                die nicht in die üblichen Fächer fallen -- und das sind
+                dieselben, bei denen der Nutzer ohnehin überlegt. Die Liste
+                ist zweistellig, nicht hundert Einträge lang: sie passt in
+                drei bis vier Zeilen, und dann ist Blättern teurer als
+                Hinsehen. Das Blatt bleibt für den Ort und für spätere
+                Korrekturen ("Ändern"). */}
             <div className="mt-3 flex flex-wrap gap-2">
-              {categories.slice(0, CATEGORY_CHIPS).map((option) => (
+              {categories.map((option) => (
                 <Chip
                   key={option.key}
                   onClick={() => chooseCategory(option)}
@@ -845,15 +872,6 @@ function StepCard({
                   {option.label}
                 </Chip>
               ))}
-              {categories.length > CATEGORY_CHIPS && (
-                <button
-                  type="button"
-                  onClick={() => setSheetOpen(true)}
-                  className="inline-flex h-[34px] items-center rounded-[10px] border border-dashed border-border px-3 text-[12.5px] font-semibold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  Alle Kategorien
-                </button>
-              )}
             </div>
             <button
               type="button"
