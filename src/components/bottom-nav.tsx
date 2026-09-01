@@ -36,6 +36,10 @@ const HIDDEN_PREFIXES = [
   "/item",
   "/saved",
   "/receipt",
+  // Der Pruef-Flow ist ein Ablauf mit eigenem Weiter-Knopf, keine
+  // Bereichsseite -- die Leiste haette dort nichts zu markieren und naehme
+  // dem Kalender den Platz weg.
+  "/review",
 ];
 
 // Unterseiten von "Mehr": die Leiste soll dort weiterhin "Mehr" markieren,
