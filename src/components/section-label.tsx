@@ -20,6 +20,7 @@ export function SectionLabel({
   count,
   href,
   linkLabel = "Alle ansehen",
+  hint,
 }: {
   title: string;
   /** "danger" allein für Abgelaufenes -- sonst verliert die Farbe ihr Gewicht. */
@@ -29,6 +30,12 @@ export function SectionLabel({
   /** Ziel des Links rechts; ohne href steht dort nur der Zähler. */
   href?: string;
   linkLabel?: string;
+  /**
+   * Ein Hinweis statt eines Links rechts -- für Abschnitte, deren Zeilen
+   * selbst die Aktion sind ("Fertig · antippen zum Ändern"). Ein Link daneben
+   * wäre dort ein zweites Ziel für dieselbe Geste.
+   */
+  hint?: string;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
@@ -43,10 +50,12 @@ export function SectionLabel({
           <span className="ml-1.5 font-mono tabular-nums">{count}</span>
         )}
       </h2>
-      {href && (
+      {href ? (
         <Link href={href} className="text-[12.5px] font-bold text-primary">
           {linkLabel}
         </Link>
+      ) : (
+        hint && <span className="text-[11.5px] font-semibold text-faint">{hint}</span>
       )}
     </div>
   );
