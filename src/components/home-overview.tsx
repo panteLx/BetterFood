@@ -232,7 +232,7 @@ export function HomeOverview({
           {/* Der Balken macht das Verhaeltnis lesbar, das drei nebeneinander
               stehende Zahlen fuer sich nicht hergeben. */}
           <div
-            className="flex h-2 overflow-hidden rounded-[5px] bg-surface-2"
+            className="flex h-2 overflow-hidden rounded-[5px] bg-track"
             role="img"
             aria-label={`${buckets.fresh} frisch, ${buckets.soon.length} bald fällig, ${buckets.expired.length} abgelaufen`}
           >
