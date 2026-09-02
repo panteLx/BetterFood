@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  Check,
   ChevronRight,
   CircleDashed,
+  Pencil,
   Plus,
   Refrigerator,
-  Settings2,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -18,24 +20,32 @@ import { Label } from "@/components/ui/label";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CategoryIcon } from "@/components/category-icon";
+import {
+  CO2_FACTOR,
+  MAX_CO2_GRAMS,
+  MAX_PRICE_CENTS,
+  PRICE_FACTOR,
+  formatEstimateInput,
+  parseEstimateInput,
+} from "@/lib/estimates";
 import type { Category, Place } from "@/db/schema";
 
 export type PlaceWithCount = Place & { itemCount: number };
 
 /**
- * Wie dieser Haushalt seinen Vorrat sortiert -- Faecher und Kategorien auf
+ * Wie dieser Haushalt seinen Vorrat sortiert -- Fächer und Kategorien auf
  * einem Blatt.
  *
- * Vorher waren das zwei Listen in zwei Reitern fuer eine einzige Beziehung:
+ * Vorher waren das zwei Listen in zwei Reitern für eine einzige Beziehung:
  * in der Kategorie stand ihr Fach, im Fach die Zahl der Artikel, und wer
  * wissen wollte, was wo landet, sprang zwischen beiden hin und her. Hier ist
- * das Fach die Ueberschrift und die Kategorie die Zeile darunter -- die
+ * das Fach die Überschrift und die Kategorie die Zeile darunter -- die
  * Zuordnung ist damit zu sehen statt nachzuschlagen, und eine Kategorie in
- * ein anderes Fach zu raeumen ist dieselbe Geste wie sie umzubenennen.
+ * ein anderes Fach zu räumen ist dieselbe Geste wie sie umzubenennen.
  *
- * Kategorien werden von aussen gehalten: auf derselben Seite haengt die
- * Produktliste an ihnen. Faecher kommen dagegen mitsamt ihrer Artikelzahl vom
- * Server und werden nach jeder Aenderung neu geladen.
+ * Kategorien werden von außen gehalten: auf derselben Seite hängt die
+ * Produktliste an ihnen. Fächer kommen dagegen mitsamt ihrer Artikelzahl vom
+ * Server und werden nach jeder Änderung neu geladen.
  */
 export function SortingManager({
   categories,
@@ -49,7 +59,7 @@ export function SortingManager({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
-  // Ein Blatt fuer beides: eine neue Kategorie und eine bestehende
+  // Ein Blatt für beides: eine neue Kategorie und eine bestehende
   // beantworten dieselben drei Fragen (Name, Haltbarkeit, Fach).
   const [categorySheet, setCategorySheet] = useState<
     { mode: "new"; placeId: number | null } | { mode: "edit"; category: Category } | null
@@ -57,9 +67,24 @@ export function SortingManager({
   const [formLabel, setFormLabel] = useState("");
   const [formShelfLife, setFormShelfLife] = useState("14");
   const [formPlaceId, setFormPlaceId] = useState<number | null>(null);
+  // In Euro und Kilogramm, wie der Nutzer sie tippt -- die Umrechnung auf Cent
+  // und Gramm macht erst parseEstimateInput beim Speichern.
+  const [formPrice, setFormPrice] = useState("");
+  const [formCo2, setFormCo2] = useState("");
 
-  const [placeSheet, setPlaceSheet] = useState<{ place: PlaceWithCount } | "new" | null>(null);
+  // Das Blatt legt nur noch an. Umbenennen passiert in der Überschrift selbst,
+  // genau wie in der Produktliste nebenan -- ein Blatt mit einem einzigen Feld
+  // ist drei Gesten (öffnen, tippen, speichern) für eine Änderung, die in eine
+  // Zeile passt. Die Kategorie behält ihres: dort ist der Name eines von vier
+  // Feldern, und ein zweiter Weg nur zum Namen wäre eine Dublette.
+  const [placeSheetOpen, setPlaceSheetOpen] = useState(false);
   const [placeName, setPlaceName] = useState("");
+
+  // Nur die ID, nicht das ganze Fach: nach router.refresh() kommen die Fächer
+  // als neue Objekte vom Server, und eine festgehaltene Kopie hätte danach
+  // eine veraltete Artikelzahl in die Überschrift zurückgeschrieben.
+  const [editingPlaceId, setEditingPlaceId] = useState<number | null>(null);
+  const [editPlaceName, setEditPlaceName] = useState("");
 
   const [pendingDeleteCategory, setPendingDeleteCategory] = useState<Category | null>(null);
   const [pendingDeletePlace, setPendingDeletePlace] = useState<PlaceWithCount | null>(null);
@@ -67,10 +92,10 @@ export function SortingManager({
   /**
    * Die Kategorien, gruppiert nach ihrem Standardfach.
    *
-   * Ueber die Fachliste gruppiert und nicht ueber die Kategorien: zeigt eine
-   * Kategorie auf ein Fach, das es nicht mehr gibt -- der Client haelt nach
-   * dem Loeschen noch die alte Zeile, die Datenbank hat "ON DELETE SET NULL"
-   * laengst ausgefuehrt --, landet sie unter "Ohne Standardort" statt in
+   * Über die Fachliste gruppiert und nicht über die Kategorien: zeigt eine
+   * Kategorie auf ein Fach, das es nicht mehr gibt -- der Client hält nach
+   * dem Löschen noch die alte Zeile, die Datenbank hat "ON DELETE SET NULL"
+   * längst ausgeführt --, landet sie unter "Ohne Standardort" statt in
    * einer Karteileiche.
    */
   const groups = useMemo(() => {
@@ -91,6 +116,10 @@ export function SortingManager({
     setFormLabel("");
     setFormShelfLife("14");
     setFormPlaceId(placeId);
+    // Leer und nicht 0: über eine gerade erst erfundene Kategorie kann die
+    // App nichts schätzen, und 0 wäre eine Behauptung.
+    setFormPrice("");
+    setFormCo2("");
     setCategorySheet({ mode: "new", placeId });
   }
 
@@ -98,6 +127,8 @@ export function SortingManager({
     setFormLabel(category.label);
     setFormShelfLife(String(category.shelfLifeDays));
     setFormPlaceId(category.defaultPlaceId);
+    setFormPrice(formatEstimateInput(category.avgPriceCents, PRICE_FACTOR, 2));
+    setFormCo2(formatEstimateInput(category.avgCo2Grams, CO2_FACTOR));
     setCategorySheet({ mode: "edit", category });
   }
 
@@ -117,10 +148,23 @@ export function SortingManager({
       return;
     }
 
+    const price = parseEstimateInput(formPrice, PRICE_FACTOR, MAX_PRICE_CENTS);
+    if (price === "invalid") {
+      toast.error("Bitte einen gültigen Ø Preis eingeben.");
+      return;
+    }
+    const co2 = parseEstimateInput(formCo2, CO2_FACTOR, MAX_CO2_GRAMS);
+    if (co2 === "invalid") {
+      toast.error("Bitte einen gültigen Ø CO₂-Wert eingeben.");
+      return;
+    }
+
     const body = JSON.stringify({
       label: formLabel.trim(),
       shelfLifeDays: Math.round(days),
       defaultPlaceId: formPlaceId,
+      avgPriceCents: price,
+      avgCo2Grams: co2,
     });
 
     setSaving(true);
@@ -166,7 +210,7 @@ export function SortingManager({
     }
   }
 
-  /** Faecher liegen samt Artikelzahl auf dem Server -- nach jeder Aenderung frisch holen. */
+  /** Fächer liegen samt Artikelzahl auf dem Server -- nach jeder Änderung frisch holen. */
   async function callPlace(input: string, init: RequestInit, success: string, failure: string) {
     setSaving(true);
     try {
@@ -186,24 +230,45 @@ export function SortingManager({
     }
   }
 
-  async function savePlace() {
-    if (!placeSheet) return;
+  async function createPlace() {
     if (!placeName.trim()) {
       toast.error("Bitte einen Namen eingeben.");
       return;
     }
-    const isNew = placeSheet === "new";
     const ok = await callPlace(
-      isNew ? "/api/places" : `/api/places/${placeSheet.place.id}`,
+      "/api/places",
       {
-        method: isNew ? "POST" : "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: placeName.trim() }),
       },
-      isNew ? "Fach hinzugefügt" : "Fach gespeichert",
+      "Fach hinzugefügt",
       "Konnte Fach nicht speichern.",
     );
-    if (ok) setPlaceSheet(null);
+    if (ok) setPlaceSheetOpen(false);
+  }
+
+  /**
+   * Der Name aus der Überschrift heraus. Bleibt das Feld leer, wird nichts
+   * geschickt: ein Fach ohne Namen wäre in der Auswahl beim Erfassen eine
+   * leere Zeile, die man nicht mehr zuordnen kann.
+   */
+  async function renamePlace(place: PlaceWithCount) {
+    if (!editPlaceName.trim()) {
+      toast.error("Bitte einen Namen eingeben.");
+      return;
+    }
+    const ok = await callPlace(
+      `/api/places/${place.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editPlaceName.trim() }),
+      },
+      "Fach gespeichert",
+      "Konnte Fach nicht speichern.",
+    );
+    if (ok) setEditingPlaceId(null);
   }
 
   async function deletePlace(place: PlaceWithCount) {
@@ -231,25 +296,89 @@ export function SortingManager({
             <span className="flex size-9.5 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
               <Refrigerator className="size-4.5" strokeWidth={1.7} />
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[14.5px] leading-tight font-bold">{place.name}</p>
-              <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
-                {place.itemCount} Artikel
-              </p>
-            </div>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-10 shrink-0 rounded-[13px]"
-              disabled={saving}
-              onClick={() => {
-                setPlaceName(place.name);
-                setPlaceSheet({ place });
-              }}
-              aria-label={`Fach „${place.name}“ bearbeiten`}
-            >
-              <Settings2 className="size-4" />
-            </Button>
+            {/* Abbrechen setzt nur den Bearbeitungsmodus zurück und fasst
+                editPlaceName nicht an -- die Überschrift rendert wieder
+                place.name aus den Props, der getippte Zwischenstand ist damit
+                verworfen und nicht etwa als leeres Feld stehengeblieben. */}
+            {editingPlaceId === place.id ? (
+              <>
+                {/* Enter speichert, Escape bricht ab -- wie beim Artikelnamen
+                    im Review. Das Feld steht in keinem <form>, also täte die
+                    Eingabetaste der Bildschirmtastatur sonst schlicht nichts,
+                    und man müsste die Tastatur erst wegschieben, um den Haken
+                    zu treffen. */}
+                <input
+                  value={editPlaceName}
+                  onChange={(event) => setEditPlaceName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") renamePlace(place);
+                    if (event.key === "Escape") setEditingPlaceId(null);
+                  }}
+                  disabled={saving}
+                  autoFocus
+                  aria-label="Name des Fachs"
+                  className="h-10.5 min-w-0 flex-1 rounded-[13px] border border-primary bg-surface-2 px-3 text-[14.5px] font-bold outline-none"
+                />
+                <Button
+                  size="icon"
+                  className="size-10 shrink-0 rounded-[13px]"
+                  disabled={saving}
+                  onClick={() => renamePlace(place)}
+                  aria-label="Speichern"
+                >
+                  <Check className="size-4.5" strokeWidth={2.4} />
+                </Button>
+                {/* Auch Abbrechen ist während des Speicherns gesperrt: sonst
+                    schließt sich das Feld, die PATCH-Anfrage läuft aber weiter
+                    und trägt hinterher genau die Umbenennung ein, die gerade
+                    verworfen werden sollte. */}
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-10 shrink-0 rounded-[13px]"
+                  disabled={saving}
+                  onClick={() => setEditingPlaceId(null)}
+                  aria-label="Abbrechen"
+                >
+                  <X className="size-4" strokeWidth={2.3} />
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14.5px] leading-tight font-bold">{place.name}</p>
+                  <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
+                    {place.itemCount} Artikel
+                  </p>
+                </div>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-10 shrink-0 rounded-[13px]"
+                  disabled={saving}
+                  onClick={() => {
+                    setEditingPlaceId(place.id);
+                    setEditPlaceName(place.name);
+                  }}
+                  aria-label={`Fach „${place.name}“ umbenennen`}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                {/* Der Papierkorb geht weiter über den Dialog: ein Fach zu
+                    entfernen nimmt den Artikeln darin ihre Zuordnung, und das
+                    darf kein Fehlgriff neben dem Stift auslösen. */}
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-10 shrink-0 rounded-[13px] text-danger"
+                  disabled={saving}
+                  onClick={() => setPendingDeletePlace(place)}
+                  aria-label={`Fach „${place.name}“ entfernen`}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </>
+            )}
           </header>
 
           <div className="flex flex-col gap-2">
@@ -270,8 +399,8 @@ export function SortingManager({
         </section>
       ))}
 
-      {/* Nur wenn es sie gibt: eine leere Ueberschrift "Ohne Standardort"
-          waere eine Frage, die niemand gestellt hat. */}
+      {/* Nur wenn es sie gibt: eine leere Überschrift "Ohne Standardort"
+          wäre eine Frage, die niemand gestellt hat. */}
       {groups.orphans.length > 0 && (
         <section className="flex flex-col gap-2">
           <header className="flex items-center gap-2.5 px-1">
@@ -307,7 +436,7 @@ export function SortingManager({
         disabled={saving}
         onClick={() => {
           setPlaceName("");
-          setPlaceSheet("new");
+          setPlaceSheetOpen(true);
         }}
       />
 
@@ -340,8 +469,57 @@ export function SortingManager({
             />
           </div>
 
-          {/* Die Faecher als Chips statt als zweitem Blatt: es sind drei bis
-              fuenf, und ein Blatt ueber einem Blatt waere ein Stapel fuer
+          {/* Nebeneinander und nicht untereinander: es sind zwei Zahlen zu
+              derselben Frage ("was ist ein Artikel hier ungefähr wert?"),
+              und einzeln untereinander wäre das Blatt eine Formularwand.
+              Beide tragen ein eigenes sichtbares Label und nicht bloß einen
+              Platzhalter: sobald ein Wert drinsteht -- und nach dem Seed steht
+              überall einer drin -- verschwindet der Platzhalter, und zwei
+              nackte Zahlen nebeneinander sagen nicht mehr, welche welche
+              ist. */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="categoryAvgPrice">Ø Preis in €</Label>
+                {/* type="text", nicht type="number": ein Zahlenfeld gibt bei
+                    einer Eingabe, die es nicht versteht -- ein Komma reicht --
+                    über value den leeren String zurück. Das ist von
+                    "bewusst geleert" nicht zu unterscheiden und hätte einen
+                    bestehenden Schätzwert stillschweigend gelöscht, statt
+                    einen Fehler zu melden. inputMode holt trotzdem die
+                    Zifferntastatur. */}
+                <Input
+                  id="categoryAvgPrice"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={formPrice}
+                  onChange={(event) => setFormPrice(event.target.value)}
+                  className="h-12 rounded-lg"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="categoryAvgCo2">Ø CO₂ in kg</Label>
+                <Input
+                  id="categoryAvgCo2"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={formCo2}
+                  onChange={(event) => setFormCo2(event.target.value)}
+                  className="h-12 rounded-lg"
+                />
+              </div>
+            </div>
+            <p className="text-xs leading-snug font-medium text-faint">
+              Je Artikel. Grundlage der Ersparnis auf der Startseite. Leer
+              lassen, wenn die Kategorie zu gemischt ist — sie zählt dann nicht
+              mit.
+            </p>
+          </div>
+
+          {/* Die Fächer als Chips statt als zweitem Blatt: es sind drei bis
+              fünf, und ein Blatt über einem Blatt wäre ein Stapel für
               eine Frage, die in eine Zeile passt. */}
           {places.length > 0 && (
             <div className="flex flex-col gap-2">
@@ -357,7 +535,7 @@ export function SortingManager({
                     {place.name}
                   </Chip>
                 ))}
-                {/* Keiner ist eine gueltige Antwort: "Sonstiges" sagt ueber
+                {/* Keiner ist eine gültige Antwort: "Sonstiges" sagt über
                     das Fach nichts aus, und dann soll das Formular auch
                     nichts vorschlagen. */}
                 <Chip
@@ -394,9 +572,9 @@ export function SortingManager({
       </Sheet>
 
       <Sheet
-        open={placeSheet !== null}
-        onOpenChange={(open) => !open && setPlaceSheet(null)}
-        title={placeSheet && placeSheet !== "new" ? placeSheet.place.name : "Neues Fach"}
+        open={placeSheetOpen}
+        onOpenChange={(open) => !open && setPlaceSheetOpen(false)}
+        title="Neues Fach"
       >
         <div className="flex flex-col gap-3.5">
           <div className="flex flex-col gap-1.5">
@@ -410,31 +588,19 @@ export function SortingManager({
             />
           </div>
 
-          <Button className="mt-1 h-13 rounded-lg text-[15px]" disabled={saving} onClick={savePlace}>
-            {placeSheet === "new" ? "Fach anlegen" : "Speichern"}
+          <Button
+            className="mt-1 h-13 rounded-lg text-[15px]"
+            disabled={saving}
+            onClick={createPlace}
+          >
+            Fach anlegen
           </Button>
-
-          {placeSheet && placeSheet !== "new" && (
-            <Button
-              variant="ghost"
-              className="h-12 rounded-lg text-danger"
-              disabled={saving}
-              onClick={() => {
-                const place = placeSheet.place;
-                setPlaceSheet(null);
-                setPendingDeletePlace(place);
-              }}
-            >
-              <Trash2 className="size-4" />
-              Fach entfernen
-            </Button>
-          )}
         </div>
       </Sheet>
 
-      {/* Eine Kategorie zu loeschen nimmt alles mit, was die Liste ueber die
+      {/* Eine Kategorie zu löschen nimmt alles mit, was die Liste über die
           Produkte darin gelernt hat -- das darf kein einzelner Fehlgriff
-          ausloesen. */}
+          auslösen. */}
       <ConfirmDialog
         open={pendingDeleteCategory !== null}
         onOpenChange={(open) => !open && setPendingDeleteCategory(null)}
@@ -460,7 +626,7 @@ export function SortingManager({
   );
 }
 
-/** Eine Kategorie in ihrem Fach -- die ganze Zeile oeffnet die Bearbeitung. */
+/** Eine Kategorie in ihrem Fach -- die ganze Zeile öffnet die Bearbeitung. */
 function CategoryRow({
   category,
   disabled,
@@ -470,6 +636,33 @@ function CategoryRow({
   disabled: boolean;
   onClick: () => void;
 }) {
+  // Haltbarkeit, Ø Preis und Ø CO₂ in einer Zeile. Bis eben stand hier nur die
+  // Haltbarkeit, obwohl die Kategorie seit den Schätzwerten drei gepflegte
+  // Eigenschaften trägt -- wer sie pflegt, sah der Liste also nicht an, welche
+  // Kategorie noch leer ist, und musste jede einzeln aufklappen.
+  //
+  // Fehlende Werte fallen weg, statt als "—" dazustehen: `null` heißt hier
+  // nicht "noch nicht gepflegt", sondern "diese Kategorie ist zu gemischt und
+  // zählt nicht mit" (siehe lib/estimates.ts). Ein Platzhalter würde einen
+  // gültigen Zustand als Lücke anmahnen und obendrein jede solche Zeile mit
+  // einem Zeichen füllen, das nichts aussagt.
+  //
+  // Formatiert über formatEstimateInput, also genau so, wie der Editor die
+  // Zahl beim Öffnen in sein Feld schreibt. Andernfalls stünde in der Liste
+  // eine andere Schreibweise derselben Zahl als im Formular darunter, und der
+  // Nutzer müsste nach dem Speichern prüfen, ob er versehentlich etwas
+  // verändert hat. Die Funktion schreibt so kurz wie möglich ("2,5 €", nicht
+  // "2,50 €") -- dieselbe Entscheidung wie im Feld, aus demselben Grund.
+  const meta = [
+    `${category.shelfLifeDays} Tage haltbar`,
+    ...(category.avgPriceCents !== null
+      ? [`${formatEstimateInput(category.avgPriceCents, PRICE_FACTOR, 2)} €`]
+      : []),
+    ...(category.avgCo2Grams !== null
+      ? [`${formatEstimateInput(category.avgCo2Grams, CO2_FACTOR)} kg`]
+      : []),
+  ].join(" · ");
+
   return (
     <button
       type="button"
@@ -483,9 +676,7 @@ function CategoryRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] leading-tight font-bold">{category.label}</p>
-        <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
-          {category.shelfLifeDays} Tage haltbar
-        </p>
+        <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">{meta}</p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
     </button>

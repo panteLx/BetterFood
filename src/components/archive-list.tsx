@@ -159,7 +159,7 @@ function ArchiveCard({
 
   return (
     <div
-      // overflow-x-clip statt overflow-hidden: siehe item-card.tsx.
+      // overflow-x-clip statt overflow-hidden: siehe item-row.tsx.
       className={cn(
         "relative overflow-x-clip rounded-[20px] bg-surface-2 transition-colors",
         offset > 0 && "bg-primary-tint",

@@ -40,11 +40,11 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  /* Ueber die shadcn-Rollen hinaus: das Design trennt eine zweite Flaeche
+  /* Über die shadcn-Rollen hinaus: das Design trennt eine zweite Fläche
      (surface2) von der Karte, eine dritte Textstufe (faint) unter
-     muted-foreground, und drei Ablauf-Zustaende mit je eigenem Tint. Genau
-     diese Dreiteilung frisch / bald / abgelaufen traegt die gesamte
-     Oberflaeche -- sie gehoert in Tokens, nicht in verstreute Hex-Werte. */
+     muted-foreground, und drei Ablauf-Zustände mit je eigenem Tint. Genau
+     diese Dreiteilung frisch / bald / abgelaufen trägt die gesamte
+     Oberfläche — sie gehört in Tokens, nicht in verstreute Hex-Werte. */
   --color-surface-2: var(--surface-2);
   --color-faint: var(--faint);
   --color-primary-tint: var(--primary-tint);
@@ -54,8 +54,24 @@
   --color-danger: var(--danger);
   --color-danger-tint: var(--danger-tint);
 
+  /* Die unbefüllte Spur hinter einem Fortschritt ist eine eigene Rolle: sie
+     darf weder Fläche (surface-2, sitzt zu nah an der Karte) noch Warnfarbe
+     sein — die Quotenleiste trug bisher danger-tint und las sich dadurch, als
+     wäre der leere Rest ein Fehler.
+
+     Drei Werte, weil der Entwurf die Spur je nach Dicke unterschiedlich tönt.
+     Verwendet wird bisher nur --track (die beiden Balken auf Startseite und
+     im Archiv); --track-2 und --track-ring gehören zur Hero-Karte, die als
+     Nächstes kommt — sie stehen hier, weil eine Palette an einer Stelle
+     stehen muss und nicht in der Komponente, die sie zufällig zuerst
+     braucht. Im Dunkeln fallen die letzten beiden zusammen: der feine
+     Unterschied des Hellmodus trägt auf dunklem Grund nicht. */
+  --color-track: var(--track);
+  --color-track-2: var(--track-2);
+  --color-track-ring: var(--track-ring);
+
   /* Tiefe ist im Dunkelmodus ein eigenes Material: der Schatten allein
-     traegt dort nichts, die helle Oberkante schon. Deshalb liegen alle vier
+     trägt dort nichts, die helle Oberkante schon. Deshalb liegen alle vier
      Stufen als Tokens hier und nicht als shadow-[...] in den Komponenten. */
   --shadow-card: var(--shadow-elevated);
   --shadow-raise: var(--shadow-hairline);
@@ -99,17 +115,20 @@
   --surface-2: #f6f8f4;
   --faint: #9aa79c;
   --primary-tint: #e6f0e8;
-  /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primaerton hat dort
+  /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primärton hat dort
      zu wenig Kontrast, deshalb ein eigener, aufgehellter Wert. */
   --primary-inv: #8ed4a3;
   --warning: #a9701a;
   --warning-tint: #faefd9;
   --danger: #b24734;
   --danger-tint: #f9e4df;
+  --track: #eef2ec;
+  --track-2: #e9ece7;
+  --track-ring: #e9f1ea;
   --scrim: rgb(20 32 24 / 0.42);
   --shadow-elevated: 0 1px 2px rgb(20 35 25 / 0.05), 0 10px 26px rgb(20 35 25 / 0.07);
-  /* Im Hellen heben sich die Vorratszeilen ueber ihren Rand ab, sie brauchen
-     keine zusaetzliche Kante. */
+  /* Im Hellen heben sich die Vorratszeilen über ihren Rand ab, sie brauchen
+     keine zusätzliche Kante. */
   --shadow-hairline: none;
   --shadow-navbar: 0 8px 28px rgb(0 0 0 / 0.14);
   --shadow-add-button: 0 4px 12px rgb(30 80 50 / 0.28);
@@ -132,72 +151,95 @@
 }
 
 .dark {
-  /* Die Farbtoene stammen aus dem Hellmodus, nur Saettigung und Helligkeit
-     sind fuer dunklen Grund gestimmt: die Flaechen liegen auf demselben
-     Gruengrau wie dort die Schrift (#151c17), der Akzent auf demselben Ton
-     wie #37714c. Der alte Dunkelmodus kippte ins Olive, weil er dieselbe
-     Gruenmenge bei doppelter Saettigung trug. */
-  --background: #0b0d0c;
-  --foreground: #ebefec;
-  --card: #171b18;
-  --card-foreground: #ebefec;
-  /* Eine Stufe ueber der Karte: Sheets und Dialoge liegen ueber ihr und
-     duerfen nicht denselben Wert tragen, sonst verschwindet die Kante. */
-  --popover: #1c211e;
-  --popover-foreground: #ebefec;
-  --primary: #4dc779;
-  --primary-foreground: #082111;
-  --secondary: #222824;
-  --secondary-foreground: #ebefec;
-  --muted: #222824;
-  --muted-foreground: #9bab9e;
-  --accent: #0f2417;
-  --accent-foreground: #4dc779;
-  --destructive: #df7968;
-  /* Deckend und im Farbton, nicht Weiss mit Alpha: ueber einer getoenten
-     Flaeche wird aus Weiss ein grauer Strich, der den Farbton zerlegt. */
-  --border: #313a34;
-  --input: #313a34;
-  --ring: #4dc779;
+  /* Anthrazit statt Beinahe-Schwarz. Der alte Grund (#0b0d0c) war praktisch
+     schwarz: darauf trug jede Karte einen sichtbaren Rand, und der Primärton
+     musste bis #4dc779 hochgezogen werden, um überhaupt zu leuchten — ein
+     Neongrün, das im Hellmodus nirgends vorkam. Der neue Grund liegt zwei
+     Stufen höher, die Flächen darüber staffeln sich in gleichmäßigen
+     Schritten (#191b1a Grund, #232624 Karte, #2a2d2b darüber), und der Akzent
+     kann auf einen gedämpften Salbeiton zurück. Der Farbton bleibt derselbe
+     wie hell, nur Sättigung und Helligkeit sind für dunklen Grund gestimmt. */
+  --background: #191b1a;
+  --foreground: #f0f1ef;
+  --card: #232624;
+  --card-foreground: #f0f1ef;
+  /* Eine Stufe über allem anderen: Sheets und Dialoge liegen über Karte und
+     surface-2 und dürfen nicht denselben Wert tragen, sonst verschwindet die
+     Kante. Die Notiz setzt popover, secondary und muted gemeinsam auf
+     #2a2d2b — damit läge ein Dialog über einem surface-2-Feld (Erinnerungs-
+     Einstellungen, Onboarding) bei 1.00:1 und wäre nur noch am Rand zu
+     erkennen. Der Wert unten hält denselben Abstand zu surface-2, den die
+     bisherige Palette hatte (1.09:1), und bleibt unter dem Rand (1.11:1),
+     damit die Kante weiter die stärkere Linie ist. */
+  --popover: #2f3331;
+  --popover-foreground: #f0f1ef;
+  --primary: #8cc9a4;
+  --primary-foreground: #14211a;
+  --secondary: #2a2d2b;
+  --secondary-foreground: #f0f1ef;
+  --muted: #2a2d2b;
+  --muted-foreground: #a3aba4;
+  --accent: #2a3a30;
+  --accent-foreground: #8cc9a4;
+  --destructive: #e08a77;
+  /* Deckend und im Farbton, nicht Weiß mit Alpha: über einer getönten
+     Fläche wird aus Weiß ein grauer Strich, der den Farbton zerlegt. */
+  --border: #363a37;
+  --input: #363a37;
+  --ring: #8cc9a4;
 
-  --surface-2: #222824;
-  --faint: #849487;
-  --primary-tint: #0f2417;
-  /* Der Toast ist invertiert, seine Flaeche also hell -- der Akzent darauf ist
-     hier dunkel, genau andersherum als im Hellmodus. */
+  --surface-2: #2a2d2b;
+  /* Die Notiz nennt hier #7e857f. Das sind 4.04:1 auf der Karte (#232624)
+     und 3.7:1 auf surface-2 — unter der AA-Schwelle von 4.5:1, und die
+     Meta-Zeile jeder Vorratszeile trägt genau diesen Ton. Der Wert unten ist
+     der hellste Punkt, der im exakt selben Farbton auf allen drei Flächen
+     über 4.5 kommt: 4.98:1 auf der Karte, 5.64:1 auf dem Grund, 4.54:1 auf
+     surface-2 (Leerzustände, Dialoge). Die Stufe unter muted-foreground
+     (6.49:1 auf der Karte) bleibt dabei deutlich erhalten. */
+  --faint: #8e958f;
+  --primary-tint: #2a3a30;
+  /* Der Toast ist invertiert, seine Fläche also hell — der Akzent darauf ist
+     hier dunkel, genau andersherum als im Hellmodus. Bleibt unverändert:
+     dieser Wert richtet sich nach der hellen Fläche, nicht nach dem Grund. */
   --primary-inv: #1a7039;
-  --warning: #e1a347;
-  --warning-tint: #281c0b;
-  --danger: #df7968;
-  --danger-tint: #2c1511;
-  --scrim: rgb(5 8 6 / 0.66);
-  /* Tiefe entsteht nachts nicht durch den Schatten -- der ist auf dunklem
-     Grund fast unsichtbar -- sondern durch die helle Oberkante. Der Schatten
-     darunter loest die Karte nur vom Grund. */
-  --shadow-elevated:
-    inset 0 1px 0 rgb(255 255 255 / 0.055), 0 1px 2px rgb(0 0 0 / 0.55),
-    0 12px 32px rgb(0 0 0 / 0.42);
-  --shadow-hairline: inset 0 1px 0 rgb(255 255 255 / 0.055);
+  --warning: #e0b06a;
+  --warning-tint: #3a2d14;
+  --danger: #e08a77;
+  --danger-tint: #3a1d15;
+  /* Die Spur liegt eine Stufe über der Karte, damit sie sich auf ihr
+     abhebt. Ring und Segmentleiste teilen sich einen Wert — die feine
+     Dreiteilung des Hellmodus trägt auf dunklem Grund nicht. */
+  --track: #313632;
+  --track-2: #2a2d2b;
+  --track-ring: #2a2d2b;
+  --scrim: rgb(9 11 10 / 0.66);
+  /* Tiefe entsteht nachts nicht durch den Schatten — der ist auf dunklem
+     Grund fast unsichtbar — sondern durch die helle Oberkante. Der Schatten
+     darunter löst die Karte nur vom Grund; auf Anthrazit reicht dafür
+     deutlich weniger Schwarz als auf dem alten, fast schwarzen Grund, wo er
+     bis 0.55 gehen musste, um überhaupt zu erscheinen. */
+  --shadow-elevated: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 32px rgb(0 0 0 / 0.3);
+  --shadow-hairline: inset 0 1px 0 rgb(255 255 255 / 0.06);
   --shadow-navbar:
-    inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 34px rgb(0 0 0 / 0.55);
+    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 10px 34px rgb(0 0 0 / 0.38);
   --shadow-add-button:
-    0 4px 14px rgb(77 199 121 / 0.22), 0 1px 4px rgb(0 0 0 / 0.45);
+    0 4px 14px rgb(140 201 164 / 0.22), 0 1px 4px rgb(0 0 0 / 0.35);
   --shadow-add-fab:
-    0 10px 30px rgb(77 199 121 / 0.28), 0 2px 8px rgb(0 0 0 / 0.5);
+    0 10px 30px rgb(140 201 164 / 0.28), 0 2px 8px rgb(0 0 0 / 0.38);
 
-  --chart-1: #4dc779;
-  --chart-2: #e1a347;
-  --chart-3: #df7968;
-  --chart-4: #9bab9e;
-  --chart-5: #849487;
-  --sidebar: #171b18;
-  --sidebar-foreground: #ebefec;
-  --sidebar-primary: #4dc779;
-  --sidebar-primary-foreground: #082111;
-  --sidebar-accent: #0f2417;
-  --sidebar-accent-foreground: #4dc779;
-  --sidebar-border: #313a34;
-  --sidebar-ring: #4dc779;
+  --chart-1: #8cc9a4;
+  --chart-2: #e0b06a;
+  --chart-3: #e08a77;
+  --chart-4: #a3aba4;
+  --chart-5: #8e958f;
+  --sidebar: #232624;
+  --sidebar-foreground: #f0f1ef;
+  --sidebar-primary: #8cc9a4;
+  --sidebar-primary-foreground: #14211a;
+  --sidebar-accent: #2a3a30;
+  --sidebar-accent-foreground: #8cc9a4;
+  --sidebar-border: #363a37;
+  --sidebar-ring: #8cc9a4;
 }
 
 @keyframes bf-pop {
@@ -256,16 +298,16 @@
   html {
     @apply font-sans;
     /* Die Zoom-Sperre steht im Viewport-Meta (layout.tsx). iOS Safari
-       ignoriert user-scalable=no im Browser-Tab jedoch bewusst -- dort haelt
-       erst touch-action die Aufziehgeste auf. pan-x pan-y laesst Scrollen in
+       ignoriert user-scalable=no im Browser-Tab jedoch bewusst — dort hält
+       erst touch-action die Aufziehgeste auf. pan-x pan-y lässt Scrollen in
        beide Richtungen zu, also auch die Wischgesten der Vorratszeilen, und
        nimmt nur Pinch und Doppeltipp-Zoom heraus. */
     touch-action: pan-x pan-y;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
-  /* Die Oberflaeche lebt von halbfetten Labels und sehr fetten Ueberschriften
-     -- Manrope liefert beides bis 800. */
+  /* Die Oberfläche lebt von halbfetten Labels und sehr fetten Überschriften
+     — Manrope liefert beides bis 800. */
   h1,
   h2,
   h3 {

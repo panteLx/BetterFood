@@ -5,6 +5,7 @@ import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { categoriesTag, forgetProductsInCategory, resolvePlace } from "@/lib/data";
+import { MAX_CO2_GRAMS, MAX_PRICE_CENTS, parseEstimate } from "@/lib/estimates";
 
 export async function PATCH(
   req: NextRequest,
@@ -15,15 +16,25 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { label, shelfLifeDays, defaultPlaceId } = body as {
+  const { label, shelfLifeDays, defaultPlaceId, avgPriceCents, avgCo2Grams } = body as {
     label?: string;
     shelfLifeDays?: number;
     // null heisst ausdruecklich "kein Standardort", undefined heisst
     // "nicht angefasst" -- dieselbe Unterscheidung wie bei /api/knowledge.
     defaultPlaceId?: number | null;
+    // Dieselbe Unterscheidung noch einmal: null leert den Schaetzwert
+    // ("zaehlt nicht mit"), undefined laesst ihn stehen.
+    avgPriceCents?: number | null;
+    avgCo2Grams?: number | null;
   };
 
-  const update: { label?: string; shelfLifeDays?: number; defaultPlaceId?: number | null } = {};
+  const update: {
+    label?: string;
+    shelfLifeDays?: number;
+    defaultPlaceId?: number | null;
+    avgPriceCents?: number | null;
+    avgCo2Grams?: number | null;
+  } = {};
 
   if (label !== undefined) {
     if (!label.trim()) {
@@ -48,6 +59,21 @@ export async function PATCH(
       return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
     }
     update.defaultPlaceId = place;
+  }
+
+  // Beide Schätzwerte über dieselbe Regel: sie unterscheiden sich nur in
+  // Feldname, Obergrenze und Fehlertext.
+  const estimateFields = [
+    ["avgPriceCents", avgPriceCents, MAX_PRICE_CENTS, "ungültiger Preis"],
+    ["avgCo2Grams", avgCo2Grams, MAX_CO2_GRAMS, "ungültiger CO₂-Wert"],
+  ] as const;
+  for (const [field, raw, max, message] of estimateFields) {
+    if (raw === undefined) continue;
+    const value = parseEstimate(raw, max);
+    if (value === "invalid") {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    update[field] = value;
   }
 
   if (Object.keys(update).length === 0) {

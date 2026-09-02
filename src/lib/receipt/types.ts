@@ -63,19 +63,21 @@ export type ReceiptDraftLine = {
   note: string | null;
   quantity: number;
   /**
-   * Steuerklasse laut Beleg. Waehlt nichts mehr vor (siehe `included`),
-   * sondern sortiert unbekannte 19-%-Zeilen im Pruefschritt in den
-   * Abschnitt "Vermutlich kein Lebensmittel".
+   * Steuerklasse laut Beleg. Waehlt nichts ab, sondern stellt eine Frage:
+   * eine unbekannte Zeile mit "A" (19 %) geht als `foodDoubt` in den Batch
+   * und wird im Pruef-Flow abgefragt wie jede andere -- nur mit dem Hinweis
+   * "vermutlich kein Lebensmittel" im Schritt. Uebersprungen wird sie nicht
+   * mehr vorab: 19 % tragen auch Limonaden, und der Testlauf verlor so einen
+   * Energydrink, den niemand am Ende unter 34 Namen wieder herausfischt.
    */
   vatClass: string | null;
-  /** Immer true beim Einlesen; abwaehlen ist Sache des Nutzers. */
-  included: boolean;
   category: string | null;
   /**
    * Die Erstbelegung des Orts: das ueber genau dieses Produkt Gelernte vor
    * dem Standardort der Kategorie. Ab hier gehoert der Ort dem Client --
-   * ein aktiver Kategoriewechsel im Pruefschritt holt sich das Fach der
-   * neuen Kategorie, solange der Nutzer den Ort nicht selbst gesetzt hat.
+   * im Pruef-Flow schlaegt ein bereits gesetzter Ort den Standard einer
+   * spaeter gewaehlten Kategorie, weil das ueber dieses Produkt Gelernte
+   * genauer ist als die Regel der Kategorie.
    */
   placeId: number | null;
   known: boolean;

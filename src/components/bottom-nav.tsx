@@ -36,6 +36,10 @@ const HIDDEN_PREFIXES = [
   "/item",
   "/saved",
   "/receipt",
+  // Der Pruef-Flow ist ein Ablauf mit eigenem Weiter-Knopf, keine
+  // Bereichsseite -- die Leiste haette dort nichts zu markieren und naehme
+  // dem Kalender den Platz weg.
+  "/review",
 ];
 
 // Unterseiten von "Mehr": die Leiste soll dort weiterhin "Mehr" markieren,
@@ -148,7 +152,7 @@ export function BottomNav() {
             Rechteckform, die der Hinzufuegen-Knopf und die Auswahl in seinem
             Sheet schon haben -- rund genug fuer eine Insel, eckig genug, um
             neben den Karten der App nicht wie ein Fremdkoerper zu wirken. */}
-        <div className="pointer-events-auto flex items-center justify-between rounded-[22px] border border-border bg-card/85 px-3 py-2.5 shadow-nav backdrop-blur-xl">
+        <div className="pointer-events-auto flex items-center justify-between rounded-[22px] border border-border bg-card/85 px-3 py-2.5 shadow-nav backdrop-blur-[20px]">
           {LEFT_ITEMS.map((item) => (
             <NavLink key={item.href} {...item} active={isActive(item.href)} />
           ))}

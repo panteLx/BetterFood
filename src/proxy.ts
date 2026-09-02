@@ -11,7 +11,22 @@ import { WELCOME_COOKIE, WELCOME_COOKIE_MAX_AGE } from "@/lib/welcome";
 // bisher leitete der Proxy den Aufruf nach /login um, die Route lief nie und
 // die Erinnerungen blieben aus. Ungeschuetzt ist sie deshalb nicht -- sie
 // prueft ihr eigenes Bearer-Token (CRON_SECRET).
-const PUBLIC_PREFIXES = ["/login", "/register", "/welcome", "/api/auth", "/api/cron"];
+//
+// /demo ist die einzige Seite ohne requireSession(). Sie darf das, weil sie
+// die Datenbank gar nicht anfasst: ihr Vorrat steht fest in demo-data.ts und
+// ist fuer jeden Besucher derselbe. Die Regel "jede Route prueft zusaetzlich
+// selbst" bleibt damit unangetastet -- hier gibt es nichts zu pruefen, weil
+// es nichts Fremdes zu sehen gibt. Die Seite ist ausserdem rein lesend: sie
+// setzt keinen einzigen Schreibzugriff ab, und die Origin-Pruefung ueber
+// UNSAFE_METHODS bleibt fuer alles unter /api ohnehin unveraendert bestehen.
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/welcome",
+  "/demo",
+  "/api/auth",
+  "/api/cron",
+];
 
 // Eine Allowlist echter Asset-Endungen. Vorher stand hier /\.[a-zA-Z0-9]+$/ --
 // also "irgendein Punkt im letzten Segment", und damit war jeder Pfad, der so
@@ -97,11 +112,25 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const sessionCookie = getSessionCookie(request);
+
+  // Einfuehrung und Demo-Vorschau sind Antworten auf die Frage "wofuer soll ich
+  // hier ein Konto anlegen?". Wer eines hat, hat sie beantwortet: die vier
+  // Slides waeren dann eine Werbung fuer etwas, das er bereits besitzt, und der
+  // Demo-Vorrat acht erfundene Artikel, die neben seinen echten stehen und sich
+  // nicht anfassen lassen. Beides fuehrt zurueck auf die Startseite.
+  //
+  // Vor der Allowlist und nicht danach, weil /welcome und /demo dort stehen --
+  // sonst waere die oeffentliche Ausnahme staerker als diese Regel. /login und
+  // /register bleiben bewusst erreichbar: das Konto zu wechseln ist etwas, das
+  // ein angemeldeter Nutzer legitim will.
+  if (sessionCookie && (pathname.startsWith("/welcome") || pathname.startsWith("/demo"))) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
-
-  const sessionCookie = getSessionCookie(request);
 
   if (sessionCookie) {
     // Ab hier gibt es ein Konto -- die Einfuehrung hat ihren Zweck erfuellt

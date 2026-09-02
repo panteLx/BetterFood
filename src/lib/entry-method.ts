@@ -9,7 +9,7 @@
  * Einkauf erfasst man mehrere Artikel hintereinander -- fast immer auf
  * demselben Weg, deshalb steht hier genau der wieder.
  */
-export type EntryMethod = "scan" | "ean" | "manual";
+export type EntryMethod = "scan" | "ean" | "receipt" | "manual";
 
 export const ENTRY_METHODS: Record<
   EntryMethod,
@@ -17,6 +17,11 @@ export const ENTRY_METHODS: Record<
 > = {
   scan: { href: "/scan", nextLabel: "Nächsten Artikel scannen" },
   ean: { href: "/scan-ean", nextLabel: "Nächste EAN eingeben" },
+  // Seit der Rechnungsimport im gemeinsamen Prüf-Flow endet, ist /saved auch
+  // sein Abschluss-Screen -- und der Weg zurück ist der nächste Beleg, nicht
+  // das Formular. Ohne diesen Eintrag bot er "Einen weiteren Artikel manuell
+  // eingeben" an, also genau den Weg, den man mit einer Rechnung vermeidet.
+  receipt: { href: "/receipt", nextLabel: "Noch eine Rechnung einlesen" },
   manual: {
     href: "/add",
     nextLabel: "Einen weiteren Artikel manuell eingeben",
@@ -24,5 +29,7 @@ export const ENTRY_METHODS: Record<
 };
 
 export function parseEntryMethod(value: string | undefined): EntryMethod {
-  return value === "scan" || value === "ean" ? value : "manual";
+  return value === "scan" || value === "ean" || value === "receipt"
+    ? value
+    : "manual";
 }

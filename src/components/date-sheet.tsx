@@ -1,16 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Chip } from "@/components/ui/chip";
+import { DateCalendar } from "@/components/date-calendar";
 import { addDays, formatMedium, fromDateInputValue, toDateInputValue } from "@/lib/expiry";
-import { cn } from "@/lib/utils";
 
-const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-
-// Die fuenf Abstaende, die im Haushalt tatsaechlich vorkommen. Fuer alles
-// andere steht der Kalender darunter.
+// Die fünf Abstände, die im Haushalt tatsächlich vorkommen. Für alles andere
+// steht der Kalender darunter.
 const QUICK_DATES = [
   { label: "Heute", days: 0 },
   { label: "Morgen", days: 1 },
@@ -19,14 +16,16 @@ const QUICK_DATES = [
   { label: "In 1 Monat", days: 30 },
 ] as const;
 
-const monthFormat = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
-
 /**
  * Die Datumsauswahl als Blatt statt als <input type="date">.
  *
- * Das native Feld sieht auf jedem Geraet anders aus, oeffnet auf iOS ein
- * Rad und beantwortet die haeufigste Frage ("in einer Woche") am
- * umstaendlichsten. Hier steht sie als erster Chip.
+ * Das native Feld sieht auf jedem Gerät anders aus, öffnet auf iOS ein Rad und
+ * beantwortet die häufigste Frage ("in einer Woche") am umständlichsten. Hier
+ * steht sie als erster Chip.
+ *
+ * Das Monatsraster selbst steht in <DateCalendar>, weil derselbe Kalender im
+ * Prüfschritt fest in einer Karte sitzt statt in einem Blatt. Hier bleiben die
+ * Schnellwahl und der Abschlussknopf -- also genau das, was ein Blatt ausmacht.
  */
 export function DateSheet({
   open,
@@ -46,48 +45,30 @@ export function DateSheet({
   /** Stichtag -- kommt vom Aufrufer, damit new Date() nicht im Render landet. */
   today: Date;
   /**
-   * Ueberschrift des Blatts. Der Beleg-Import setzt hier den Produktnamen
-   * ein -- nach dem dritten Blatt in Folge weiss man sonst nicht mehr,
-   * worueber man gerade entscheidet.
+   * Überschrift des Blatts. Der Beleg-Import setzt hier den Produktnamen ein --
+   * nach dem dritten Blatt in Folge weiß man sonst nicht mehr, worüber man
+   * gerade entscheidet.
    */
   title?: string;
   /** Beschriftung des Abschlussknopfs; sonst "Auf <Datum> setzen". */
   confirmLabel?: string;
   /**
-   * Wird nur vom Abschlussknopf ausgeloest, nicht vom Wegwischen. Fuer
-   * Aufrufer, bei denen das Datum nicht in ein offenes Formular laeuft,
-   * sondern selbst die Handlung ist -- der Nachkauf legt damit eine Packung
-   * an, und das darf ein Tipp neben das Blatt nicht tun.
+   * Wird nur vom Abschlussknopf ausgelöst, nicht vom Wegwischen. Für Aufrufer,
+   * bei denen das Datum nicht in ein offenes Formular läuft, sondern selbst die
+   * Handlung ist -- der Nachkauf legt damit eine Packung an, und das darf ein
+   * Tipp neben das Blatt nicht tun.
    */
   onConfirm?: (value: string) => void;
 }) {
   const selected = useMemo(() => (value ? fromDateInputValue(value) : today), [value, today]);
-  const [monthCursor, setMonthCursor] = useState<Date | null>(null);
-  // Ohne eigenen Blaettern-Zustand folgt der Kalender dem gewaehlten Datum.
-  const month = useMemo(
-    () => monthCursor ?? new Date(selected.getFullYear(), selected.getMonth(), 1),
-    [monthCursor, selected],
-  );
 
-  const cells = useMemo(() => {
-    const first = new Date(month.getFullYear(), month.getMonth(), 1);
-    // Montag als erster Wochentag: getDay() liefert 0 fuer Sonntag.
-    const lead = (first.getDay() + 6) % 7;
-    const result: { date: Date; inMonth: boolean }[] = [];
-    for (let index = 0; index < 42; index += 1) {
-      const date = new Date(first.getFullYear(), first.getMonth(), 1 - lead + index);
-      // Die sechste Zeile nur zeichnen, wenn der Monat sie wirklich braucht.
-      if (index >= 35 && date.getMonth() !== first.getMonth()) break;
-      result.push({ date, inMonth: date.getMonth() === first.getMonth() });
-    }
-    return result;
-  }, [month]);
-
-  const todayKey = toDateInputValue(today);
-
-  function pick(date: Date) {
-    onChange(toDateInputValue(date));
-  }
+  // Eine Schnellwahl ist immer auch ein Sprung der Ansicht, und zwar auch dann,
+  // wenn sie den Wert gar nicht ändert: wer sich in den Dezember geblättert hat
+  // und "Heute" tippt, will den heutigen Monat sehen. Der Kalender kann das
+  // nicht selbst erkennen, weil er dafür eine Änderung an `value` bräuchte --
+  // deshalb der Neuaufbau über den key. Er kostet nichts: der ganze Zustand des
+  // Kalenders ist der gewählte Monat, und genau der soll hier zurückfallen.
+  const [quickNonce, setQuickNonce] = useState(0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title={title}>
@@ -99,8 +80,8 @@ export function DateSheet({
               key={quick.days}
               active={toDateInputValue(date) === value}
               onClick={() => {
-                setMonthCursor(null);
-                pick(date);
+                onChange(toDateInputValue(date));
+                setQuickNonce((nonce) => nonce + 1);
               }}
               className="h-9"
             >
@@ -110,63 +91,7 @@ export function DateSheet({
         })}
       </div>
 
-      <div className="flex items-center justify-between pb-2.5">
-        <button
-          type="button"
-          aria-label="Vorheriger Monat"
-          onClick={() => setMonthCursor(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-          className="flex size-9.5 items-center justify-center rounded-[13px] border border-border bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <ChevronLeft className="size-4" strokeWidth={2.1} />
-        </button>
-        <span className="text-[15px] font-bold">{monthFormat.format(month)}</span>
-        <button
-          type="button"
-          aria-label="Nächster Monat"
-          onClick={() => setMonthCursor(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-          className="flex size-9.5 items-center justify-center rounded-[13px] border border-border bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <ChevronRight className="size-4" strokeWidth={2.1} />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-0.5 pb-1.5">
-        {WEEKDAYS.map((weekday) => (
-          <span key={weekday} className="py-1 text-center text-[11px] font-semibold text-faint">
-            {weekday}
-          </span>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-[3px]">
-        {cells.map(({ date, inMonth }) => {
-          const key = toDateInputValue(date);
-          const isSelected = key === value;
-          const isToday = key === todayKey;
-          // Vergangene Tage sind kein sinnvolles MHD fuer einen Artikel, den
-          // man gerade erst erfasst -- ausser er ist schon abgelaufen, und
-          // dafuer gibt es die Bearbeiten-Ansicht mit demselben Kalender.
-          const isPast = key < todayKey;
-          return (
-            <button
-              key={key}
-              type="button"
-              disabled={isPast}
-              aria-pressed={isSelected}
-              onClick={() => pick(date)}
-              className={cn(
-                "h-10 rounded-[13px] text-sm font-semibold tabular-nums transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                !inMonth && "opacity-35",
-                isPast && "cursor-default text-faint",
-                isSelected && "bg-primary text-primary-foreground",
-                isToday && !isSelected && "font-extrabold ring-[1.5px] ring-primary ring-inset",
-              )}
-            >
-              {date.getDate()}
-            </button>
-          );
-        })}
-      </div>
+      <DateCalendar key={quickNonce} value={value} onChange={onChange} today={today} />
 
       <button
         type="button"

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Package, Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
-import { ItemCard } from "@/components/item-card";
+import { ItemRow } from "@/components/item-row";
+import { SectionLabel } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
@@ -15,10 +16,15 @@ import {
   undoResolve,
   type ResolveStatus,
 } from "@/lib/item-actions";
-import { URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
+import {
+  EXPIRY_BUCKETS,
+  URGENT_WITHIN_DAYS,
+  daysUntil,
+  type StatusFilter,
+} from "@/lib/expiry";
+import { useIsClient } from "@/lib/use-is-client";
 import type { Category, Item, List, Place } from "@/db/schema";
 
-type StatusFilter = "alle" | "bald" | "abgelaufen";
 type Grouping = "ablauf" | "ort" | "kategorie";
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -32,23 +38,6 @@ const GROUPINGS: { value: Grouping; label: string }[] = [
   { value: "ort", label: "Ort" },
   { value: "kategorie", label: "Kategorie" },
 ];
-
-// Die Eimer der Ablauf-Gruppierung. "Diese Woche" endet bei 7 Tagen, weil
-// darueber hinaus kein Einkauf mehr geplant wird.
-const EXPIRY_BUCKETS = [
-  { title: "Abgelaufen", danger: true, test: (days: number) => days < 0 },
-  {
-    title: "Bald aufbrauchen",
-    danger: false,
-    test: (days: number) => days >= 0 && days <= URGENT_WITHIN_DAYS,
-  },
-  {
-    title: "Diese Woche",
-    danger: false,
-    test: (days: number) => days > URGENT_WITHIN_DAYS && days <= 7,
-  },
-  { title: "Später", danger: false, test: (days: number) => days > 7 },
-] as const;
 
 export function InventoryList({
   initialItems,
@@ -77,6 +66,16 @@ export function InventoryList({
     setPrevInitialItems(initialItems);
     setItems(initialItems);
   }
+
+  // Alles Datumsabhängige erst im Client. Bis hierher rechnete diese Datei
+  // new Date() mitten im Memo, also auch im Server-Render -- unter
+  // cacheComponents:true ist das ein "unstable value", der den Prerender der
+  // Route abbricht, und selbst wo die Route ohnehin dynamisch ist, rechnet
+  // der Server mit seiner Zeitzone und der Browser mit seiner: ein Artikel um
+  // 23:30 Uhr MESZ war serverseitig schon "morgen". Die Startseite macht es
+  // seit jeher so; hier zieht die Liste nur nach.
+  const isClient = useIsClient();
+  const today = useMemo(() => (isClient ? new Date() : null), [isClient]);
 
   const categoryLabels = useMemo(
     () => new Map(categories.map((c) => [c.key, c.label])),
@@ -138,12 +137,28 @@ export function InventoryList({
     }
   }
 
+  // Die Restlaufzeit einmal je Artikel statt in jedem Durchgang neu:
+  // sortieren, filtern und gruppieren fragten vorher dieselbe Rechnung
+  // sechsmal ab (einmal je Eimer), und mit den feineren Eimern aus
+  // expiry.ts wären es jetzt sieben.
+  //
+  // Eigenes Memo und nicht zusammen mit den Filtern: die Suche hängt an jedem
+  // Tastendruck, die Restlaufzeit und die Sortierung nicht. Zusammen lief bei
+  // 263 Artikeln je getipptem Buchstaben ein voller Sortierlauf, der immer
+  // dieselbe Reihenfolge herausgab.
+  //
+  // null, solange der heutige Tag noch nicht feststeht -- siehe today.
+  const withDays = useMemo(() => {
+    if (!today) return null;
+    return items
+      .map((item) => ({ item, days: daysUntil(item.expiryDate, today) }))
+      .sort((a, b) => a.days - b.days);
+  }, [items, today]);
+
   const pool = useMemo(() => {
-    const sorted = [...items].sort(
-      (a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate),
-    );
-    const byStatus = sorted.filter((item) => {
-      const days = daysUntil(item.expiryDate);
+    if (!withDays) return null;
+
+    const byStatus = withDays.filter(({ days }) => {
       if (status === "bald") return days >= 0 && days <= URGENT_WITHIN_DAYS;
       if (status === "abgelaufen") return days < 0;
       return true;
@@ -152,48 +167,85 @@ export function InventoryList({
     const needle = query.trim().toLowerCase();
     if (!needle) return byStatus;
     return byStatus.filter(
-      (item) =>
+      ({ item }) =>
         item.name.toLowerCase().includes(needle) ||
         labelOf(item).toLowerCase().includes(needle) ||
         placeOf(item).toLowerCase().includes(needle),
     );
     // labelOf/placeOf haengen nur an den beiden Maps, die hier bereits stehen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, status, query, categoryLabels, placeNames]);
+  }, [withDays, status, query, categoryLabels, placeNames]);
 
+  /**
+   * Die Abschnitte der aktuellen Gliederung.
+   *
+   * Ein Durchlauf durch `pool` je Gliederung statt eines filter() je
+   * Abschnitt: bei zwölf Kategorien und 263 Artikeln waren das über dreitausend
+   * Vergleiche für eine Einteilung, die jeder Artikel selbst kennt. Die
+   * Reihenfolge der Abschnitte kommt weiterhin aus der jeweiligen Tabelle
+   * (Fächer, Kategorien, EXPIRY_BUCKETS) und nicht aus der Fundfolge, und
+   * leere Abschnitte fallen wie bisher weg.
+   */
   const sections = useMemo(() => {
-    if (grouping === "ort") {
-      const named = places.map((place) => ({
-        title: place.name,
-        danger: false,
-        items: pool.filter((item) => item.placeId === place.id),
-      }));
-      // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende, statt
-      // stillschweigend aus der Ansicht zu fallen.
-      const unplaced = pool.filter(
-        (item) => item.placeId === null || !placeNames.has(item.placeId),
-      );
-      return [
-        ...named,
-        { title: "Ohne Ort", danger: false, items: unplaced },
-      ].filter((section) => section.items.length > 0);
+    if (!pool) return null;
+
+    // Der Schlüssel je Artikel und die Abschnitte in ihrer festen Reihenfolge
+    // -- beides hängt an der Gliederung.
+    const keyOf = (entry: { item: Item; days: number }): string | number => {
+      if (grouping === "ort") {
+        return entry.item.placeId !== null && placeNames.has(entry.item.placeId)
+          ? entry.item.placeId
+          : "__unplaced";
+      }
+      if (grouping === "kategorie") return entry.item.category;
+      // EXPIRY_BUCKETS kommt aus expiry.ts, seit Startseite und Vorrat
+      // dieselbe Gliederung zeigen. Die Tabelle ist dabei feiner geworden:
+      // aus "Bald aufbrauchen" (0 bis 3 Tage) sind "Heute" und "Morgen"
+      // geworden. Genau in diesen beiden Tagen entscheidet sich, ob etwas
+      // weggeworfen wird -- sie in einen Eimer mit "in drei Tagen" zu werfen,
+      // verschenkte die Dringlichkeit.
+      return EXPIRY_BUCKETS.find((bucket) => bucket.test(entry.days))!.title;
+    };
+
+    const order: { key: string | number; title: string; danger: boolean }[] =
+      grouping === "ort"
+        ? [
+            ...places.map((place) => ({
+              key: place.id as string | number,
+              title: place.name,
+              danger: false,
+            })),
+            // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
+            // statt stillschweigend aus der Ansicht zu fallen.
+            { key: "__unplaced", title: "Ohne Ort", danger: false },
+          ]
+        : grouping === "kategorie"
+          ? categories.map((category) => ({
+              key: category.key as string | number,
+              title: category.label,
+              danger: false,
+            }))
+          : EXPIRY_BUCKETS.map((bucket) => ({
+              key: bucket.title as string | number,
+              title: bucket.title,
+              danger: bucket.danger,
+            }));
+
+    const grouped = new Map<string | number, { item: Item; days: number }[]>();
+    for (const entry of pool) {
+      const key = keyOf(entry);
+      const bucket = grouped.get(key);
+      if (bucket) bucket.push(entry);
+      else grouped.set(key, [entry]);
     }
 
-    if (grouping === "kategorie") {
-      return categories
-        .map((category) => ({
-          title: category.label,
-          danger: false,
-          items: pool.filter((item) => item.category === category.key),
-        }))
-        .filter((section) => section.items.length > 0);
-    }
-
-    return EXPIRY_BUCKETS.map((bucket) => ({
-      title: bucket.title,
-      danger: bucket.danger,
-      items: pool.filter((item) => bucket.test(daysUntil(item.expiryDate))),
-    })).filter((section) => section.items.length > 0);
+    return order
+      .map(({ key, title, danger }) => ({
+        title,
+        danger,
+        entries: grouped.get(key) ?? [],
+      }))
+      .filter((section) => section.entries.length > 0);
   }, [pool, grouping, places, categories, placeNames]);
 
   if (items.length === 0) {
@@ -216,7 +268,7 @@ export function InventoryList({
       <div className="px-5">
         <Header
           total={items.length}
-          shown={pool.length}
+          shown={pool?.length ?? null}
           lists={lists}
           activeListId={activeListId}
         />
@@ -265,22 +317,41 @@ export function InventoryList({
       </div>
 
       <div className="flex flex-col gap-4.5 px-5 pb-4">
-        {sections.map((section) => (
+        {/* Bis die Hydration den heutigen Tag liefert, steht die Gliederung
+            noch nicht fest (siehe today). Statt einer Lücke stehen dort
+            Platzhalter in Zeilenhöhe -- höchstens sechs, weil darunter der
+            Bildschirm ohnehin zu Ende ist und ein Vorrat mit 263 Artikeln
+            sonst 263 pulsierende Balken aufbaut, die eine Lidschlagdauer
+            später wieder verschwinden. */}
+        {sections === null && (
+          <div className="flex flex-col gap-2.5">
+            {Array.from({ length: Math.min(items.length, 6) }).map(
+              (_, index) => (
+                <div
+                  key={index}
+                  className="h-15 animate-pulse rounded-[15px] bg-muted"
+                />
+              ),
+            )}
+          </div>
+        )}
+
+        {sections?.map((section) => (
           <section key={section.title} className="flex flex-col gap-2.5">
-            <div className="flex items-baseline justify-between">
-              <h2
-                className={`pl-1 text-[13px] font-bold ${section.danger ? "text-danger" : "text-muted-foreground"}`}
-              >
-                {section.title}
-              </h2>
-              <span className="text-[11.5px] font-semibold text-faint">
-                {section.items.length} Artikel
-              </span>
-            </div>
-            {section.items.map((item) => (
-              <ItemCard
+            <SectionLabel
+              title={section.title}
+              tone={section.danger ? "danger" : "muted"}
+              count={section.entries.length}
+            />
+            {section.entries.map(({ item, days }) => (
+              <ItemRow
                 key={item.id}
                 item={item}
+                days={days}
+                // Die Zweitzeile trägt jeweils die andere Achse als die
+                // Gruppierung: wer nach Ort gliedert, hat den Ort schon in der
+                // Überschrift und will darunter die Kategorie sehen -- und
+                // umgekehrt. Sonst stünde in jeder Zeile dasselbe Wort.
                 meta={grouping === "ort" ? labelOf(item) : placeOf(item)}
                 onConsume={() => resolve(item, "used")}
                 onDiscard={() => resolve(item, "thrown_away")}
@@ -289,7 +360,7 @@ export function InventoryList({
           </section>
         ))}
 
-        {sections.length === 0 && (
+        {sections?.length === 0 && (
           <EmptyState
             icon={Search}
             title={query.trim() ? "Nichts gefunden" : "Hier ist gerade nichts"}
@@ -323,7 +394,8 @@ function Header({
   activeListId,
 }: {
   total: number;
-  shown: number;
+  /** null, solange Filter und Gliederung noch nicht gerechnet sind. */
+  shown: number | null;
   lists: ListWithCounts[];
   activeListId: number;
 }) {
@@ -332,13 +404,14 @@ function Header({
       <div className="min-w-0">
         <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
         <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
-          {total === 0 ? (
-            "Noch nichts erfasst"
-          ) : (
-            <>
-              {shown} von {total} Artikeln
-            </>
-          )}
+          {/* Ohne gerechneten Filter nur die Gesamtzahl: "12 von 12" wäre in
+              genau dem Moment gelogen, in dem über die Zähler der Startseite
+              mit "abgelaufen" vorgefiltert hereinkommt. */}
+          {total === 0
+            ? "Noch nichts erfasst"
+            : shown === null
+              ? `${total} Artikel`
+              : `${shown} von ${total} Artikeln`}
         </p>
       </div>
       <ListSwitcher activeListId={activeListId} lists={lists} />

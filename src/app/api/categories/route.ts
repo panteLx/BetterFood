@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { slugifyCategoryKey } from "@/lib/categories";
 import { requireSession, requireActiveList } from "@/lib/session";
 import { categoriesTag, getCategoriesForList, resolvePlace } from "@/lib/data";
+import { MAX_CO2_GRAMS, MAX_PRICE_CENTS, parseEstimate } from "@/lib/estimates";
 
 export async function GET() {
   const session = await requireSession();
@@ -20,12 +21,16 @@ export async function POST(req: NextRequest) {
   const listId = await requireActiveList(session.user.id);
 
   const body = await req.json();
-  const { label, shelfLifeDays, defaultPlaceId } = body as {
+  const { label, shelfLifeDays, defaultPlaceId, avgPriceCents, avgCo2Grams } = body as {
     label: string;
     shelfLifeDays: number;
     // null wie undefined: kein Standardort. Anders als beim PATCH gibt es
     // hier nichts zu leeren, die Kategorie entsteht ja gerade erst.
     defaultPlaceId?: number | null;
+    // Dasselbe fuer die Schaetzwerte: eine neue Kategorie startet ohne, weil
+    // die App ueber eine selbst angelegte Kategorie nichts wissen kann.
+    avgPriceCents?: number | null;
+    avgCo2Grams?: number | null;
   };
 
   if (!label || !label.trim()) {
@@ -41,6 +46,15 @@ export async function POST(req: NextRequest) {
   const place = await resolvePlace(defaultPlaceId, listId);
   if (place === "invalid") {
     return NextResponse.json({ error: "ungültiger Ort" }, { status: 400 });
+  }
+
+  const price = parseEstimate(avgPriceCents ?? null, MAX_PRICE_CENTS);
+  if (price === "invalid") {
+    return NextResponse.json({ error: "ungültiger Preis" }, { status: 400 });
+  }
+  const co2 = parseEstimate(avgCo2Grams ?? null, MAX_CO2_GRAMS);
+  if (co2 === "invalid") {
+    return NextResponse.json({ error: "ungültiger CO₂-Wert" }, { status: 400 });
   }
 
   const existing = await db
@@ -64,6 +78,8 @@ export async function POST(req: NextRequest) {
       label: label.trim(),
       shelfLifeDays: Math.round(shelfLifeDays),
       defaultPlaceId: place,
+      avgPriceCents: price,
+      avgCo2Grams: co2,
       createdAt: new Date(),
       listId,
     })

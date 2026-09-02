@@ -44,4 +44,4 @@ Domain logic and all DB access live in `src/lib/**` (`data.ts` cached queries, `
 
 ## Repo etiquette
 
-PRs squash-merged to `main`. Commit titles: English sentence-style with the PR number, e.g. `Stop strangers from walking into the household (#16)` — no Conventional Commits prefixes. PR bodies: long-form English prose on the why, with headings and before/after numbers. Branch names are free-form.
+PRs squash-merged to `main`. Commit titles: English sentence-style with the PR number, no Conventional Commits prefixes. **Name the object and the action** — `Rework the dark palette to anthracite (#18)`, not `Trade the near-black night for something you can actually see (#18)`. A title is an index entry, not a headline; metaphor belongs nowhere in it. PR bodies: long-form English prose on the why, with headings and before/after numbers. Branch names are free-form.

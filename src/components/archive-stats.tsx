@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { computeArchiveStats } from "@/lib/stats";
+import { computeArchiveStats, summarizeArchive } from "@/lib/stats";
 import { useIsClient } from "@/lib/use-is-client";
 import type { Item } from "@/db/schema";
 
@@ -19,7 +19,7 @@ import type { Item } from "@/db/schema";
 export function ArchiveStats({ items }: { items: Item[] }) {
   const isClient = useIsClient();
   const stats = useMemo(
-    () => (isClient ? computeArchiveStats(items, new Date()) : null),
+    () => (isClient ? computeArchiveStats(summarizeArchive(items, new Date())) : null),
     [isClient, items],
   );
 
@@ -47,7 +47,7 @@ export function ArchiveStats({ items }: { items: Item[] }) {
           </div>
 
           <div
-            className="flex h-2.5 overflow-hidden rounded-md bg-danger-tint"
+            className="flex h-2.5 overflow-hidden rounded-md bg-track"
             role="img"
             aria-label={`${quota} Prozent gerettet`}
           >

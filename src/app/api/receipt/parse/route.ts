@@ -150,13 +150,6 @@ async function parseUpload(req: NextRequest, listId: number) {
       note: line.weight,
       quantity: line.quantity,
       vatClass: line.vatClass,
-      // Alles angehakt. Der Steuersatz waehlte hier frueher vor -- 19 % sind
-      // meistens Drogerie oder Haushalt --, hat dabei aber auch jede Limonade
-      // ausgelassen: ein Getraenk mit MHD, das der Nutzer suchen musste. Ein
-      // vergessener Artikel kostet mehr als ein abzuwaehlender, deshalb
-      // entscheidet der Satz jetzt nichts mehr und ist im Pruefschritt nur
-      // noch ein Hinweis an unbekannten Zeilen (vatClass).
-      included: true,
       category: category?.key ?? null,
       // Der gelernte Ort des Produkts schlaegt den Standardort der Kategorie
       // -- aber nur fuer diese Erstbelegung: wer im Pruefschritt die

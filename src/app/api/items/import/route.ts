@@ -10,6 +10,14 @@ import { findMergeTarget } from "@/lib/item-merge";
 /** Mehr Positionen hat keine Rechnung -- alles darueber ist ein Fehler oder ein Angriff. */
 const MAX_ITEMS = 300;
 
+/**
+ * Laenger ist kein Barcode mehr -- EAN-13, UPC-A und selbst ein GS1 DataBar
+ * Expanded bleiben weit darunter. Der Wert kommt aus dem Browser, und 300
+ * Zeilen mal einer beliebig langen Zeichenkette waeren sonst genau der Weg,
+ * ueber den sich die Tabelle vollschreiben laesst.
+ */
+const MAX_BARCODE_LENGTH = 64;
+
 type ImportInput = {
   name?: string;
   /**
@@ -18,6 +26,12 @@ type ImportInput = {
    * beide Schreibweisen kennen.
    */
   rawName?: string | null;
+  /**
+   * EAN/UPC, sofern der Artikel gescannt wurde. `null` bei Belegzeilen und
+   * Handeingabe. Er landet auf der Zeile UND in `product_knowledge` -- ohne
+   * ihn erkennt der naechste Scan desselben Produkts es nicht wieder.
+   */
+  barcode?: string | null;
   note?: string | null;
   category?: string;
   placeId?: number | null;
@@ -76,6 +90,7 @@ export async function POST(req: NextRequest) {
   const prepared: {
     name: string;
     rawName: string | null;
+    barcode: string | null;
     note: string | null;
     category: string;
     placeId: number | null;
@@ -130,6 +145,7 @@ export async function POST(req: NextRequest) {
     prepared.push({
       name,
       rawName: entry.rawName?.trim() || null,
+      barcode: entry.barcode?.trim().slice(0, MAX_BARCODE_LENGTH) || null,
       note: entry.note?.trim() || null,
       category: entry.category,
       placeId: entry.placeId ?? null,
@@ -162,7 +178,20 @@ export async function POST(req: NextRequest) {
 
       if (target) {
         const quantity = target.quantity + entry.quantity;
-        tx.update(items).set({ quantity }).where(eq(items.id, target.id)).run();
+        // Den Barcode nachtragen, wenn die Zielzeile noch keinen hat --
+        // dieselbe Regel wie in der Einzelerfassung (POST /api/items).
+        // findMergeTarget fasst auch ueber den Namen zusammen, eine von Hand
+        // angelegte Zeile kann also das Ziel eines Scans sein; ohne das
+        // Nachtragen bliebe sie ohne Barcode. Ein bereits vorhandener wird
+        // nicht ueberschrieben: der gehoert zu dem Produkt, das dort steht.
+        tx.update(items)
+          .set({
+            quantity,
+            ...(entry.barcode && !target.barcode ? { barcode: entry.barcode } : {}),
+          })
+          .where(eq(items.id, target.id))
+          .run();
+        if (entry.barcode && !target.barcode) target.barcode = entry.barcode;
         // Auch im Speicher fortschreiben: steht dasselbe Produkt zweimal auf
         // demselben Beleg, muss die zweite Zeile auf die bereits erhoehte
         // Menge treffen und nicht auf den Stand von vorhin.
@@ -174,7 +203,7 @@ export async function POST(req: NextRequest) {
           .values({
             name: entry.name,
             category: entry.category,
-            barcode: null,
+            barcode: entry.barcode,
             placeId: entry.placeId,
             note: entry.note,
             quantity: entry.quantity,
@@ -197,7 +226,12 @@ export async function POST(req: NextRequest) {
       // Ohne das waere die zweite Rechnung so muehsam wie die erste.
       rememberProduct(
         listId,
-        { name: entry.name, category: entry.category, placeId: entry.placeId },
+        {
+          barcode: entry.barcode,
+          name: entry.name,
+          category: entry.category,
+          placeId: entry.placeId,
+        },
         tx,
       );
 
@@ -207,6 +241,12 @@ export async function POST(req: NextRequest) {
       // "KAROTTE SNACK RL", und die Liste haette nur "Karotten" gelernt.
       // Zwei Zeilen statt einer ist derselbe Zustand, den ein spaeterer
       // Handeintrag ohnehin erzeugt haette -- nur frueher.
+      //
+      // Bewusst OHNE barcode, auch wenn der Artikel gescannt wurde:
+      // rememberProduct sucht mit Barcode ausschliesslich ueber den Barcode
+      // und faende die Zeile von eben wieder -- der Alias ueberschriebe dann
+      // ihren nameKey, statt danebenzustehen. Die Rohform braucht einen
+      // eigenen, namensbasierten Eintrag.
       if (
         entry.rawName &&
         normalizeProductName(entry.rawName) !== normalizeProductName(entry.name)
