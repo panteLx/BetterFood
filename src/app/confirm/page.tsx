@@ -76,6 +76,10 @@ async function Confirm({
         // Scanner.
         method={parseEntryMethod(via ?? "scan")}
         redirectTo="/"
+        // Auch hier wird erfasst und nicht korrigiert -- wer eine EAN von Hand
+        // eintippt, landet auf derselben Seite wie nach einem Scan und soll
+        // dasselbe offene MHD-Raster sehen wie im Prüf-Flow.
+        inlineExpiry
       />
     </div>
   );
