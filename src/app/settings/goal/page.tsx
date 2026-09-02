@@ -30,6 +30,11 @@ export default function GoalPage() {
         if (!active || !data) return;
         setGoal(parseMonthlyGoal(data.monthlyGoal));
       })
+      // Offline oder ein 5xx sind hier kein Fehlerfall, den der Nutzer sehen
+      // muesste -- die Seite zeigt dann die Vorgabe. Ohne den Zweig bliebe
+      // die Ablehnung unbehandelt; dieselbe Kette in settings/page.tsx faengt
+      // sie ebenso ab.
+      .catch(() => {})
       .finally(() => {
         if (active) setLoaded(true);
       });

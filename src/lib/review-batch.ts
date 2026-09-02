@@ -332,12 +332,22 @@ export function readBatch(): BatchEntry[] {
   return getSnapshot();
 }
 
-/** Setzt den Batch: Cache, `sessionStorage` und alle Abonnenten in einem Zug. */
-export function writeBatch(entries: BatchEntry[]): void {
+/**
+ * Setzt den Batch: Cache, `sessionStorage` und alle Abonnenten in einem Zug.
+ *
+ * Gibt zurueck, was tatsaechlich abgelegt wurde -- und das ist nicht immer
+ * das Uebergebene: ueber `MAX_BATCH_ENTRIES` wird gekuerzt. Der
+ * Rechnungsimport rechnete danach auf seiner ungekuerzten Liste weiter und
+ * sprang auf einen Index, den es nicht mehr gab; der Prueflauf zeigte dann
+ * "Alles geprueft" fuer einen Batch mit offenen Zeilen. Wer den Rueckgabewert
+ * benutzt, kann diese Klasse von Fehlern nicht mehr bauen.
+ */
+export function writeBatch(entries: BatchEntry[]): BatchEntry[] {
   const next = entries.length > MAX_BATCH_ENTRIES ? entries.slice(0, MAX_BATCH_ENTRIES) : entries;
   snapshot = next;
   writeStorage(next);
   for (const listener of listeners) listener();
+  return next;
 }
 
 /**

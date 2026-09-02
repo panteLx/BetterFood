@@ -3,12 +3,14 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Receipt, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SectionLabel } from "@/components/section-label";
 import { formatMedium, toDateInputValue } from "@/lib/expiry";
 import {
+  MAX_BATCH_ENTRIES,
   createEntry,
   firstPendingIndex,
   readBatch,
@@ -158,9 +160,27 @@ export function ReceiptImport() {
       }),
     );
 
-    const batch = [...readBatch(), ...entries];
-    writeBatch(batch);
+    // Der Rückgabewert und nicht die übergebene Liste: `writeBatch` kürzt auf
+    // MAX_BATCH_ENTRIES, und der Index unten muss sich auf das beziehen, was
+    // wirklich im Speicher liegt. Auf der ungekürzten Liste gerechnet konnte
+    // die erste offene Zeile jenseits des Deckels liegen -- der Flow sprang
+    // dann auf einen Index ohne Eintrag und zeigte "Alles geprüft" für einen
+    // Einkauf, von dem noch nichts entschieden war.
+    const pending = [...readBatch(), ...entries];
+    const batch = writeBatch(pending);
     setDraft(null);
+
+    // Und wenn dabei etwas weggefallen ist, muss es dastehen: stillschweigend
+    // fehlende Belegzeilen fallen erst im Vorrat auf, wo niemand sie mehr
+    // einer Rechnung zuordnen kann.
+    const dropped = pending.length - batch.length;
+    if (dropped > 0) {
+      toast.warning(
+        `Nur ${MAX_BATCH_ENTRIES} Positionen auf einmal — ${dropped} ${
+          dropped === 1 ? "Zeile wurde" : "Zeilen wurden"
+        } nicht übernommen.`,
+      );
+    }
 
     // Auf den ersten offenen Eintrag und nicht stur auf /review/0: liegt
     // schon ein durchgeprüfter Scan-Batch davor, begänne der Flow sonst bei

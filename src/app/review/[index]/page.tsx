@@ -20,7 +20,12 @@ export const metadata: Metadata = {
  *
  * Der Index steht im Pfad und nicht im Zustand einer einzigen Seite, damit
  * die Zeilen unter der Karte ("Fertig · n -- antippen zum Ändern") auf einen
- * Schritt zeigen können und der Zurück-Knopf des Browsers dasselbe tut wie
+ * Schritt zeigen können -- ein Link je Schritt statt eines Zustands, den nur
+ * diese Seite kennt.
+ *
+ * Gewechselt wird trotzdem mit `router.replace`: der Durchlauf belegt genau
+ * einen History-Eintrag, damit die Zurück-Geste "abbrechen" heißt und der
+ * ReviewBatchGuard vorher fragen kann. Einen Artikel zurück führt der Chip
  * "Voriger Artikel".
  *
  * Der Batch selbst liegt im `sessionStorage` und damit ausschließlich im

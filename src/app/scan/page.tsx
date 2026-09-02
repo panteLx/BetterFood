@@ -463,7 +463,12 @@ export default function ScanPage() {
                 } else {
                   silentRestartsRef.current += 1;
                 }
-                controlsRef.current?.stop();
+                // Ueber stopReader und nicht direkt: derselbe Leser, dasselbe
+                // asynchrone stop() wie beim Verlassen des Screens. Bei
+                // eingeschaltetem Licht lehnt das angehaengte switchTorch(false)
+                // ab, und bis zu zwoelf Startversuche hinterliessen ebenso viele
+                // unbehandelte Ablehnungen in der Konsole.
+                stopReader(controlsRef.current);
                 restartTimeoutId = setTimeout(() => {
                   if (active) startScanning();
                 }, 250);
@@ -475,7 +480,7 @@ export default function ScanPage() {
         )
         .then((controls) => {
           if (!active) {
-            controls.stop();
+            stopReader(controls);
           } else {
             controlsRef.current = controls;
             // Vorratsschrank und Kuehlschrank sind dunkel. switchTorch ist in

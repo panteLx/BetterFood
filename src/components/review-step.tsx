@@ -151,7 +151,13 @@ function ReviewFlow({
       (item, position) => position > index && item.status === "pending",
     );
     const next = ahead >= 0 ? ahead : firstPendingIndex(updated);
-    router.push(`/review/${next >= 0 ? next : updated.length}`);
+    // replace und nicht push: der ganze Prüf-Flow belegt genau einen
+    // History-Eintrag. Ein Beleg mit 34 Zeilen legte sonst 34 an, und die
+    // Zurück-Geste hangelte sich durch sie hindurch, bis eine davon aus dem
+    // Flow hinausführte -- mit dem ganzen ungeprüften Einkauf. Jetzt heißt
+    // Zurück eindeutig "abbrechen" und der ReviewBatchGuard kann danach
+    // fragen; artikelweise zurück geht über "Voriger Artikel".
+    router.replace(`/review/${next >= 0 ? next : updated.length}`);
   }
 
   /**
@@ -193,6 +199,16 @@ function ReviewFlow({
             // Nutzer den Namen begradigt hat -- daraus lernt der Import den
             // Alias in product_knowledge.
             rawName: item.rawName,
+            // Der Barcode muss mit, obwohl der Prüf-Flow ihn nirgends mehr
+            // anzeigt: ohne ihn lernt `product_knowledge` den Scan nur unter
+            // dem Namen, und der nächste Scan desselben Artikels fragt
+            // `GET /api/items/known?barcode=…` -- also genau nach dem Feld,
+            // das dann leer ist. Der Artikel bliebe für immer "neu", und das
+            // Versprechen "Danach merkt sich die Liste die Einordnung für den
+            // nächsten Einkauf" wäre keins. Auf dem alten Weg (/scan ->
+            // /confirm -> POST /api/items) ging er mit; beim Batch-Import
+            // fiel er heraus. `null` bei Belegzeilen, die keinen haben.
+            barcode: item.barcode,
             note: item.note,
             category: item.category,
             placeId: item.placeId,
@@ -223,10 +239,15 @@ function ReviewFlow({
       // zurück führte nur auf einen leeren Batch.
       // Der Weg zurück ist der, auf dem der Einkauf hereinkam: nach einem
       // Beleg der nächste Beleg, nach einem Scan die Kamera.
+      // Der letzte Eintrag und nicht der erste: der Rechnungsimport haengt
+      // seine Zeilen an einen laufenden Batch an, statt ihn zu ersetzen
+      // (receipt-import.tsx, handOver). Wer erst ein paar Artikel scannt und
+      // dann einen Beleg einliest, kam ueber den Beleg herein -- `batch[0]`
+      // zeigte in dem Fall auf den ersten Scan und schickte ihn zurueck an
+      // die Kamera.
+      const arrivedVia = batch[batch.length - 1]?.source === "receipt" ? "receipt" : "scan";
       router.replace(
-        `/saved?name=${encodeURIComponent(summary)}&method=${
-          batch[0]?.source === "receipt" ? "receipt" : "scan"
-        }`,
+        `/saved?name=${encodeURIComponent(summary)}&method=${arrivedVia}`,
       );
     } catch (caught) {
       setCommitting(false);
@@ -262,8 +283,9 @@ function ReviewFlow({
         {/* Der Prüf-Flow blendet die Navigationsleiste aus (bottom-nav.tsx,
             HIDDEN_PREFIXES) -- ohne diesen Knopf war die Startseite von hier
             aus nur über den Zurück-Schritt des Browsers erreichbar. Er führt
-            fest auf "/" und nicht über router.back(): zurück heißt hier "ein
-            Artikel früher", und dafür steht der Chip rechts daneben.
+            fest auf "/" und nicht über router.back(): die Zurück-Geste bricht
+            den Durchlauf ab (ReviewBatchGuard fragt vorher nach), und ein
+            Artikel früher steht auf dem Chip rechts daneben.
 
             Der Batch bleibt liegen. Wer den Einkauf halb geprüft verlässt,
             findet ihn beim nächsten Besuch von /review wieder -- verloren
@@ -274,7 +296,9 @@ function ReviewFlow({
               ReviewBatchGuard verwirft ihn beim Verlassen von /review. Ohne
               die Frage kostete ein Fehlgriff neben dem Kalender den ganzen
               Einkauf -- und der Knopf sitzt oben links, also genau dort, wo
-              der Daumen sonst "zurück" erwartet.
+              der Daumen sonst "zurück" erwartet. Dieselbe Frage stellt der
+              Guard für die Zurück-Geste selbst; hier steht sie, weil dieser
+              Knopf sie direkt auslöst und nicht über die History läuft.
 
               Auch die bereits abgehakten Artikel sind dann weg: geschrieben
               wird erst am Ende, in einem einzigen Import. Deshalb nennt der
@@ -312,7 +336,7 @@ function ReviewFlow({
           {index > 0 && (
             <button
               type="button"
-              onClick={() => router.push(`/review/${index - 1}`)}
+              onClick={() => router.replace(`/review/${index - 1}`)}
               className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card pr-3 pl-2 text-[12px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <ChevronLeft className="size-3.5" strokeWidth={2.4} />
