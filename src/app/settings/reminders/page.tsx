@@ -202,7 +202,10 @@ export default function RemindersPage() {
           So sieht das aus
         </h2>
         {/* Eine Vorschau statt einer Beschreibung: wer eine Erinnerung
-            einschaltet, soll vorher sehen, was ihn nachts weckt. */}
+            einschaltet, soll vorher sehen, was ihn nachts weckt. Titel und
+            Text stehen hier genau so, wie expiry-check.ts sie baut -- vorher
+            versprach die Vorschau Menge, Ort und "Tippen, um als aufgebraucht
+            zu markieren", und nichts davon gab es je. */}
         <div className="flex gap-3 rounded-[20px] border border-border bg-surface-2 p-3.5">
           <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
             <Leaf className="size-4.5" strokeWidth={1.7} />
@@ -213,10 +216,10 @@ export default function RemindersPage() {
               <span className="font-medium text-muted-foreground">jetzt</span>
             </div>
             <p className="mt-1.5 text-sm leading-snug font-bold">
-              Vollmilch läuft heute ab
+              1 abgelaufen, 2 laufen heute ab
             </p>
             <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
-              Noch 2 im Kühlschrank. Tippen, um als aufgebraucht zu markieren.
+              Naturjoghurt, Vollmilch, Hackfleisch
             </p>
           </div>
         </div>

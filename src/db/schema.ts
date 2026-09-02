@@ -76,10 +76,37 @@ export const items = sqliteTable("items", {
   // im Vorrat lag. Was die Liste ueber das Produkt gelernt hat, steht davon
   // unabhaengig in product_knowledge und ueberlebt jedes Aufraeumen ohnehin.
   hiddenAt: integer("hidden_at", { mode: "timestamp" }),
-  lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
   listId: integer("list_id").references(() => lists.id),
   addedById: text("added_by_id").references(() => user.id),
 });
+
+/**
+ * Wann dieses Mitglied zuletzt über diesen Artikel benachrichtigt wurde.
+ *
+ * Bewusst eine eigene Tabelle statt der früheren Spalte
+ * items.last_notified_at: die Vorwarnzeit und die Uhrzeit sind persönliche
+ * Einstellungen, der Merker am Artikel war es nicht. In einer geteilten Liste
+ * gewann damit, wer zuerst dran war -- der Lauf um 08:00 markierte den Artikel
+ * als gemeldet, und das Mitglied mit 09:00 bekam nie etwas. Ein Merker pro
+ * Mitglied und Artikel ist die einzige Form, in der zwei Menschen dieselbe
+ * Ware unabhängig voneinander gemeldet bekommen können.
+ *
+ * Kaskade auf beiden Seiten: der Merker hat ohne seinen Artikel oder seinen
+ * Nutzer keine Bedeutung mehr.
+ */
+export const itemNotifications = sqliteTable(
+  "item_notifications",
+  {
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    notifiedAt: integer("notified_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.itemId, table.userId] })],
+);
 
 export const categories = sqliteTable(
   "categories",
@@ -199,4 +226,5 @@ export type NewPlace = typeof places.$inferInsert;
 export type List = typeof lists.$inferSelect;
 export type NewList = typeof lists.$inferInsert;
 export type ListMember = typeof listMembers.$inferSelect;
+export type ItemNotification = typeof itemNotifications.$inferSelect;
 export type ProductKnowledge = typeof productKnowledge.$inferSelect;
