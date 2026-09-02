@@ -15,6 +15,7 @@ import {
   DecodeHintType,
   FormatException,
   NotFoundException,
+  ReaderException,
 } from "@zxing/library";
 import { Flashlight, FlashlightOff, X } from "lucide-react";
 import {
@@ -50,6 +51,31 @@ HTMLCanvasElementLuminanceSource.prototype.isRotateSupported = function () {
   return false;
 };
 
+// Die Warnung blieb trotzdem, denn sie hat noch eine zweite Quelle. Im
+// Java-Original erben NotFound-, Checksum- und FormatException von
+// ReaderException, und genau darauf verlaesst sich MultiFormatReader:
+// "instanceof ReaderException" heisst "Leser probiert, nichts gefunden,
+// weiter", alles andere schreibt er als non-ReaderException in die Konsole.
+// Die TypeScript-Portierung (@zxing/library 0.23.0) laesst die drei aber
+// direkt von Exception erben -- ReaderException ist dort eine Klasse ohne
+// Nachkommen. Damit ist jeder Frame ohne Code eine Warnung, zwei pro
+// Sekunde, in jedem Browser und jeder Umgebung.
+//
+// Hier wird die Erbfolge des Originals nachgezogen. Die drei bleiben, was
+// sie sind (der eigene Konstruktor steht als Eigenschaft auf dem Prototyp,
+// instanceof NotFoundException trifft weiterhin), sie sind nur zusaetzlich
+// eine ReaderException -- und der MultiFormatReader geht wieder still zum
+// naechsten Frame ueber.
+for (const decodeException of [
+  NotFoundException,
+  ChecksumException,
+  FormatException,
+]) {
+  if (!(decodeException.prototype instanceof ReaderException)) {
+    Object.setPrototypeOf(decodeException.prototype, ReaderException.prototype);
+  }
+}
+
 // Ohne Hints probiert der MultiFormatReader pro Frame saemtliche Formate durch
 // -- QR, Micro-QR, Aztec, DataMatrix, PDF417 und alle 1D-Varianten. Auf
 // Lebensmitteln steht nichts davon: dort sind es EAN-13, EAN-8, UPC-A oder
@@ -58,7 +84,12 @@ HTMLCanvasElementLuminanceSource.prototype.isRotateSupported = function () {
 const SCAN_HINTS = new Map<DecodeHintType, unknown>([
   [
     DecodeHintType.POSSIBLE_FORMATS,
-    [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E],
+    [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+    ],
   ],
   [DecodeHintType.TRY_HARDER, true],
 ]);
@@ -177,15 +208,28 @@ function stopReader(controls: IScannerControls | null | undefined): void {
   void Promise.resolve(controls.stop() as unknown).catch(() => {});
 }
 
-type MatchStreak = { text: string | null; format: BarcodeFormat | null; count: number; at: number };
+type MatchStreak = {
+  text: string | null;
+  format: BarcodeFormat | null;
+  count: number;
+  at: number;
+};
 
 export default function ScanPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const trayRef = useRef<HTMLUListElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
-  const streakRef = useRef<MatchStreak>({ text: null, format: null, count: 0, at: 0 });
-  const lastHitRef = useRef<{ text: string | null; at: number }>({ text: null, at: 0 });
+  const streakRef = useRef<MatchStreak>({
+    text: null,
+    format: null,
+    count: 0,
+    at: 0,
+  });
+  const lastHitRef = useRef<{ text: string | null; at: number }>({
+    text: null,
+    at: 0,
+  });
   const silentRestartsRef = useRef(0);
   const startupRestartsRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +267,9 @@ export default function ScanPage() {
 
   const patchEntry = useCallback((id: string, change: Partial<BatchEntry>) => {
     updateBatch((entries) =>
-      entries.map((entry) => (entry.id === id ? { ...entry, ...change } : entry)),
+      entries.map((entry) =>
+        entry.id === id ? { ...entry, ...change } : entry,
+      ),
     );
   }, []);
 
@@ -388,7 +434,8 @@ export default function ScanPage() {
               // haelt die Sperrzeit offen, unabhaengig davon, ob der Treffer
               // gleich auch gezaehlt wird: siehe REHIT_COOLDOWN_MS.
               const lastHit = lastHitRef.current;
-              const repeat = lastHit.text === text && now - lastHit.at < REHIT_COOLDOWN_MS;
+              const repeat =
+                lastHit.text === text && now - lastHit.at < REHIT_COOLDOWN_MS;
               lastHitRef.current = { text, at: now };
 
               // Die Serie faengt von vorn an. Ohne das waere sie im naechsten
@@ -576,7 +623,7 @@ export default function ScanPage() {
         >
           <X className="size-5" strokeWidth={2} />
         </button>
-        <span className="text-[15px] font-bold">Batch-Scan</span>
+        <span className="text-[15px] font-bold">Scanner</span>
         {torchAvailable ? (
           <button
             type="button"
@@ -585,7 +632,11 @@ export default function ScanPage() {
             onClick={toggleTorch}
             className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
           >
-            {torchOn ? <Flashlight className="size-5" /> : <FlashlightOff className="size-5" />}
+            {torchOn ? (
+              <Flashlight className="size-5" />
+            ) : (
+              <FlashlightOff className="size-5" />
+            )}
           </button>
         ) : (
           <span className="size-10.5" aria-hidden="true" />
@@ -608,7 +659,9 @@ export default function ScanPage() {
 
         {error && (
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
-            <p className="text-center text-sm font-semibold text-[#e88e78]">{error}</p>
+            <p className="text-center text-sm font-semibold text-[#e88e78]">
+              {error}
+            </p>
             <button
               type="button"
               onClick={handleRetry}
@@ -662,9 +715,13 @@ export default function ScanPage() {
                         entry.id === lastTouchedId ? "bg-white/8" : ""
                       }`}
                     >
-                      <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {entry.name}
+                      </span>
                       {entry.quantity > 1 && (
-                        <span className="shrink-0 text-white/55">×{entry.quantity}</span>
+                        <span className="shrink-0 text-white/55">
+                          ×{entry.quantity}
+                        </span>
                       )}
                       {/* "bekannt"/"neu" meint product_knowledge dieser Liste,
                           nicht Open Food Facts: OFF kennt fast jeden Barcode,
@@ -681,7 +738,11 @@ export default function ScanPage() {
                               : "text-warning"
                         }`}
                       >
-                        {resolving.includes(entry.id) ? "…" : entry.known ? "bekannt" : "neu"}
+                        {resolving.includes(entry.id)
+                          ? "…"
+                          : entry.known
+                            ? "bekannt"
+                            : "neu"}
                       </span>
                     </li>
                   ))}
