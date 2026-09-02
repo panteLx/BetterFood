@@ -45,23 +45,59 @@ import {
 import type { Category, Item, List, Place } from "@/db/schema";
 
 /**
- * Die Eimer der Vorschau: dieselbe Gliederung wie im Vorrat, nur ohne
- * "Später". Die Startseite beantwortet die Frage "was ist jetzt dran?" --
- * was in drei Wochen abläuft, gehört in den Vorrat, nicht auf die Startseite.
+ * Die dringenden Eimer der Vorschau: dieselbe Gliederung wie im Vorrat, nur
+ * ohne "Später". Sie beantworten die Frage "was ist jetzt dran?" und haben
+ * deshalb den ersten Zugriff auf das Zeilenbudget.
+ *
+ * "Später" steht bewusst daneben und nicht dazwischen (LATER_BUCKET): der
+ * Eimer füllt nur auf, was die dringenden übrig lassen. Vorher fiel er ganz
+ * weg -- wer nichts hatte, das in den nächsten sieben Tagen abläuft, sah
+ * unter der Hero-Karte gar nichts mehr. Eine Startseite, die leer ist, weil
+ * alles in Ordnung ist, sieht nicht ruhig aus, sondern kaputt.
  */
 const PREVIEW_BUCKETS = EXPIRY_BUCKETS.filter((bucket) => bucket.title !== "Später");
 
 /**
- * Wie viele Zeilen die Vorschau insgesamt und je Abschnitt zeigt.
+ * Der Auffüll-Eimer, aus derselben Tabelle geholt statt hier neu definiert --
+ * Titel und Grenze (ab Tag 8) dürfen sich nicht von denen im Vorrat
+ * unterscheiden. Das "!" ist sicher, solange EXPIRY_BUCKETS diesen Eintrag
+ * hat; fiele er dort weg, wäre das ein Fehler im Vorrat und nicht hier.
+ */
+const LATER_BUCKET = EXPIRY_BUCKETS.find((bucket) => bucket.title === "Später")!;
+
+/**
+ * Wie viele Zeilen die Vorschau insgesamt und je dringendem Abschnitt zeigt.
  *
- * Die Zeilen werden reihum vergeben und nicht der Reihe nach: bei achtundzwanzig
- * abgelaufenen Artikeln fräße ein reines "von oben auffüllen" das ganze Budget
- * und "Heute" käme gar nicht mehr vor -- genau der Fehler, den die alte
- * Zweiteilung in "Abgelaufen" und "Als Nächstes dran" umgangen hatte. Vier
- * gefüllte Eimer bekommen so je zwei Zeilen, zwei Eimer je drei.
+ * Die dringenden Zeilen werden reihum vergeben und nicht der Reihe nach: bei
+ * achtundzwanzig abgelaufenen Artikeln fräße ein reines "von oben auffüllen"
+ * das ganze Budget und "Heute" käme gar nicht mehr vor -- genau der Fehler,
+ * den die alte Zweiteilung in "Abgelaufen" und "Als Nächstes dran" umgangen
+ * hatte. Vier gefüllte Eimer bekommen so je zwei Zeilen, zwei Eimer je drei.
+ *
+ * Erst was danach vom Budget übrig ist, geht an "Später" -- ohne eigenen
+ * Deckel, weil es nur ein Abschnitt ist und er nichts weiter verdrängen
+ * kann. Bei leerem Vorderfeld sind das alle acht Zeilen, bei zwei dringenden
+ * Artikeln noch sechs; belegen die dringenden Eimer alle acht, verschwindet
+ * "Später" ganz.
  */
 const PREVIEW_ROW_BUDGET = 8;
 const PREVIEW_ROWS_PER_BUCKET = 3;
+
+/**
+ * Ein fertiger Abschnitt der Vorschau: der Eimer plus die Zeilenzahl, die er
+ * vom Budget bekommen hat.
+ *
+ * Der Titel wird ausdrücklich über alle Eimer typisiert. TypeScript leitet
+ * aus dem filter() oben seit 5.5 ein Typprädikat ab, PREVIEW_BUCKETS kennt
+ * "Später" also gar nicht mehr -- ohne diese Annotation ließe sich der
+ * Auffüll-Abschnitt nicht an dieselbe Liste anhängen.
+ */
+type PreviewSection = {
+  title: (typeof EXPIRY_BUCKETS)[number]["title"];
+  danger: boolean;
+  items: Item[];
+  shown: number;
+};
 
 /**
  * Der Umfang des Fortschrittsrings: 2 · π · 50 = 314,16 bei r = 50.
@@ -188,6 +224,14 @@ export function HomeOverview({
     const soon = withDays.filter(
       (entry) => entry.days >= 0 && entry.days <= URGENT_WITHIN_DAYS,
     );
+    // Innerhalb eines Eimers das Dringendste zuerst; bei Abgelaufenem ist
+    // days negativ, dort steht das am längsten Überfällige oben. filter()
+    // gibt eine neue Liste zurück, sort() darf hier also sortieren.
+    const inBucket = (test: (days: number) => boolean) =>
+      withDays
+        .filter((entry) => test(entry.days))
+        .sort((a, b) => a.days - b.days)
+        .map((entry) => entry.item);
     return {
       expired: expired.length,
       soon: soon.length,
@@ -198,33 +242,55 @@ export function HomeOverview({
       // Beide zählen jetzt Zeilen, genau wie der Vorrat-Filter und die Zahl
       // im Listenwechsel (getListsWithCounts zählt ebenfalls Zeilen).
       total: withDays.length,
-      // Innerhalb eines Eimers das Dringendste zuerst; bei Abgelaufenem ist
-      // days negativ, dort steht das am längsten Überfällige oben.
-      sections: PREVIEW_BUCKETS.map((bucket) => ({
+      urgentSections: PREVIEW_BUCKETS.map((bucket) => ({
         title: bucket.title,
         danger: bucket.danger,
-        items: withDays
-          .filter((entry) => bucket.test(entry.days))
-          .sort((a, b) => a.days - b.days)
-          .map((entry) => entry.item),
+        items: inBucket(bucket.test),
       })).filter((section) => section.items.length > 0),
+      // Auch hier das Nächstliegende zuerst: "Später" ist keine Restekiste,
+      // sondern der Anfang dessen, was als Nächstes dran wäre.
+      later: inBucket(LATER_BUCKET.test),
     };
   }, [items, today]);
 
-  /** Wie viele Zeilen jeder Abschnitt zeigen darf -- reihum vergeben. */
-  const shownPerSection = useMemo(() => {
-    const sections = buckets?.sections ?? [];
-    const shown = sections.map(() => 0);
+  /**
+   * Die Abschnitte der Vorschau samt der Zeilenzahl, die jeder zeigen darf.
+   *
+   * Zwei Stufen: erst bekommen die dringenden Eimer reihum ihre Zeilen (höchstens
+   * PREVIEW_ROWS_PER_BUCKET je Eimer), dann geht der Rest des Budgets an
+   * "Später". Ein Abschnitt ohne zugeteilte Zeile fällt am Ende ganz weg --
+   * eine Überschrift mit null Zeilen darunter wäre schlimmer als gar kein
+   * Abschnitt. Bei PREVIEW_ROW_BUDGET = 8 und höchstens vier dringenden
+   * Eimern kann das heute nur "Später" treffen; die Prüfung steht trotzdem
+   * für alle da, damit ein kleineres Budget nicht stillschweigend eine
+   * leere Überschrift erzeugt.
+   */
+  const sections = useMemo(() => {
+    const urgent = buckets?.urgentSections ?? [];
+    const shown = urgent.map(() => 0);
     let budget = PREVIEW_ROW_BUDGET;
     for (let round = 0; round < PREVIEW_ROWS_PER_BUCKET && budget > 0; round += 1) {
-      for (let index = 0; index < sections.length && budget > 0; index += 1) {
-        if (sections[index].items.length > shown[index]) {
+      for (let index = 0; index < urgent.length && budget > 0; index += 1) {
+        if (urgent[index].items.length > shown[index]) {
           shown[index] += 1;
           budget -= 1;
         }
       }
     }
-    return shown;
+    const result: PreviewSection[] = urgent.map((section, index) => ({
+      ...section,
+      shown: shown[index],
+    }));
+    const later = buckets?.later ?? [];
+    if (budget > 0 && later.length > 0) {
+      result.push({
+        title: LATER_BUCKET.title,
+        danger: LATER_BUCKET.danger,
+        items: later,
+        shown: Math.min(budget, later.length),
+      });
+    }
+    return result.filter((section) => section.shown > 0);
   }, [buckets]);
 
   const stats = useMemo(
@@ -297,10 +363,14 @@ export function HomeOverview({
    * fällig" (bis einschließlich URGENT_WITHIN_DAYS = 3 Tage), "Diese Woche"
    * reicht bis Tag 7 und damit darüber hinaus -- dort führt der Link auf den
    * ungefilterten Vorrat, statt die Hälfte der gemeinten Artikel wegzufiltern.
+   * "Später" hat im Vorrat überhaupt kein Gegenstück: dessen Filter kennt nur
+   * "alle", "bald" und "abgelaufen" (siehe STATUS_FILTERS in
+   * inventory-list.tsx). Also ebenfalls der ungefilterte Vorrat -- lieber
+   * mehr zeigen als das Gemeinte wegfiltern.
    */
   function sectionHref(title: string): string {
     if (title === "Abgelaufen") return "/inventory?filter=abgelaufen";
-    if (title === "Diese Woche") return "/inventory";
+    if (title === "Diese Woche" || title === "Später") return "/inventory";
     return "/inventory?filter=bald";
   }
 
@@ -356,9 +426,8 @@ export function HomeOverview({
         </div>
       )}
 
-      {buckets?.sections.map((section, index) => {
-        const shown = shownPerSection[index];
-        const hidden = section.items.length - shown;
+      {sections.map((section) => {
+        const hidden = section.items.length - section.shown;
         const href = sectionHref(section.title);
         return (
           <section key={section.title} className="flex flex-col gap-2.5">
@@ -371,7 +440,7 @@ export function HomeOverview({
               count={section.items.length}
               href={href}
             />
-            {section.items.slice(0, shown).map(row)}
+            {section.items.slice(0, section.shown).map(row)}
             {/* Ohne diese Zeile sieht ein Ausschnitt aus wie der ganze
                 Rückstand. */}
             {hidden > 0 && (
