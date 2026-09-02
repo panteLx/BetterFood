@@ -8,7 +8,12 @@ import { SubPageHeader } from "@/components/sub-page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SectionLabel } from "@/components/section-label";
 import { formatMedium, toDateInputValue } from "@/lib/expiry";
-import { createEntry, readBatch, writeBatch } from "@/lib/review-batch";
+import {
+  createEntry,
+  firstPendingIndex,
+  readBatch,
+  writeBatch,
+} from "@/lib/review-batch";
 import {
   IGNORE_LABELS,
   type ReceiptDraft,
@@ -160,7 +165,7 @@ export function ReceiptImport() {
     // Auf den ersten offenen Eintrag und nicht stur auf /review/0: liegt
     // schon ein durchgeprüfter Scan-Batch davor, begänne der Flow sonst bei
     // einem Artikel, über den längst entschieden ist.
-    const first = batch.findIndex((entry) => entry.status === "pending");
+    const first = firstPendingIndex(batch);
     router.push(`/review/${first >= 0 ? first : batch.length}`);
   }
 

@@ -29,12 +29,21 @@ import {
   computeArchiveStats,
   computeBadges,
   computeSavings,
+  summarizeArchive,
   type Badge,
   type BadgeId,
   type CategoryEstimate,
   type ResolvedEntry,
 } from "@/lib/stats";
-import { EXPIRY_BUCKETS, URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
+import {
+  EXPIRY_BUCKETS,
+  URGENT_WITHIN_DAYS,
+  daysUntil,
+  formatShort,
+  inventoryHref,
+  type StatusFilter,
+} from "@/lib/expiry";
+import { CO2_FACTOR, PRICE_FACTOR } from "@/lib/estimates";
 import { cn } from "@/lib/utils";
 import {
   resolveItem,
@@ -95,7 +104,9 @@ const PREVIEW_ROWS_PER_BUCKET = 3;
 type PreviewSection = {
   title: (typeof EXPIRY_BUCKETS)[number]["title"];
   danger: boolean;
-  items: Item[];
+  /** Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. */
+  filter: StatusFilter | null;
+  entries: { item: Item; days: number }[];
   shown: number;
 };
 
@@ -128,10 +139,12 @@ const kiloFormat = new Intl.NumberFormat("de-DE", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
-const badgeDateFormat = new Intl.DateTimeFormat("de-DE", {
+// Wie die anderen Formatter im Modulkopf und nicht im Render: ein
+// Intl.DateTimeFormat ist das teuerste Objekt in diesem Renderpfad.
+const dayFormat = new Intl.DateTimeFormat("de-DE", {
+  weekday: "long",
   day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
+  month: "long",
 });
 
 /**
@@ -143,7 +156,7 @@ const badgeDateFormat = new Intl.DateTimeFormat("de-DE", {
  */
 function formatCo2(grams: number): string {
   if (grams < 950) return `${grams} g`;
-  return `${kiloFormat.format(grams / 1000)} kg`;
+  return `${kiloFormat.format(grams / CO2_FACTOR)} kg`;
 }
 
 function greetingFor(hour: number): string {
@@ -220,22 +233,30 @@ export function HomeOverview({
       item,
       days: daysUntil(item.expiryDate, today),
     }));
-    const expired = withDays.filter((entry) => entry.days < 0);
-    const soon = withDays.filter(
-      (entry) => entry.days >= 0 && entry.days <= URGENT_WITHIN_DAYS,
+
+    // Ein Durchlauf statt eines filter() je Eimer: die Eimer sind über `days`
+    // disjunkt, also ordnet der erste passende Test jeden Artikel endgültig
+    // zu. Vorher lief die Liste fünfmal durch (vier dringende Eimer plus
+    // "Später"), und jeder Lauf fragte dieselbe Zahl noch einmal ab.
+    const byBucket = new Map<string, { item: Item; days: number }[]>(
+      EXPIRY_BUCKETS.map((bucket) => [bucket.title, []]),
     );
+    let expired = 0;
+    let soon = 0;
+    for (const entry of withDays) {
+      const bucket = EXPIRY_BUCKETS.find((candidate) => candidate.test(entry.days));
+      if (bucket) byBucket.get(bucket.title)!.push(entry);
+      if (entry.days < 0) expired += 1;
+      else if (entry.days <= URGENT_WITHIN_DAYS) soon += 1;
+    }
     // Innerhalb eines Eimers das Dringendste zuerst; bei Abgelaufenem ist
-    // days negativ, dort steht das am längsten Überfällige oben. filter()
-    // gibt eine neue Liste zurück, sort() darf hier also sortieren.
-    const inBucket = (test: (days: number) => boolean) =>
-      withDays
-        .filter((entry) => test(entry.days))
-        .sort((a, b) => a.days - b.days)
-        .map((entry) => entry.item);
+    // days negativ, dort steht das am längsten Überfällige oben.
+    for (const entries of byBucket.values()) entries.sort((a, b) => a.days - b.days);
+
     return {
-      expired: expired.length,
-      soon: soon.length,
-      fresh: withDays.length - expired.length - soon.length,
+      expired,
+      soon,
+      fresh: withDays.length - expired - soon,
       // Die Segmentleiste teilte bisher durch items.length, der Zähler
       // daneben zeigte die Summe der Mengen -- bei "3× Milch" behauptete die
       // Leiste damit ein anderes Verhältnis, als die Zahlen daneben sagten.
@@ -245,11 +266,12 @@ export function HomeOverview({
       urgentSections: PREVIEW_BUCKETS.map((bucket) => ({
         title: bucket.title,
         danger: bucket.danger,
-        items: inBucket(bucket.test),
-      })).filter((section) => section.items.length > 0),
+        filter: bucket.filter,
+        entries: byBucket.get(bucket.title)!,
+      })).filter((section) => section.entries.length > 0),
       // Auch hier das Nächstliegende zuerst: "Später" ist keine Restekiste,
       // sondern der Anfang dessen, was als Nächstes dran wäre.
-      later: inBucket(LATER_BUCKET.test),
+      later: byBucket.get(LATER_BUCKET.title)!,
     };
   }, [items, today]);
 
@@ -271,7 +293,7 @@ export function HomeOverview({
     let budget = PREVIEW_ROW_BUDGET;
     for (let round = 0; round < PREVIEW_ROWS_PER_BUCKET && budget > 0; round += 1) {
       for (let index = 0; index < urgent.length && budget > 0; index += 1) {
-        if (urgent[index].items.length > shown[index]) {
+        if (urgent[index].entries.length > shown[index]) {
           shown[index] += 1;
           budget -= 1;
         }
@@ -286,24 +308,31 @@ export function HomeOverview({
       result.push({
         title: LATER_BUCKET.title,
         danger: LATER_BUCKET.danger,
-        items: later,
+        filter: LATER_BUCKET.filter,
+        entries: later,
         shown: Math.min(budget, later.length),
       });
     }
     return result.filter((section) => section.shown > 0);
   }, [buckets]);
 
-  const stats = useMemo(
-    () => (today ? computeArchiveStats(resolvedEntries, today) : null),
+  // Ein Durchlauf durch das Archiv, zwei Auswertungen daraus: Quote/Serien
+  // und Abzeichen stellten bis hierher dieselben Fragen an dieselbe Liste.
+  const summary = useMemo(
+    () => (today ? summarizeArchive(resolvedEntries, today) : null),
     [resolvedEntries, today],
+  );
+  const stats = useMemo(
+    () => (summary ? computeArchiveStats(summary) : null),
+    [summary],
+  );
+  const badges = useMemo(
+    () => (summary ? computeBadges(summary, monthlyGoal) : null),
+    [summary, monthlyGoal],
   );
   const savings = useMemo(
     () => (today ? computeSavings(resolvedEntries, today, estimates) : null),
     [resolvedEntries, today, estimates],
-  );
-  const badges = useMemo(
-    () => (today ? computeBadges(resolvedEntries, today, monthlyGoal) : null),
-    [resolvedEntries, today, monthlyGoal],
   );
 
   async function resolve(item: Item, nextStatus: ResolveStatus) {
@@ -348,37 +377,14 @@ export function HomeOverview({
     }
   }
 
-  const dateLine = today
-    ? new Intl.DateTimeFormat("de-DE", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-      }).format(today)
-    : "";
+  const dateLine = today ? dayFormat.format(today) : "";
 
-  /**
-   * Der Link hinter einem Abschnitt.
-   *
-   * "Heute" und "Morgen" liegen vollständig innerhalb des Filters "Bald
-   * fällig" (bis einschließlich URGENT_WITHIN_DAYS = 3 Tage), "Diese Woche"
-   * reicht bis Tag 7 und damit darüber hinaus -- dort führt der Link auf den
-   * ungefilterten Vorrat, statt die Hälfte der gemeinten Artikel wegzufiltern.
-   * "Später" hat im Vorrat überhaupt kein Gegenstück: dessen Filter kennt nur
-   * "alle", "bald" und "abgelaufen" (siehe STATUS_FILTERS in
-   * inventory-list.tsx). Also ebenfalls der ungefilterte Vorrat -- lieber
-   * mehr zeigen als das Gemeinte wegfiltern.
-   */
-  function sectionHref(title: string): string {
-    if (title === "Abgelaufen") return "/inventory?filter=abgelaufen";
-    if (title === "Diese Woche" || title === "Später") return "/inventory";
-    return "/inventory?filter=bald";
-  }
-
-  function row(item: Item) {
+  function row({ item, days }: { item: Item; days: number }) {
     return (
       <ItemRow
         key={item.id}
         item={item}
+        days={days}
         meta={
           item.placeId !== null && placeNames.has(item.placeId)
             ? placeNames.get(item.placeId)!
@@ -427,8 +433,8 @@ export function HomeOverview({
       )}
 
       {sections.map((section) => {
-        const hidden = section.items.length - section.shown;
-        const href = sectionHref(section.title);
+        const hidden = section.entries.length - section.shown;
+        const href = inventoryHref(section.filter);
         return (
           <section key={section.title} className="flex flex-col gap-2.5">
             {/* Zähler und "Alle ansehen" bleiben, anders als im Entwurf: sie
@@ -437,10 +443,10 @@ export function HomeOverview({
             <SectionLabel
               title={section.title}
               tone={section.danger ? "danger" : "muted"}
-              count={section.items.length}
+              count={section.entries.length}
               href={href}
             />
-            {section.items.slice(0, section.shown).map(row)}
+            {section.entries.slice(0, section.shown).map(row)}
             {/* Ohne diese Zeile sieht ein Ausschnitt aus wie der ganze
                 Rückstand. */}
             {hidden > 0 && (
@@ -570,7 +576,7 @@ function HeroCard({
           {hasSavings ? (
             <div>
               <p className="text-[16px] leading-none font-extrabold tabular-nums">
-                {euroFormat.format(savings.moneySavedCents / 100)} gespart
+                {euroFormat.format(savings.moneySavedCents / PRICE_FACTOR)} gespart
               </p>
               <p className="mt-0.5 text-[12px] font-semibold text-muted-foreground">
                 {formatCo2(savings.co2SavedGrams)} CO₂ vermieden
@@ -655,7 +661,7 @@ function HeroCard({
                 <span className="mt-0.5 block truncate text-[11.5px] leading-tight font-semibold text-faint">
                   {badge.earnedAt === null
                     ? badge.requirement
-                    : `Erreicht am ${badgeDateFormat.format(badge.earnedAt)}`}
+                    : `Erreicht am ${formatShort(badge.earnedAt)}`}
                 </span>
               </span>
             </li>

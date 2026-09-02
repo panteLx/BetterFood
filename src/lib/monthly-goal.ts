@@ -43,13 +43,14 @@ export const MONTHLY_GOAL_OPTIONS = [60, 70, 80, 90, 95, 100] as const;
  */
 export function parseMonthlyGoal(raw: unknown): number {
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
-    return DEFAULT_MONTHLY_GOAL;
-  }
-  return Math.round(parsed);
+  return isValidMonthlyGoal(parsed) ? Math.round(parsed) : DEFAULT_MONTHLY_GOAL;
 }
 
-/** Wie parseMonthlyGoal, aber ohne Rückfallebene -- für die Eingangsprüfung der API. */
+/**
+ * Wie parseMonthlyGoal, aber ohne Rückfallebene -- für die Eingangsprüfung der
+ * API. Die Grenze steht nur hier: zwei Fassungen derselben Spanne wären zwei,
+ * die auseinanderlaufen können.
+ */
 export function isValidMonthlyGoal(value: unknown): value is number {
   return Number.isFinite(value) && (value as number) >= 1 && (value as number) <= 100;
 }

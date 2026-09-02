@@ -17,23 +17,26 @@ import { toast } from "sonner";
 import { CategoryIcon } from "@/components/category-icon";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
-import {
-  DEFAULT_SHELF_LIFE_DAYS,
-  ExpiryPicker,
-  jumpTarget,
-} from "@/components/expiry-picker";
+import { ExpiryPicker } from "@/components/expiry-picker";
 import { SectionLabel } from "@/components/section-label";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
-import { formatShort, fromDateInputValue } from "@/lib/expiry";
 import {
+  DEFAULT_SHELF_LIFE_DAYS,
+  formatShort,
+  fromDateInputValue,
+  jumpTarget,
+  startOfDay,
+} from "@/lib/expiry";
+import {
+  MAX_QUANTITY,
   clearBatch,
+  firstPendingIndex,
   updateBatch,
   useBatch,
   type BatchEntry,
 } from "@/lib/review-batch";
-import { startOfDay } from "@/lib/stats";
 import { useIsClient } from "@/lib/use-is-client";
 import { cn } from "@/lib/utils";
 import type { Category, Place } from "@/db/schema";
@@ -77,7 +80,12 @@ export function ReviewStep({
   );
 }
 
-function ReviewSkeleton() {
+/**
+ * Der Platzhalter dieses Bildschirms -- vor der Hydration hier, und als
+ * Suspense-Fallback der Route (`/review/[index]`). Beide zeigen dieselbe
+ * Karte; zwei Kopien wären zwei Stellen, die auseinanderlaufen.
+ */
+export function ReviewSkeleton() {
   return (
     <div className="flex flex-1 flex-col gap-4 px-5 pt-2">
       <div className="h-7 w-40 animate-pulse rounded-lg bg-muted" />
@@ -142,8 +150,7 @@ function ReviewFlow({
     const ahead = updated.findIndex(
       (item, position) => position > index && item.status === "pending",
     );
-    const next =
-      ahead >= 0 ? ahead : updated.findIndex((item) => item.status === "pending");
+    const next = ahead >= 0 ? ahead : firstPendingIndex(updated);
     router.push(`/review/${next >= 0 ? next : updated.length}`);
   }
 
@@ -415,9 +422,6 @@ type StepPatch = {
   expiryDate?: string | null;
 };
 
-/** Kein Artikel kommt öfter als das vor -- derselbe Deckel wie im Batch. */
-const MAX_QUANTITY = 999;
-
 function StepCard({
   entry,
   categories,
@@ -450,9 +454,10 @@ function StepCard({
   const [quantity, setQuantity] = useState(entry.quantity);
   // Der Umbenennen-Entwurf steht neben `name` und nicht darin: "Abbrechen"
   // muss zum vorigen Namen zurückkommen, und ein leer getipptes Feld darf
-  // den Artikel nicht namenlos machen.
-  const [editingName, setEditingName] = useState(false);
-  const [draftName, setDraftName] = useState(entry.name);
+  // den Artikel nicht namenlos machen. null heißt "wird gerade nicht
+  // umbenannt" -- ein zweites Flag daneben wäre derselbe Zustand doppelt
+  // geführt.
+  const [draftName, setDraftName] = useState<string | null>(null);
 
   const categoryRow = categories.find((row) => row.key === category) ?? null;
   const shelfLife = categoryRow?.shelfLifeDays ?? DEFAULT_SHELF_LIFE_DAYS;
@@ -510,9 +515,9 @@ function StepCard({
 
   /** Übernimmt den Entwurf aus dem Eingabefeld; ein leerer bleibt wirkungslos. */
   function commitRename() {
-    const trimmed = draftName.trim();
+    const trimmed = draftName?.trim();
     if (trimmed) setName(trimmed);
-    setEditingName(false);
+    setDraftName(null);
   }
 
   function chooseCategory(next: Category) {
@@ -532,14 +537,14 @@ function StepCard({
             <CategoryIcon categoryKey={category ?? "sonstiges"} className="size-6" />
           </span>
 
-          {editingName ? (
+          {draftName !== null ? (
             <>
               <input
                 value={draftName}
                 onChange={(event) => setDraftName(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitRename();
-                  if (event.key === "Escape") setEditingName(false);
+                  if (event.key === "Escape") setDraftName(null);
                 }}
                 autoFocus
                 aria-label="Name des Artikels"
@@ -556,7 +561,7 @@ function StepCard({
               <button
                 type="button"
                 aria-label="Umbenennen abbrechen"
-                onClick={() => setEditingName(false)}
+                onClick={() => setDraftName(null)}
                 className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-surface-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <X className="size-4" strokeWidth={2.4} />
@@ -579,10 +584,7 @@ function StepCard({
                   der Artikel zu erkennen ist. */}
               <button
                 type="button"
-                onClick={() => {
-                  setDraftName(name);
-                  setEditingName(true);
-                }}
+                onClick={() => setDraftName(name)}
                 aria-label={`${name || entry.barcode || "Artikel"} umbenennen`}
                 className="line-clamp-2 min-w-0 flex-1 rounded-[10px] text-left text-[17px] leading-tight font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
@@ -852,6 +854,9 @@ function DoneList({ batch, categories }: { batch: BatchEntry[]; categories: Cate
   const rows = batch
     .map((entry, index) => ({ entry, index }))
     .filter(({ entry }) => entry.status === "done");
+  // Einmal aufgebaut statt find() je Zeile: bei einem Beleg mit 34 Positionen
+  // und zwölf Kategorien waren das gut vierhundert Vergleiche je Render.
+  const categoryLabels = new Map(categories.map((row) => [row.key, row.label]));
 
   if (rows.length === 0) return null;
 
@@ -860,7 +865,8 @@ function DoneList({ batch, categories }: { batch: BatchEntry[]; categories: Cate
       <SectionLabel title="Fertig" count={rows.length} hint="antippen zum Ändern" />
       {rows.map(({ entry, index }) => {
         const label =
-          categories.find((row) => row.key === entry.category)?.label ?? entry.category;
+          (entry.category === null ? null : categoryLabels.get(entry.category)) ??
+          entry.category;
         return (
           <button
             key={entry.id}

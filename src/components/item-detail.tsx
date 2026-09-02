@@ -18,6 +18,7 @@ import {
   expiryStatus,
   formatMedium,
   fromDateInputValue,
+  startOfDay,
   toDateInputValue,
 } from "@/lib/expiry";
 import {
@@ -334,10 +335,6 @@ export function ItemDetail({
       )}
     </div>
   );
-}
-
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function DetailRow({

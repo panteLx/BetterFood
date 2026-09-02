@@ -6,18 +6,10 @@ import {
   daysUntil,
   formatLong,
   fromDateInputValue,
+  jumpTarget,
   toDateInputValue,
 } from "@/lib/expiry";
 import { cn } from "@/lib/utils";
-
-/**
- * Die Haltbarkeit einer Kategorie, die es nicht (mehr) gibt.
- *
- * Derselbe Wert wie `categories.shelfLifeDays` in der Schemadefinition. Er
- * greift, solange noch keine Kategorie gewählt ist -- der Kalender braucht
- * auch dann schon einen Monat, den er zeigen kann.
- */
-export const DEFAULT_SHELF_LIFE_DAYS = 14;
 
 /**
  * Die fünf Sprünge über dem Kalender.
@@ -38,26 +30,6 @@ const JUMPS = [
   { label: "+1 Mon", days: 30 },
   { label: "+1 Jahr", days: 365 },
 ] as const;
-
-/**
- * Der Tag, auf den ein Sprung von `days` Tagen zeigt -- als yyyy-mm-dd.
- *
- * Ein Sprung ab einem alten Bezugsdatum kann in der Vergangenheit landen, und
- * dort nimmt der Kalender keine Tipps entgegen. Dann steht der Cursor auf
- * heute: "schon abgelaufen" ist eine Aussage, die der Nutzer treffen soll,
- * nicht der Richtwert.
- *
- * Exportiert, weil die Aufrufer denselben Wert für ihren Vorschlag brauchen:
- * `jumpTarget(shelfLife, ...)` ist der Richtwert der Kategorie, und der muss
- * exakt auf dem Tag landen, den auch ein gleich langer Sprung träfe -- sonst
- * stünde der Vorschlag im Raster neben einem hervorgehobenen Sprung, der
- * woanders hinzeigt.
- */
-export function jumpTarget(days: number, reference: Date, today: Date): string {
-  const key = toDateInputValue(addDays(days, reference));
-  const todayKey = toDateInputValue(today);
-  return key < todayKey ? todayKey : key;
-}
 
 /**
  * "in 7 Tagen" -- die zweite Hälfte der Ergebniszeile.

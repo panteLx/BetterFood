@@ -2,14 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import {
-  STATUS_CLASSES,
-  daysUntil,
-  expiryDayBlock,
-  expiryStatus,
-} from "@/lib/expiry";
+import { STATUS_CLASSES, expiryDayBlock, expiryStatus } from "@/lib/expiry";
 import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
-import { useIsClient } from "@/lib/use-is-client";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/db/schema";
 
@@ -34,12 +28,24 @@ import type { Item } from "@/db/schema";
  */
 export function ItemRow({
   item,
+  days,
   meta,
   onConsume,
   onDiscard,
   disabled = false,
 }: {
   item: Item;
+  /**
+   * Restlaufzeit in Tagen, gegen den Stichtag des Aufrufers gerechnet.
+   *
+   * Als Prop und nicht hier: beide Aufrufer brauchen dieselbe Zahl ohnehin
+   * schon, um zu sortieren und zu gruppieren, und beide zeigen erst nach der
+   * Hydration Zeilen an (vorher steht dort ein Platzhalter). Rechnete die
+   * Zeile noch einmal selbst, hinge sie an ihrer eigenen Uhr -- über
+   * Mitternacht hinweg stünde unter der Überschrift "Heute" eine Zeile, die
+   * sich für "Morgen" hält.
+   */
+  days: number;
   /** Zweitzeile: je nach Gruppierung die Kategorie oder der Ort. */
   meta: string;
   onConsume: () => void;
@@ -53,10 +59,6 @@ export function ItemRow({
     disabled,
   });
 
-  // Die Statusfarbe hängt am heutigen Datum -- bis zur Hydration bleibt sie
-  // deshalb neutral, statt den Prerender der Route zu sprengen.
-  const isClient = useIsClient();
-  const days = isClient ? daysUntil(item.expiryDate) : 0;
   const styles = STATUS_CLASSES[expiryStatus(days)];
   const block = expiryDayBlock(days);
 
@@ -128,10 +130,6 @@ export function ItemRow({
               "flex size-11 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[12px]",
               styles.tint,
               styles.text,
-              // Vor der Hydration steht dort rechnerisch "0 Tage" -- das wäre
-              // eine Behauptung über jeden Artikel. Erst der Client kennt den
-              // heutigen Tag.
-              !isClient && "opacity-0",
             )}
           >
             <span

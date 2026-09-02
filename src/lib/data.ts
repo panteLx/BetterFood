@@ -131,14 +131,6 @@ export async function getPlacesForList(listId: number) {
 }
 
 /**
- * Die nicht archivierten Listen eines Nutzers samt Artikel- und
- * Mitgliederzahl -- das, was im Listen-Blatt unter jedem Namen steht.
- *
- * Zwei Gruppierungen statt zweier Joins in einer Abfrage: ein gemeinsamer
- * Join ueber Artikel UND Mitglieder vervielfacht die Zeilen und zaehlt beides
- * falsch.
- */
-/**
  * Das Monatsziel eines Nutzers, mit dem Standardwert als Rueckfallebene.
  *
  * Ohne "use cache": die settings-Zeile aendert sich ueber die
@@ -156,6 +148,14 @@ export async function getMonthlyGoal(userId: string) {
   return parseMonthlyGoal(row?.value);
 }
 
+/**
+ * Die nicht archivierten Listen eines Nutzers samt Artikel- und
+ * Mitgliederzahl -- das, was im Listen-Blatt unter jedem Namen steht.
+ *
+ * Zwei Gruppierungen statt zweier Joins in einer Abfrage: ein gemeinsamer
+ * Join ueber Artikel UND Mitglieder vervielfacht die Zeilen und zaehlt beides
+ * falsch.
+ */
 export async function getListsWithCounts(userId: string) {
   const rows = await db
     .select({ id: lists.id, name: lists.name })

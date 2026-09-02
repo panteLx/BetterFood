@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { ReviewStep } from "@/components/review-step";
+import { ReviewSkeleton, ReviewStep } from "@/components/review-step";
 import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 import { requireActiveList, requireSession } from "@/lib/session";
 
@@ -39,19 +39,9 @@ export default function ReviewPage({
   // Navigation"-Validierung, siehe node_modules/next/dist/docs/.../
   // instant-navigation.md).
   return (
-    <Suspense fallback={<ReviewFallback />}>
+    <Suspense fallback={<ReviewSkeleton />}>
       <ResolvedReview params={params} />
     </Suspense>
-  );
-}
-
-function ReviewFallback() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 px-5 pt-2">
-      <div className="h-7 w-40 animate-pulse rounded-lg bg-muted" />
-      <div className="h-1 animate-pulse rounded-full bg-muted" />
-      <div className="h-[520px] animate-pulse rounded-[24px] bg-muted" />
-    </div>
   );
 }
 

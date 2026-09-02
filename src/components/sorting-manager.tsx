@@ -77,7 +77,7 @@ export function SortingManager({
   // ist drei Gesten (öffnen, tippen, speichern) für eine Änderung, die in eine
   // Zeile passt. Die Kategorie behält ihres: dort ist der Name eines von vier
   // Feldern, und ein zweiter Weg nur zum Namen wäre eine Dublette.
-  const [placeSheet, setPlaceSheet] = useState<"new" | null>(null);
+  const [placeSheetOpen, setPlaceSheetOpen] = useState(false);
   const [placeName, setPlaceName] = useState("");
 
   // Nur die ID, nicht das ganze Fach: nach router.refresh() kommen die Fächer
@@ -245,7 +245,7 @@ export function SortingManager({
       "Fach hinzugefügt",
       "Konnte Fach nicht speichern.",
     );
-    if (ok) setPlaceSheet(null);
+    if (ok) setPlaceSheetOpen(false);
   }
 
   /**
@@ -436,7 +436,7 @@ export function SortingManager({
         disabled={saving}
         onClick={() => {
           setPlaceName("");
-          setPlaceSheet("new");
+          setPlaceSheetOpen(true);
         }}
       />
 
@@ -572,8 +572,8 @@ export function SortingManager({
       </Sheet>
 
       <Sheet
-        open={placeSheet !== null}
-        onOpenChange={(open) => !open && setPlaceSheet(null)}
+        open={placeSheetOpen}
+        onOpenChange={(open) => !open && setPlaceSheetOpen(false)}
         title="Neues Fach"
       >
         <div className="flex flex-col gap-3.5">

@@ -16,10 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { DateSheet } from "@/components/date-sheet";
-import {
-  DEFAULT_SHELF_LIFE_DAYS,
-  ExpiryPicker,
-} from "@/components/expiry-picker";
+import { ExpiryPicker } from "@/components/expiry-picker";
 import {
   Dialog,
   DialogPortal,
@@ -30,9 +27,11 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { estimateExpiryDate } from "@/lib/categories";
 import {
+  DEFAULT_SHELF_LIFE_DAYS,
   expiryLabel,
   formatLong,
   fromDateInputValue,
+  startOfDay,
   toDateInputValue,
 } from "@/lib/expiry";
 import { useIsClient } from "@/lib/use-is-client";
@@ -888,10 +887,6 @@ export function ItemForm({
       </Dialog>
     </div>
   );
-}
-
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 /**

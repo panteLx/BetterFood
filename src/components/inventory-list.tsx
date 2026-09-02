@@ -16,11 +16,15 @@ import {
   undoResolve,
   type ResolveStatus,
 } from "@/lib/item-actions";
-import { EXPIRY_BUCKETS, URGENT_WITHIN_DAYS, daysUntil } from "@/lib/expiry";
+import {
+  EXPIRY_BUCKETS,
+  URGENT_WITHIN_DAYS,
+  daysUntil,
+  type StatusFilter,
+} from "@/lib/expiry";
 import { useIsClient } from "@/lib/use-is-client";
 import type { Category, Item, List, Place } from "@/db/schema";
 
-type StatusFilter = "alle" | "bald" | "abgelaufen";
 type Grouping = "ablauf" | "ort" | "kategorie";
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -133,17 +137,26 @@ export function InventoryList({
     }
   }
 
+  // Die Restlaufzeit einmal je Artikel statt in jedem Durchgang neu:
+  // sortieren, filtern und gruppieren fragten vorher dieselbe Rechnung
+  // sechsmal ab (einmal je Eimer), und mit den feineren Eimern aus
+  // expiry.ts wären es jetzt sieben.
+  //
+  // Eigenes Memo und nicht zusammen mit den Filtern: die Suche hängt an jedem
+  // Tastendruck, die Restlaufzeit und die Sortierung nicht. Zusammen lief bei
+  // 263 Artikeln je getipptem Buchstaben ein voller Sortierlauf, der immer
+  // dieselbe Reihenfolge herausgab.
+  //
   // null, solange der heutige Tag noch nicht feststeht -- siehe today.
-  const pool = useMemo(() => {
+  const withDays = useMemo(() => {
     if (!today) return null;
-
-    // Die Restlaufzeit einmal je Artikel statt in jedem Durchgang neu:
-    // sortieren, filtern und gruppieren fragten vorher dieselbe Rechnung
-    // sechsmal ab (einmal je Eimer), und mit den feineren Eimern aus
-    // expiry.ts wären es jetzt sieben.
-    const withDays = items
+    return items
       .map((item) => ({ item, days: daysUntil(item.expiryDate, today) }))
       .sort((a, b) => a.days - b.days);
+  }, [items, today]);
+
+  const pool = useMemo(() => {
+    if (!withDays) return null;
 
     const byStatus = withDays.filter(({ days }) => {
       if (status === "bald") return days >= 0 && days <= URGENT_WITHIN_DAYS;
@@ -161,49 +174,78 @@ export function InventoryList({
     );
     // labelOf/placeOf haengen nur an den beiden Maps, die hier bereits stehen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, status, query, categoryLabels, placeNames, today]);
+  }, [withDays, status, query, categoryLabels, placeNames]);
 
+  /**
+   * Die Abschnitte der aktuellen Gliederung.
+   *
+   * Ein Durchlauf durch `pool` je Gliederung statt eines filter() je
+   * Abschnitt: bei zwölf Kategorien und 263 Artikeln waren das über dreitausend
+   * Vergleiche für eine Einteilung, die jeder Artikel selbst kennt. Die
+   * Reihenfolge der Abschnitte kommt weiterhin aus der jeweiligen Tabelle
+   * (Fächer, Kategorien, EXPIRY_BUCKETS) und nicht aus der Fundfolge, und
+   * leere Abschnitte fallen wie bisher weg.
+   */
   const sections = useMemo(() => {
     if (!pool) return null;
 
-    if (grouping === "ort") {
-      const named = places.map((place) => ({
-        title: place.name,
-        danger: false,
-        entries: pool.filter(({ item }) => item.placeId === place.id),
-      }));
-      // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende, statt
-      // stillschweigend aus der Ansicht zu fallen.
-      const unplaced = pool.filter(
-        ({ item }) => item.placeId === null || !placeNames.has(item.placeId),
-      );
-      return [
-        ...named,
-        { title: "Ohne Ort", danger: false, entries: unplaced },
-      ].filter((section) => section.entries.length > 0);
+    // Der Schlüssel je Artikel und die Abschnitte in ihrer festen Reihenfolge
+    // -- beides hängt an der Gliederung.
+    const keyOf = (entry: { item: Item; days: number }): string | number => {
+      if (grouping === "ort") {
+        return entry.item.placeId !== null && placeNames.has(entry.item.placeId)
+          ? entry.item.placeId
+          : "__unplaced";
+      }
+      if (grouping === "kategorie") return entry.item.category;
+      // EXPIRY_BUCKETS kommt aus expiry.ts, seit Startseite und Vorrat
+      // dieselbe Gliederung zeigen. Die Tabelle ist dabei feiner geworden:
+      // aus "Bald aufbrauchen" (0 bis 3 Tage) sind "Heute" und "Morgen"
+      // geworden. Genau in diesen beiden Tagen entscheidet sich, ob etwas
+      // weggeworfen wird -- sie in einen Eimer mit "in drei Tagen" zu werfen,
+      // verschenkte die Dringlichkeit.
+      return EXPIRY_BUCKETS.find((bucket) => bucket.test(entry.days))!.title;
+    };
+
+    const order: { key: string | number; title: string; danger: boolean }[] =
+      grouping === "ort"
+        ? [
+            ...places.map((place) => ({
+              key: place.id as string | number,
+              title: place.name,
+              danger: false,
+            })),
+            // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
+            // statt stillschweigend aus der Ansicht zu fallen.
+            { key: "__unplaced", title: "Ohne Ort", danger: false },
+          ]
+        : grouping === "kategorie"
+          ? categories.map((category) => ({
+              key: category.key as string | number,
+              title: category.label,
+              danger: false,
+            }))
+          : EXPIRY_BUCKETS.map((bucket) => ({
+              key: bucket.title as string | number,
+              title: bucket.title,
+              danger: bucket.danger,
+            }));
+
+    const grouped = new Map<string | number, { item: Item; days: number }[]>();
+    for (const entry of pool) {
+      const key = keyOf(entry);
+      const bucket = grouped.get(key);
+      if (bucket) bucket.push(entry);
+      else grouped.set(key, [entry]);
     }
 
-    if (grouping === "kategorie") {
-      return categories
-        .map((category) => ({
-          title: category.label,
-          danger: false,
-          entries: pool.filter(({ item }) => item.category === category.key),
-        }))
-        .filter((section) => section.entries.length > 0);
-    }
-
-    // EXPIRY_BUCKETS kommt aus expiry.ts, seit Startseite und Vorrat dieselbe
-    // Gliederung zeigen. Die Tabelle ist dabei feiner geworden: aus "Bald
-    // aufbrauchen" (0 bis 3 Tage) sind "Heute" und "Morgen" geworden. Genau
-    // in diesen beiden Tagen entscheidet sich, ob etwas weggeworfen wird --
-    // sie in einen Eimer mit "in drei Tagen" zu werfen, verschenkte die
-    // Dringlichkeit.
-    return EXPIRY_BUCKETS.map((bucket) => ({
-      title: bucket.title,
-      danger: bucket.danger,
-      entries: pool.filter(({ days }) => bucket.test(days)),
-    })).filter((section) => section.entries.length > 0);
+    return order
+      .map(({ key, title, danger }) => ({
+        title,
+        danger,
+        entries: grouped.get(key) ?? [],
+      }))
+      .filter((section) => section.entries.length > 0);
   }, [pool, grouping, places, categories, placeNames]);
 
   if (items.length === 0) {
@@ -301,10 +343,11 @@ export function InventoryList({
               tone={section.danger ? "danger" : "muted"}
               count={section.entries.length}
             />
-            {section.entries.map(({ item }) => (
+            {section.entries.map(({ item, days }) => (
               <ItemRow
                 key={item.id}
                 item={item}
+                days={days}
                 // Die Zweitzeile trägt jeweils die andere Achse als die
                 // Gruppierung: wer nach Ort gliedert, hat den Ort schon in der
                 // Überschrift und will darunter die Kategorie sehen -- und

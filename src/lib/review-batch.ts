@@ -171,8 +171,13 @@ export const REVIEW_BATCH_KEY = "bf.review-batch.v3";
  */
 export const MAX_BATCH_ENTRIES = 300;
 
-/** Kein Artikel wiegt mehr als das -- alles darüber ist ein Zählfehler. */
-const MAX_QUANTITY = 999;
+/**
+ * Kein Artikel wiegt mehr als das -- alles darüber ist ein Zählfehler.
+ *
+ * Exportiert, weil der Stepper im Prüf-Schritt gegen denselben Deckel sperren
+ * muss: eine zweite 999 dort wäre eine, die beim Ändern übersehen wird.
+ */
+export const MAX_QUANTITY = 999;
 
 function isStatus(value: unknown): value is BatchEntryStatus {
   return value === "pending" || value === "done" || value === "skipped";
@@ -413,4 +418,16 @@ export function mergeEntry(entries: BatchEntry[], entry: BatchEntry): BatchEntry
   }
   if (entries.length >= MAX_BATCH_ENTRIES) return entries;
   return [...entries, entry];
+}
+
+/**
+ * Der erste noch offene Eintrag, oder -1, wenn keiner mehr offen ist.
+ *
+ * Alle Einstiege in den Prüf-Flow stellen dieselbe Frage: wer nach einem
+ * halb durchgegangenen Einkauf zurückkommt, soll dort weitermachen, wo er
+ * aufgehört hat, und nicht bei einem Artikel, über den längst entschieden
+ * ist.
+ */
+export function firstPendingIndex(entries: BatchEntry[]): number {
+  return entries.findIndex((entry) => entry.status === "pending");
 }

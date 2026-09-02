@@ -12,6 +12,13 @@ export const URGENT_WITHIN_DAYS = 3;
 
 export type ExpiryStatus = "fresh" | "soon" | "expired";
 
+/** Mitternacht des Tages, in dem `date` liegt. */
+export function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export function daysUntil(date: Date, now: Date = new Date()): number {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -117,6 +124,13 @@ export function expiryDayBlock(days: number): { value: string; label: string } {
 }
 
 /**
+ * Die drei Filter des Vorrats. Hier und nicht in inventory-list.tsx, weil
+ * EXPIRY_BUCKETS unten auf sie zeigt und die Startseite daraus ihre Links
+ * baut -- ein Filtername ist damit ein Typ und kein String mehr.
+ */
+export type StatusFilter = "alle" | "bald" | "abgelaufen";
+
+/**
  * Die Ablauf-Eimer, nach denen Startseite und Vorrat gliedern.
  *
  * Feiner als die drei Zustände von expiryStatus, weil eine Liste eine
@@ -129,18 +143,43 @@ export function expiryDayBlock(days: number): { value: string; label: string } {
  * von ihnen, müsste die andere aus ihr importieren -- und beide zeigen
  * dieselbe Gliederung, die sich unter keinen Umständen auseinander
  * entwickeln darf.
+ *
+ * `filter` ist der Vorrat-Filter, der denselben Ausschnitt zeigt, oder null
+ * für "es gibt keinen, der passt". "Heute" und "Morgen" liegen vollständig
+ * innerhalb von "bald" (bis einschließlich URGENT_WITHIN_DAYS = 3 Tage),
+ * "Diese Woche" reicht bis Tag 7 und damit darüber hinaus, "Später" hat gar
+ * kein Gegenstück -- beide führen deshalb auf den ungefilterten Vorrat:
+ * lieber mehr zeigen als das Gemeinte wegfiltern. Das Feld steht hier und
+ * nicht als Titelvergleich auf der Startseite, weil eine reine Textänderung
+ * an einer Überschrift sonst lautlos den Link umbiegt.
  */
 export const EXPIRY_BUCKETS = [
-  { title: "Abgelaufen", danger: true, test: (days: number) => days < 0 },
-  { title: "Heute", danger: false, test: (days: number) => days === 0 },
-  { title: "Morgen", danger: false, test: (days: number) => days === 1 },
+  {
+    title: "Abgelaufen",
+    danger: true,
+    filter: "abgelaufen",
+    test: (days: number) => days < 0,
+  },
+  { title: "Heute", danger: false, filter: "bald", test: (days: number) => days === 0 },
+  { title: "Morgen", danger: false, filter: "bald", test: (days: number) => days === 1 },
   {
     title: "Diese Woche",
     danger: false,
+    filter: null,
     test: (days: number) => days >= 2 && days <= 7,
   },
-  { title: "Später", danger: false, test: (days: number) => days > 7 },
-] as const;
+  { title: "Später", danger: false, filter: null, test: (days: number) => days > 7 },
+] as const satisfies readonly {
+  title: string;
+  danger: boolean;
+  filter: StatusFilter | null;
+  test: (days: number) => boolean;
+}[];
+
+/** Der Vorrat-Link zu einem Eimer -- ohne Filter der ungefilterte Vorrat. */
+export function inventoryHref(filter: StatusFilter | null): string {
+  return filter === null ? "/inventory" : `/inventory?filter=${filter}`;
+}
 
 export function addDays(days: number, from: Date = new Date()): Date {
   const result = new Date(from.getFullYear(), from.getMonth(), from.getDate());
@@ -159,4 +198,37 @@ export function toDateInputValue(date: Date): string {
 export function fromDateInputValue(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1);
+}
+
+/**
+ * Die Haltbarkeit einer Kategorie, die es nicht (mehr) gibt.
+ *
+ * Derselbe Wert wie `categories.shelfLifeDays` in der Schemadefinition. Er
+ * greift, solange noch keine Kategorie gewählt ist -- der Kalender braucht
+ * auch dann schon einen Monat, den er zeigen kann.
+ */
+export const DEFAULT_SHELF_LIFE_DAYS = 14;
+
+/**
+ * Der Tag, auf den ein Sprung von `days` Tagen zeigt -- als yyyy-mm-dd.
+ *
+ * Ein Sprung ab einem alten Bezugsdatum kann in der Vergangenheit landen, und
+ * dort nimmt der Kalender keine Tipps entgegen. Dann steht der Cursor auf
+ * heute: "schon abgelaufen" ist eine Aussage, die der Nutzer treffen soll,
+ * nicht der Richtwert.
+ *
+ * Die Aufrufer brauchen denselben Wert für ihren Vorschlag:
+ * `jumpTarget(shelfLife, ...)` ist der Richtwert der Kategorie, und der muss
+ * exakt auf dem Tag landen, den auch ein gleich langer Sprung träfe -- sonst
+ * stünde der Vorschlag im Raster neben einem hervorgehobenen Sprung, der
+ * woanders hinzeigt.
+ *
+ * Hier und nicht in `expiry-picker.tsx`: die Funktion ist Datumsrechnung und
+ * keine Darstellung, und eine Server-Komponente kann den Vorgabewert daneben
+ * nicht aus einer "use client"-Datei lesen.
+ */
+export function jumpTarget(days: number, reference: Date, today: Date): string {
+  const key = toDateInputValue(addDays(days, reference));
+  const todayKey = toDateInputValue(today);
+  return key < todayKey ? todayKey : key;
 }

@@ -61,20 +61,19 @@ export async function PATCH(
     update.defaultPlaceId = place;
   }
 
-  if (avgPriceCents !== undefined) {
-    const value = parseEstimate(avgPriceCents, MAX_PRICE_CENTS);
+  // Beide Schätzwerte über dieselbe Regel: sie unterscheiden sich nur in
+  // Feldname, Obergrenze und Fehlertext.
+  const estimateFields = [
+    ["avgPriceCents", avgPriceCents, MAX_PRICE_CENTS, "ungültiger Preis"],
+    ["avgCo2Grams", avgCo2Grams, MAX_CO2_GRAMS, "ungültiger CO₂-Wert"],
+  ] as const;
+  for (const [field, raw, max, message] of estimateFields) {
+    if (raw === undefined) continue;
+    const value = parseEstimate(raw, max);
     if (value === "invalid") {
-      return NextResponse.json({ error: "ungültiger Preis" }, { status: 400 });
+      return NextResponse.json({ error: message }, { status: 400 });
     }
-    update.avgPriceCents = value;
-  }
-
-  if (avgCo2Grams !== undefined) {
-    const value = parseEstimate(avgCo2Grams, MAX_CO2_GRAMS);
-    if (value === "invalid") {
-      return NextResponse.json({ error: "ungültiger CO₂-Wert" }, { status: 400 });
-    }
-    update.avgCo2Grams = value;
+    update[field] = value;
   }
 
   if (Object.keys(update).length === 0) {
