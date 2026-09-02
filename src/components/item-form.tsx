@@ -17,6 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { DateSheet } from "@/components/date-sheet";
 import {
+  DEFAULT_SHELF_LIFE_DAYS,
+  ExpiryPicker,
+} from "@/components/expiry-picker";
+import {
   Dialog,
   DialogPortal,
   DialogBackdrop,
@@ -62,6 +66,7 @@ export function ItemForm({
   title,
   redirectTo,
   method = "manual",
+  inlineExpiry = false,
 }: {
   categories: CategoryOption[];
   places: PlaceOption[];
@@ -86,6 +91,20 @@ export function ItemForm({
    * naechstes von Hand eintragen und nicht in die Kamera geschickt werden.
    */
   method?: EntryMethod;
+  /**
+   * Ob der Kalender offen im Feld "Haltbar bis" steht statt hinter einem
+   * Knopf, der erst ein Blatt öffnet.
+   *
+   * Gesetzt beim Erfassen (/add, /confirm), nicht beim Korrigieren (/edit).
+   * Der Unterschied ist keine Geschmacksfrage: beim Erfassen hat
+   * initialExpiryValue() den Richtwert der Kategorie längst berechnet, er
+   * war nur unsichtbar -- wer nichts antippte, speicherte eine Schätzung,
+   * die er nie gesehen hat. Beim Korrigieren steht dagegen ein echtes,
+   * früher gewähltes Datum da; ein aufgeklappter Kalender wäre dort ein
+   * Vorschlag zum Ändern, wo keiner nötig ist, und schöbe die übrigen
+   * Felder um eine halbe Bildschirmhöhe nach unten.
+   */
+  inlineExpiry?: boolean;
 }) {
   const router = useRouter();
   const [categoryList, setCategoryList] =
@@ -105,11 +124,17 @@ export function ItemForm({
     const shelfLife = categoryList.find(
       (c) => c.key === fallbackCategory,
     )?.shelfLifeDays;
-    // Ohne Kategorie gibt es nichts zu schaetzen -- das Feld fuellt sich,
-    // sobald eine gewaehlt ist.
-    return shelfLife === undefined
-      ? ""
-      : toDateInputValue(estimateExpiryDate(shelfLife));
+    if (shelfLife !== undefined)
+      return toDateInputValue(estimateExpiryDate(shelfLife));
+    // Ohne Kategorie gibt es nichts zu schätzen -- hinter dem Blatt füllt
+    // sich das Feld erst, sobald eine gewählt ist. Steht der Kalender aber
+    // offen im Formular, braucht er von Anfang an einen Monat, den er zeigen
+    // kann: dann greift derselbe Rückfall wie im Prüf-Flow. Nebenwirkung mit
+    // Absicht -- auf diesem Weg ist expiryDate nie leer, "Bitte ein
+    // Haltbarkeitsdatum wählen." kann hier also gar nicht mehr auslösen.
+    return inlineExpiry
+      ? toDateInputValue(estimateExpiryDate(DEFAULT_SHELF_LIFE_DAYS))
+      : "";
   }
 
   const [name, setName] = useState(initialName);
@@ -118,6 +143,16 @@ export function ItemForm({
   const [quantity, setQuantity] = useState(initialQuantity);
   const [note, setNote] = useState(initialNote);
   const [dateTouched, setDateTouched] = useState(Boolean(initialExpiryDate));
+  // Derselbe Wert noch einmal als Ref, aus demselben Grund wie
+  // categoryTouchedRef und placeTouchedRef darunter: applyCategory läuft auch
+  // aus applyKnownProduct heraus, also NACH einem await, und sähe im State nur
+  // den Stand des Renders, der die Abfrage angestoßen hat. Mit dem offen
+  // stehenden Kalender ist das erreichbar geworden -- wer "Milch" tippt und
+  // sofort einen Tag antippt, hatte nach 500 ms Debounce plus Antwort seinen
+  // gewählten Tag wieder durch den Richtwert der gelernten Kategorie ersetzt.
+  // Hinter dem Blatt kostete derselbe Weg mehrere Griffe und war praktisch
+  // nicht zu treffen.
+  const dateTouchedRef = useRef(dateTouched);
   const [expiryDate, setExpiryDate] = useState(initialExpiryValue);
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,6 +176,25 @@ export function ItemForm({
   const [creatingCategory, setCreatingCategory] = useState(false);
 
   const isClient = useIsClient();
+  // Der Stichtag für Kalender, Blatt und die Restlaufzeit unter dem Datum --
+  // null, solange der Server (und der erste Client-Render) läuft: new Date()
+  // ist dort ein "unstable value" und bricht den Prerender der Route ab.
+  //
+  // Bei jedem Render neu gelesen und nur über die Tageszahl gemerkt. Beides
+  // hat einen Grund. Ein useMemo(..., [isClient]) rechnete genau einmal, bei
+  // der Hydration -- und unter Cache Components bleibt diese Seite per
+  // <Activity> am Leben statt abgebaut zu werden (siehe shouldResetRef weiter
+  // unten). Ein über Nacht offener PWA-Tab trüge dann am nächsten Morgen noch
+  // den gestrigen Stichtag: DateCalendar sperrt daraus die Vergangenheit,
+  // gestern wäre also weiter anwählbar. Umgekehrt reichte auch nicht, den Wert
+  // roh durchzureichen -- ein neues Date-Objekt je Render hängt sich in die
+  // useMemo-Kette von DateCalendar und baut bei jedem Tastendruck im
+  // Namensfeld dessen 42 Zellen neu auf.
+  const todayTime = isClient ? startOfDay(new Date()).getTime() : null;
+  const today = useMemo(
+    () => (todayTime === null ? null : new Date(todayTime)),
+    [todayTime],
+  );
 
   // Nach einem erfolgreichen Speichern muss das Formular zurueckgesetzt
   // werden: Cache Components unmountet die verlassene Route nicht, sondern
@@ -170,7 +224,8 @@ export function ItemForm({
       setPlaceId(initialPlaceId);
       setQuantity(initialQuantity);
       setNote(initialNote);
-      setDateTouched(Boolean(initialExpiryDate));
+      dateTouchedRef.current = Boolean(initialExpiryDate);
+      setDateTouched(dateTouchedRef.current);
       setExpiryDate(initialExpiryValue());
       categoryTouchedRef.current = false;
       placeTouchedRef.current = false;
@@ -341,15 +396,28 @@ export function ItemForm({
     setCategory(value);
     const option = list.find((c) => c.key === value);
 
-    if (!dateTouched) {
+    if (!dateTouchedRef.current) {
       setExpiryDate(
-        toDateInputValue(estimateExpiryDate(option?.shelfLifeDays ?? 14)),
+        toDateInputValue(
+          estimateExpiryDate(option?.shelfLifeDays ?? DEFAULT_SHELF_LIFE_DAYS),
+        ),
       );
     }
 
     if (!placeTouchedRef.current && option?.defaultPlaceId != null) {
       setPlaceId(option.defaultPlaceId);
     }
+  }
+
+  /**
+   * Der Nutzer hat das MHD selbst benannt -- im Raster, über einen Sprung oder
+   * im Blatt. Ab hier schreibt kein Kategoriewechsel den Wert mehr um, und im
+   * Kalender wird aus dem Ring eine gefüllte Fläche.
+   */
+  function chooseDate(value: string) {
+    dateTouchedRef.current = true;
+    setDateTouched(true);
+    setExpiryDate(value);
   }
 
   function handleNameChange(value: string) {
@@ -448,6 +516,12 @@ export function ItemForm({
       toast.error("Bitte eine Kategorie wählen.");
       return;
     }
+    // Rückversicherung, kein erreichbarer Zweig mehr. Mit inlineExpiry steht
+    // ab dem ersten Render ein Datum in expiryDate (siehe initialExpiryValue),
+    // und der Blatt-Weg läuft nur noch auf /edit, wo items.expiryDate NOT NULL
+    // ist -- initialExpiryDate ist dort also immer gesetzt. Die Prüfung bleibt
+    // trotzdem stehen: sie ist die letzte Schranke vor einem Artikel ohne MHD,
+    // den die Ablaufwarnung danach nie melden könnte, und sie kostet nichts.
     if (!expiryDate) {
       toast.error("Bitte ein Haltbarkeitsdatum wählen.");
       return;
@@ -651,36 +725,59 @@ export function ItemForm({
         </Field>
 
         <Field label="Haltbar bis">
-          <button
-            type="button"
-            onClick={() => setDateSheetOpen(true)}
-            className="flex h-16 items-center gap-3 rounded-[18px] border border-border bg-card px-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
-              <CalendarDays className="size-5" strokeWidth={1.8} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-bold">
-                {selectedDate ? formatLong(selectedDate) : "Datum wählen"}
+          {inlineExpiry ? (
+            today ? (
+              <ExpiryPicker
+                value={expiryDate}
+                onChange={chooseDate}
+                // Genau das Flag, das ohnehin schon "der Nutzer hat das Datum
+                // selbst angefasst" bedeutet: es entscheidet im Raster
+                // zwischen geringelt (Richtwert) und gefüllt (Entscheidung).
+                confirmed={dateTouched}
+                today={today}
+                // Beim Erfassen von Hand gibt es kein Kaufdatum -- gerechnet
+                // wird ab heute, und die Zeile über den Sprüngen sagt das.
+                reference={today}
+                shelfLife={shelfLifeDays ?? DEFAULT_SHELF_LIFE_DAYS}
+              />
+            ) : (
+              // Vor der Hydration gibt es kein "heute" und damit keinen Monat.
+              // Der Platzhalter trägt ungefähr die Höhe des Kalenders,
+              // damit Notiz und Speichern-Leiste beim Einblenden nicht
+              // springen -- exakt geht nicht, ein Monat mit sechs Wochenzeilen
+              // ist 43px höher als einer mit fünf.
+              <div className="h-[430px] animate-pulse rounded-[16px] bg-muted" />
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDateSheetOpen(true)}
+              className="flex h-16 items-center gap-3 rounded-[18px] border border-border bg-card px-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
+                <CalendarDays className="size-5" strokeWidth={1.8} />
               </span>
-              {selectedDate && isClient && (
-                <span className="mt-0.5 block text-[12.5px] font-medium text-muted-foreground">
-                  {expiryLabel(
-                    Math.round(
-                      (selectedDate.getTime() -
-                        startOfDay(new Date()).getTime()) /
-                        86_400_000,
-                    ),
-                    selectedDate,
-                  )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-bold">
+                  {selectedDate ? formatLong(selectedDate) : "Datum wählen"}
                 </span>
-              )}
-            </span>
-            <ChevronRight
-              className="size-4 shrink-0 text-faint"
-              strokeWidth={2}
-            />
-          </button>
+                {selectedDate && today && (
+                  <span className="mt-0.5 block text-[12.5px] font-medium text-muted-foreground">
+                    {expiryLabel(
+                      Math.round(
+                        (selectedDate.getTime() - today.getTime()) / 86_400_000,
+                      ),
+                      selectedDate,
+                    )}
+                  </span>
+                )}
+              </span>
+              <ChevronRight
+                className="size-4 shrink-0 text-faint"
+                strokeWidth={2}
+              />
+            </button>
+          )}
           {shelfLifeDays !== undefined && categoryLabel && (
             <p className="pl-1 text-[12.5px] leading-relaxed font-medium text-balance text-faint">
               {categoryLabel} hält typischerweise{" "}
@@ -737,16 +834,16 @@ export function ItemForm({
         </button>
       </div>
 
-      {isClient && (
+      {/* Kein Blatt, wo der Kalender schon offen im Feld steht: es gäbe dann
+          zwei Wege zu derselben Antwort, und den einen könnte niemand mehr
+          öffnen. */}
+      {today && !inlineExpiry && (
         <DateSheet
           open={dateSheetOpen}
           onOpenChange={setDateSheetOpen}
           value={expiryDate}
-          onChange={(value) => {
-            setDateTouched(true);
-            setExpiryDate(value);
-          }}
-          today={startOfDay(new Date())}
+          onChange={chooseDate}
+          today={today}
         />
       )}
 

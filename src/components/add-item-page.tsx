@@ -22,6 +22,10 @@ export async function AddItemPage({ standalone = false }: { standalone?: boolean
       categories={allCategories}
       places={allPlaces}
       redirectTo={standalone ? "/" : undefined}
+      // Erfassen, nicht korrigieren: der Kalender steht offen im Formular,
+      // so wie im Prüf-Flow nach dem Scannen. Hinter dem Blatt blieb der
+      // geschätzte Richtwert unsichtbar, bis jemand den Knopf antippte.
+      inlineExpiry
     />
   );
 }
