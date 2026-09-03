@@ -18,6 +18,7 @@ import {
   ReaderException,
 } from "@zxing/library";
 import { Flashlight, FlashlightOff, X } from "lucide-react";
+import { Avo } from "@/components/avo";
 import {
   createEntry,
   mergeEntry,
@@ -581,7 +582,7 @@ export default function ScanPage() {
   // steht die Hausregel entgegen, und sie liefe bei der naechsten
   // Palettenaenderung auseinander.
   return (
-    <div className="dark relative -mt-[max(env(safe-area-inset-top),1.75rem)] flex flex-1 flex-col overflow-hidden bg-[#0b0f0c] text-white">
+    <div className="dark relative -mt-[max(env(safe-area-inset-top),1.75rem)] flex flex-1 flex-col overflow-hidden bg-[#0d1512] text-white">
       {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
           iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
           object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
@@ -614,28 +615,28 @@ export default function ScanPage() {
           ruhiger Verlauf -- der Screen sieht dann nicht kaputt aus. */}
       <div
         aria-hidden="true"
-        className={`absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_30%,#2a332c_0%,#12170f_60%,#0b0f0c_100%)] transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_30%,#2c3a30_0%,#16201a_60%,#0d1512_100%)] transition-opacity duration-300 ${
           videoReady ? "opacity-0" : "opacity-100"
         }`}
       />
 
-      <div className="relative flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top),0.75rem)]">
+      <div className="relative flex items-center justify-between px-4.5 pt-[max(env(safe-area-inset-top),0.75rem)]">
         <button
           type="button"
           onClick={() => router.push("/")}
           aria-label="Scannen abbrechen"
-          className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+          className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
         >
           <X className="size-5" strokeWidth={2} />
         </button>
-        <span className="text-[15px] font-bold">Scanner</span>
+        <span className="font-heading text-base font-bold">Scanner</span>
         {torchAvailable ? (
           <button
             type="button"
             aria-label={torchOn ? "Licht ausschalten" : "Licht einschalten"}
             aria-pressed={torchOn}
             onClick={toggleTorch}
-            className="flex size-10.5 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur-sm outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+            className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
           >
             {torchOn ? (
               <Flashlight className="size-5" />
@@ -644,23 +645,28 @@ export default function ScanPage() {
             )}
           </button>
         ) : (
-          <span className="size-10.5" aria-hidden="true" />
+          <span className="size-11" aria-hidden="true" />
         )}
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-6.5 px-7">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6.5">
         {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
-            bleibt genau der Ausschnitt hell, in dem der Code liegen soll. */}
-        <div className="relative h-48 w-[270px] overflow-hidden rounded-[26px] shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_0_0_2000px_rgb(0_0_0/0.42)]">
-          <span className="absolute inset-x-4 top-4 h-[3px] animate-scan rounded-sm bg-[#4dc779] shadow-[0_0_18px_#4dc779]" />
+            bleibt genau der Ausschnitt hell, in dem der Code liegen soll --
+            der zweite Ring mit seinen 2000px Streuung *ist* die Abdunklung,
+            kein Rahmen daneben. */}
+        <div className="relative h-[186px] w-[262px] overflow-hidden rounded-[34px] shadow-[0_0_0_3px_rgb(255_255_255/0.92),0_0_0_2000px_rgb(0_0_0/0.46)]">
+          <span className="bg-primary-light absolute inset-x-4.5 top-4.5 h-1 animate-scan rounded-full shadow-[0_0_20px_var(--primary-light)]" />
         </div>
-        <p className="text-center text-[15px] leading-relaxed font-semibold text-balance text-white/90">
-          Einfach weiterscannen.
-          <br />
-          <span className="font-medium text-white/55">
-            Geprüft wird danach — ein Artikel nach dem anderen.
-          </span>
-        </p>
+        <div className="flex items-center gap-3 rounded-[24px] bg-white/10 px-4 py-3 backdrop-blur-[8px]">
+          <Avo size="sm" mood="happy" onDark />
+          <p className="font-heading text-[15px] leading-snug font-bold text-pretty text-white/90">
+            Einfach weiterscannen.
+            <br />
+            <span className="font-sans text-[12.5px] font-semibold text-white/60">
+              Geprüft wird danach — einer nach dem anderen.
+            </span>
+          </p>
+        </div>
 
         {error && (
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
@@ -698,9 +704,9 @@ export default function ScanPage() {
                 genau bg-black/50 + border-white/12. Die Ausnahme steht so im
                 Plan (Abschnitt "Batch-Ablage (8e)"). */}
             {scanned.length > 0 && (
-              <div className="rounded-xl border border-white/12 bg-black/50 p-3.5 backdrop-blur-[8px]">
-                <p className="text-[11px] font-bold tracking-[0.08em] text-white/55 uppercase">
-                  Erfasst
+              <div className="rounded-[26px] border border-white/12 bg-black/50 p-4 backdrop-blur-[8px]">
+                <p className="text-[11px] font-extrabold tracking-[0.1em] text-white/60 uppercase">
+                  Ablage · {scanned.length} erfasst
                 </p>
                 {/* max-h statt fester Hoehe: nach dem Wocheneinkauf stehen hier
                     zwanzig Zeilen, und der Sucher darf darunter nicht
@@ -710,47 +716,76 @@ export default function ScanPage() {
                 <ul
                   ref={trayRef}
                   aria-live="polite"
-                  className="mt-2.5 max-h-[30vh] space-y-1 overflow-y-auto"
+                  className="mt-3 max-h-[30vh] space-y-1.5 overflow-y-auto"
                 >
-                  {scanned.map((entry) => (
-                    <li
-                      key={entry.id}
-                      data-entry-id={entry.id}
-                      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-[14px] font-semibold ${
-                        entry.id === lastTouchedId ? "bg-white/8" : ""
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        {entry.name}
-                      </span>
-                      {entry.quantity > 1 && (
-                        <span className="shrink-0 text-white/55">
-                          ×{entry.quantity}
-                        </span>
-                      )}
-                      {/* "bekannt"/"neu" meint product_knowledge dieser Liste,
-                          nicht Open Food Facts: OFF kennt fast jeden Barcode,
-                          sagt aber nichts darueber, ob DIESER Haushalt das
-                          Produkt schon einmal einsortiert hat -- und nur das
-                          entscheidet, ob der Pruef-Flow gleich nach der
-                          Kategorie fragen muss. */}
-                      <span
-                        className={`shrink-0 text-[12px] font-semibold ${
-                          resolving.includes(entry.id)
-                            ? "text-white/35"
-                            : entry.known
-                              ? "text-white/55"
-                              : "text-warning"
+                  {scanned.map((entry) => {
+                    // Der zuletzt gescannte Eintrag ist immer der, dessen Name
+                    // noch die rohe EAN ist -- die Aufloesung zum Produktnamen
+                    // laeuft parallel im Hintergrund (resolveEntry). Deshalb
+                    // faellt "gerade erkannt" mit "resolving" zusammen: sobald
+                    // ein Name da ist, ist der Eintrag nicht mehr der neueste.
+                    const justRecognized = entry.id === lastTouchedId;
+                    return (
+                      <li
+                        key={entry.id}
+                        data-entry-id={entry.id}
+                        className={`flex items-center gap-2.5 rounded-[14px] px-2.5 py-1.5 text-[14.5px] ${
+                          justRecognized
+                            ? // rgba(79,212,140,.18) ist kein Token: der Wert
+                              // gehoert nur dieser einen Markierung auf dem
+                              // Kamerabild, nicht der Palette.
+                              "bg-[rgba(79,212,140,.18)]"
+                            : "bg-white/6"
                         }`}
                       >
-                        {resolving.includes(entry.id)
-                          ? "…"
-                          : entry.known
-                            ? "bekannt"
-                            : "neu"}
-                      </span>
-                    </li>
-                  ))}
+                        <span
+                          className={`min-w-0 flex-1 truncate font-bold ${
+                            resolving.includes(entry.id)
+                              ? "font-mono text-[13px]"
+                              : "font-heading"
+                          }`}
+                        >
+                          {entry.name}
+                        </span>
+                        {entry.quantity > 1 && (
+                          <span className="font-mono shrink-0 text-[12.5px] text-white/60">
+                            ×{entry.quantity}
+                          </span>
+                        )}
+                        {/* "bekannt"/"neu" meint product_knowledge dieser Liste,
+                            nicht Open Food Facts: OFF kennt fast jeden Barcode,
+                            sagt aber nichts darueber, ob DIESER Haushalt das
+                            Produkt schon einmal einsortiert hat -- und nur das
+                            entscheidet, ob der Pruef-Flow gleich nach der
+                            Kategorie fragen muss. */}
+                        <span
+                          className={`font-heading shrink-0 text-[12.5px] font-bold ${
+                            justRecognized
+                              ? // #7ce8a8 ist die helle --primary-inv-Variante
+                                // aus dem Hellmodus -- der erzwungene
+                                // dark-Wrapper zieht sonst den dunklen
+                                // .dark-Wert (#1a7039), der fuer den
+                                // invertierten Toast gedacht ist, nicht fuer
+                                // dieses immer-dunkle Kamerabild.
+                                "text-[#7ce8a8]"
+                              : resolving.includes(entry.id)
+                                ? "text-white/35"
+                                : entry.known
+                                  ? "text-white/60"
+                                  : "text-warning"
+                          }`}
+                        >
+                          {justRecognized
+                            ? "gerade erkannt"
+                            : resolving.includes(entry.id)
+                              ? "…"
+                              : entry.known
+                                ? "bekannt"
+                                : "neu"}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -759,15 +794,20 @@ export default function ScanPage() {
                 gleich mitgeprueft -- verschwiegen ergaebe der Knopf darunter
                 keinen Sinn, der zaehlt naemlich alles. */}
             {fromReceipt > 0 && (
-              <p className="px-1 text-[12.5px] leading-snug font-semibold text-white/55">
+              <p className="px-1 text-[12.5px] leading-snug font-semibold text-white/60">
                 Aus einer Rechnung warten noch {fromReceipt} Artikel auf die
                 Prüfung.
               </p>
             )}
 
+            {/* Schrift #0b1f14 statt --primary-foreground: auf diesem Screen
+                ist der Verlauf die hellste Flaeche ueberhaupt, ein weisser
+                Text darauf saeuft kaum weniger ab als ein dunkler -- der
+                Entwurf misst hier bewusst dunkle Schrift, anders als jeder
+                andere Primaerknopf im Repo. */}
             <Link
               href="/review/0"
-              className="bg-primary text-primary-foreground flex h-13 items-center justify-center rounded-[16px] text-[15px] font-extrabold"
+              className="bg-(image:--gradient-primary) font-heading flex h-14 items-center justify-center rounded-[22px] text-[16.5px] font-bold text-[#0b1f14]"
             >
               {batch.length} Artikel prüfen
             </Link>
@@ -778,7 +818,7 @@ export default function ScanPage() {
                 Einkauf liegen lassen. */}
             <Link
               href="/scan-ean"
-              className="flex h-11 items-center justify-center text-sm font-semibold text-white/60"
+              className="font-heading flex h-11 items-center justify-center text-sm font-bold text-white/62"
             >
               EAN von Hand eingeben
             </Link>
@@ -787,7 +827,7 @@ export default function ScanPage() {
           <>
             <Link
               href="/scan-ean"
-              className="flex h-13 items-center justify-center rounded-[17px] border border-white/25 bg-white/10 text-[15px] font-semibold text-white backdrop-blur-sm"
+              className="flex h-13 items-center justify-center rounded-[22px] border border-white/25 bg-white/10 text-[15px] font-semibold text-white backdrop-blur-sm"
             >
               EAN von Hand eingeben
             </Link>
