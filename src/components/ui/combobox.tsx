@@ -13,7 +13,7 @@ function ComboboxInputGroup({ className, ...props }: ComboboxPrimitive.InputGrou
     <ComboboxPrimitive.InputGroup
       data-slot="combobox-input-group"
       className={cn(
-        "relative flex h-9 w-full items-center rounded-lg border border-input bg-transparent focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30",
+        "relative flex h-9 w-full items-center rounded-lg bg-card shadow-row focus-within:ring-3 focus-within:ring-ring/50",
         className
       )}
       {...props}
@@ -62,7 +62,7 @@ function ComboboxPopup({ className, ...props }: ComboboxPrimitive.Popup.Props) {
     <ComboboxPrimitive.Popup
       data-slot="combobox-popup"
       className={cn(
-        "relative isolate z-50 max-h-80 w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+        "relative isolate z-50 max-h-80 w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-[20px] bg-popover text-popover-foreground shadow-card duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
         className
       )}
       {...props}
