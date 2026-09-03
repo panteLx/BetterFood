@@ -81,10 +81,10 @@ export function ListSwitcher({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9.5 max-w-[55%] shrink-0 items-center gap-1.5 rounded-[13px] border border-border bg-card px-3 text-[13px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex h-10 max-w-[50%] shrink-0 items-center gap-1.5 rounded-full bg-card px-3.5 font-heading text-[13.5px] font-bold shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span className="truncate">{activeList?.name ?? "Vorrat"}</span>
-        <ChevronDown className="size-3.5 shrink-0 text-faint" strokeWidth={2.2} />
+        <ChevronDown className="size-3.5 shrink-0 text-faint" strokeWidth={2.6} />
       </button>
 
       <Sheet open={open} onOpenChange={setOpen} title="Liste wechseln">
