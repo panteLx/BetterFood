@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Bell, X } from "lucide-react";
 import { useNeedsInstall } from "@/components/install-hint";
+import { Button } from "@/components/ui/button";
 import {
   getNotificationPermissionState,
   hasPushSubscription,
@@ -89,34 +90,30 @@ export function ReminderHintBanner() {
 
   return (
     <div className="flex items-start gap-3 rounded-[20px] bg-primary-tint p-3.5">
-      <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[11px] bg-primary text-primary-foreground">
+      <span className="flex size-8.5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Bell className="size-4.5" strokeWidth={2} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] leading-snug font-bold text-accent-foreground">
+        <p className="font-heading text-[13.5px] leading-snug font-bold text-accent-foreground">
           Erinnerungen einschalten
         </p>
         <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-accent-foreground/80">
           BetterFood meldet sich, bevor etwas abläuft – sonst merkst du es erst
           beim Aufmachen.
         </p>
-        <button
-          type="button"
-          onClick={enable}
-          disabled={busy}
-          className="mt-2.5 h-9 rounded-[10px] bg-primary px-3.5 text-[13px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-        >
+        <Button onClick={enable} disabled={busy} className="mt-2.5 h-9 px-3.5 text-[13px]">
           {busy ? "Einen Moment…" : "Erinnerungen einschalten"}
-        </button>
+        </Button>
       </div>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={dismiss}
         aria-label="Hinweis ausblenden"
-        className="flex size-7 shrink-0 items-center justify-center rounded-[9px] text-accent-foreground opacity-65 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="shrink-0 text-accent-foreground opacity-65 hover:bg-primary/15 hover:text-accent-foreground"
       >
         <X className="size-3.5" strokeWidth={2.4} />
-      </button>
+      </Button>
     </div>
   );
 }
