@@ -80,10 +80,16 @@ function InventoryFallback() {
   return (
     <div className="flex flex-1 flex-col gap-3.5 px-5 pt-2">
       <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
-      <div className="h-12 animate-pulse rounded-2xl bg-muted" />
-      <div className="h-10 animate-pulse rounded-[13px] bg-muted" />
+      {/* Suche (50px) und Statusfilter (40px), beide inzwischen volle
+          Pillen -- sonst springt die Form beim Hydrieren mit, auch wenn die
+          Höhe schon stimmte. */}
+      <div className="h-[50px] animate-pulse rounded-full bg-muted" />
+      <div className="h-10 animate-pulse rounded-full bg-muted" />
+      {/* Zeilenhöhe wie die echten Platzhalter in InventoryList: 72px,
+          24px Radius (vorher 74px/20px -- die Liste sprang beim Wechsel von
+          diesem Fallback zur echten Ladeanzeige). */}
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-[74px] animate-pulse rounded-[20px] bg-muted" />
+        <div key={index} className="h-[72px] animate-pulse rounded-[24px] bg-muted" />
       ))}
     </div>
   );

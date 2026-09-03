@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:'Manrope',sans-serif; background:#e8ebe6; }
+  a { color:#37714c; text-decoration:none; }
+  a:hover { color:#2b5a3c; }
+  @keyframes bf-pop { 0%{transform:scale(.7);opacity:0} 60%{transform:scale(1.06)} 100%{transform:scale(1);opacity:1} }
+  @keyframes bf-rise { from{transform:translateY(14px);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes bf-scan { 0%,100%{transform:translateY(0)} 50%{transform:translateY(150px)} }
+  .no-sb::-webkit-scrollbar { display:none; }
+  .no-sb { scrollbar-width:none; }
+</style>
+</helmet>
+
+<section style="padding:56px 64px 96px; display:flex; flex-direction:column; gap:56px">
+
+  <div style="display:flex; flex-direction:column; gap:8px; max-width:760px">
+    <span style="font-size:11px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#8a938c">Referenz · aus dem Repo panteLx/BetterFood nachgebaut</span>
+    <h1 style="margin:0; font-size:34px; font-weight:800; letter-spacing:-0.02em; color:#151c17">BetterFood — Ist-Zustand</h1>
+    <p style="margin:0; font-size:15px; font-weight:500; line-height:1.6; color:#5d675f; text-wrap:pretty">Manrope 400–800, JetBrains Mono für Ziffernfolgen. Salbeigrün <span style="font-family:'JetBrains Mono',monospace">#37714c</span>, Grund <span style="font-family:'JetBrains Mono',monospace">#f2f4f0</span>, Radius-Band um 14px. Alle Werte, Abstände und Texte stammen aus <span style="font-family:'JetBrains Mono',monospace">globals.css</span>, <span style="font-family:'JetBrains Mono',monospace">home-overview.tsx</span>, <span style="font-family:'JetBrains Mono',monospace">item-row.tsx</span>, <span style="font-family:'JetBrains Mono',monospace">inventory-list.tsx</span>, <span style="font-family:'JetBrains Mono',monospace">item-detail.tsx</span>, <span style="font-family:'JetBrains Mono',monospace">archive-*.tsx</span>, <span style="font-family:'JetBrains Mono',monospace">scan/page.tsx</span> und <span style="font-family:'JetBrains Mono',monospace">saved/page.tsx</span>.</p>
+  </div>
+
+  <!-- ============================ HELLMODUS ============================ -->
+  <div style="display:flex; flex-direction:column; gap:20px">
+    <span style="font-size:11px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#8a938c">Hellmodus</span>
+    <div style="display:flex; gap:36px; align-items:flex-start">
+
+      <!-- ---------------- START ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Start · /</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --faint:#9aa79c; --surface2:#f6f8f4; --primary:#37714c; --primary-fg:#ffffff; --primary-tint:#e6f0e8; --warning:#a9701a; --warning-tint:#faefd9; --danger:#b24734; --danger-tint:#f9e4df; --track:#eef2ec; --track2:#e9ece7; --track-ring:#e9f1ea; --shadow-card:0 1px 2px rgb(20 35 25/0.05), 0 10px 26px rgb(20 35 25/0.07); --shadow-nav:0 8px 28px rgb(0 0 0/0.14); --shadow-action:0 4px 12px rgb(30 80 50/0.28); --shadow-raise:none; width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); position:relative; display:flex; flex-direction:column">
+
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; padding-top:28px">
+            <div style="display:flex; flex-direction:column; gap:20px; padding:8px 20px 16px">
+
+              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+                <div style="min-width:0">
+                  <h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Guten Morgen, Lena</h1>
+                  <p style="margin:6px 0 0; height:18px; font-size:13px; font-weight:500; color:var(--muted-fg)">Donnerstag, 03. September</p>
+                </div>
+                <button type="button" style="display:flex; height:38px; max-width:55%; flex-shrink:0; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit; cursor:pointer">
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Haushalt</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; flex-shrink:0"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+              </div>
+
+              <div>
+                <!-- Hero-Karte -->
+                <div style="border-radius:28px; border:1px solid var(--border); background:var(--card); padding:20px; box-shadow:var(--shadow-card)">
+                  <div style="display:flex; align-items:center; gap:18px">
+                    <div style="position:relative; width:116px; height:116px; flex-shrink:0">
+                      <svg viewBox="0 0 116 116" style="width:100%; height:100%; transform:rotate(-90deg)" aria-hidden="true">
+                        <circle cx="58" cy="58" r="50" fill="none" stroke="var(--track-ring)" stroke-width="11"></circle>
+                        <circle cx="58" cy="58" r="50" fill="none" stroke="var(--primary)" stroke-width="11" stroke-linecap="round" stroke-dasharray="245.04 314.16"></circle>
+                      </svg>
+                      <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center">
+                        <span style="font-size:24px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">78 %</span>
+                        <span style="margin-top:4px; font-size:10.5px; line-height:1; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint)">gerettet</span>
+                      </div>
+                    </div>
+                    <div style="display:flex; min-width:0; flex:1; flex-direction:column; gap:10px">
+                      <div style="display:flex; align-items:center; gap:8px">
+                        <span style="display:flex; height:30px; align-items:center; gap:4px; border-radius:10px; background:var(--primary-tint); padding:0 10px; font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--primary)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>
+                          12
+                        </span>
+                        <span style="min-width:0; font-size:12px; line-height:1.25; font-weight:700; color:var(--muted-fg)">Tage ohne Verschwendung</span>
+                      </div>
+                      <div>
+                        <p style="margin:0; font-size:16px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">18,40 € gespart</p>
+                        <p style="margin:2px 0 0; font-size:12px; font-weight:600; color:var(--muted-fg)">6,2 kg CO₂ vermieden</p>
+                      </div>
+                      <div>
+                        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:11px; font-weight:700">
+                          <span style="color:var(--muted-fg)">Monatsziel 70 %</span>
+                          <span style="color:var(--primary)">78 %</span>
+                        </div>
+                        <div style="margin-top:6px; height:6px; overflow:hidden; border-radius:999px; background:var(--track)">
+                          <span style="display:block; height:100%; width:100%; border-radius:999px; background:var(--primary)"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="margin-top:16px; display:flex; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:14px">
+                    <div style="display:flex; align-items:center; gap:6px">
+                      <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"></path><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"></path><path d="M5 21h14"></path></svg></span>
+                      <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"></path></svg></span>
+                      <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></span>
+                    </div>
+                    <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:700; color:var(--faint)">+1 Abzeichen</span>
+                    <button type="button" style="flex-shrink:0; border:0; background:none; padding:0; font:inherit; font-size:12.5px; font-weight:700; color:var(--primary); cursor:pointer">Alle ansehen</button>
+                  </div>
+                </div>
+
+                <!-- Segmentleiste -->
+                <div style="margin-top:14px">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:700">
+                    <div style="display:flex; align-items:center; gap:14px">
+                      <a href="#" style="display:flex; align-items:center; gap:6px; color:var(--muted-fg)"><span style="width:7px; height:7px; border-radius:999px; background:var(--warning)"></span><span style="font-variant-numeric:tabular-nums">3</span> bald</a>
+                      <a href="#" style="display:flex; align-items:center; gap:6px; color:var(--muted-fg)"><span style="width:7px; height:7px; border-radius:999px; background:var(--danger)"></span><span style="font-variant-numeric:tabular-nums">2</span> abgelaufen</a>
+                    </div>
+                    <a href="#" style="color:var(--muted-fg); font-variant-numeric:tabular-nums">24 gesamt</a>
+                  </div>
+                  <div style="margin-top:7px; display:flex; height:4px; overflow:hidden; border-radius:999px; background:var(--track2)">
+                    <span style="background:var(--primary); width:79.17%"></span>
+                    <span style="background:var(--warning); width:12.5%"></span>
+                    <span style="background:var(--danger); width:8.33%"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Abschnitt: Abgelaufen -->
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--danger)">Abgelaufen<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow-raise)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--danger-tint); color:var(--danger)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−2</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Naturjoghurt 500g</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--danger-tint); color:var(--danger)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−1</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tag</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Feldsalat</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Abschnitt: Heute -->
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Heute<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--warning-tint); color:var(--warning)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Vollmilch 3,5 %<span style="margin-left:8px; color:var(--muted-fg)">×3</span></span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--warning-tint); color:var(--warning)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Hähnchenbrust</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Abschnitt: Morgen -->
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Morgen<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">1</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--warning-tint); color:var(--warning)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">1</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tag</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Hummus Classic</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Abschnitt: Diese Woche -->
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Diese Woche<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">4</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--primary-tint); color:var(--primary)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">4</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Gouda am Stück</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:var(--primary-tint); color:var(--primary)">
+                        <span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">5</span>
+                        <span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span>
+                      </span>
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Eier, 6er Schachtel</span>
+                        <span style="margin-top:2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span>
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <a href="#" style="display:flex; align-items:center; justify-content:center; gap:4px; padding:4px 0; font-size:12.5px; font-weight:600; color:var(--muted-fg)">
+                  Noch 2 weitere ansehen
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m9 18 6-6-6-6"></path></svg>
+                </a>
+              </section>
+            </div>
+            <div aria-hidden="true" style="height:88px; flex-shrink:0"></div>
+          </div>
+
+          <!-- Bottom-Nav-Insel -->
+          <nav style="position:absolute; left:0; right:0; bottom:0; height:88px; padding:8px 16px 16px">
+            <div style="display:flex; align-items:center; justify-content:space-between; border-radius:22px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 85%, transparent); padding:10px 12px; box-shadow:var(--shadow-nav); backdrop-filter:blur(20px)">
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg></span>
+              <button type="button" style="display:flex; width:44px; height:44px; flex-shrink:0; align-items:center; justify-content:center; border:0; border-radius:13px; background:var(--primary); color:var(--primary-fg); box-shadow:var(--shadow-action); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></span>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- ---------------- VORRAT ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Vorrat · /inventory</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --faint:#9aa79c; --surface2:#f6f8f4; --primary:#37714c; --primary-fg:#ffffff; --primary-tint:#e6f0e8; --warning:#a9701a; --warning-tint:#faefd9; --danger:#b24734; --danger-tint:#f9e4df; --shadow-nav:0 8px 28px rgb(0 0 0/0.14); --shadow-action:0 4px 12px rgb(30 80 50/0.28); width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); position:relative; display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:36px 0 0">
+
+            <div style="padding:0 20px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+              <div style="min-width:0">
+                <h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Dein Vorrat</h1>
+                <p style="margin:6px 0 0; font-size:13px; font-weight:500; color:var(--muted-fg)">24 von 24 Artikeln</p>
+              </div>
+              <button type="button" style="display:flex; height:38px; flex-shrink:0; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit; cursor:pointer">
+                Haushalt
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+            </div>
+
+            <div style="padding:0 20px">
+              <label style="display:flex; height:48px; align-items:center; gap:10px; border-radius:14px; border:1px solid var(--border); background:var(--card); padding:0 14px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px; flex-shrink:0"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+                <span style="min-width:0; flex:1; font-size:14.5px; font-weight:600; color:var(--faint)">Artikel, Ort oder Kategorie suchen</span>
+              </label>
+            </div>
+
+            <div style="display:flex; gap:4px; padding:0 20px">
+              <button type="button" style="height:40px; flex:1; border-radius:13px; border:1px solid transparent; background:var(--primary); font:inherit; font-size:13px; font-weight:700; color:var(--primary-fg); cursor:pointer">Alle</button>
+              <button type="button" style="height:40px; flex:1; border-radius:13px; border:1px solid var(--border); background:var(--card); font:inherit; font-size:13px; font-weight:700; color:var(--muted-fg); cursor:pointer">Bald fällig</button>
+              <button type="button" style="height:40px; flex:1; border-radius:13px; border:1px solid var(--border); background:var(--card); font:inherit; font-size:13px; font-weight:700; color:var(--muted-fg); cursor:pointer">Abgelaufen</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; padding:0 20px">
+              <span style="font-size:11.5px; font-weight:600; white-space:nowrap; color:var(--faint)">Gruppiert</span>
+              <button type="button" style="display:inline-flex; height:30px; flex-shrink:0; align-items:center; justify-content:center; border-radius:10px; border:1px solid transparent; background:var(--primary); padding:0 10px; font:inherit; font-size:12px; font-weight:600; white-space:nowrap; color:var(--primary-fg); cursor:pointer">Ablauf</button>
+              <button type="button" style="display:inline-flex; height:30px; flex-shrink:0; align-items:center; justify-content:center; border-radius:10px; border:1px solid var(--border); background:var(--card); padding:0 10px; font:inherit; font-size:12px; font-weight:600; white-space:nowrap; color:var(--muted-fg); cursor:pointer">Ort</button>
+              <button type="button" style="display:inline-flex; height:30px; flex-shrink:0; align-items:center; justify-content:center; border-radius:10px; border:1px solid var(--border); background:var(--card); padding:0 10px; font:inherit; font-size:12px; font-weight:600; white-space:nowrap; color:var(--muted-fg); cursor:pointer">Kategorie</button>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px; padding:0 20px 16px">
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--danger)">Abgelaufen<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--danger-tint); color:var(--danger)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−2</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14.5px; line-height:1.25; font-weight:700">Naturjoghurt 500g</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- Zeile mitten in der Wischgeste: aufgebraucht -->
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--primary-tint)">
+                  <div aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; padding:0 20px; font-size:13px; font-weight:700">
+                    <span style="color:var(--primary)">Aufgebraucht</span>
+                    <span style="color:var(--danger); opacity:0">Weggeworfen</span>
+                  </div>
+                  <div style="position:relative; display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); transform:translateX(118px)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--danger-tint); color:var(--danger)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−1</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tag</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Feldsalat</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Heute<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--warning-tint); color:var(--warning)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Vollmilch 3,5 %<span style="margin-left:8px; color:var(--muted-fg)">×3</span></span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--warning-tint); color:var(--warning)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Hähnchenbrust</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Später<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">17</span></h2>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--primary-tint); color:var(--primary)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">42</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Passierte Tomaten<span style="margin-left:8px; color:var(--muted-fg)">×4</span></span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Vorratsschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--primary-tint); color:var(--primary)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">128</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Basmatireis 1 kg</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Vorratsschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div aria-hidden="true" style="height:88px; flex-shrink:0"></div>
+          </div>
+
+          <nav style="position:absolute; left:0; right:0; bottom:0; height:88px; padding:8px 16px 16px">
+            <div style="display:flex; align-items:center; justify-content:space-between; border-radius:22px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 85%, transparent); padding:10px 12px; box-shadow:var(--shadow-nav); backdrop-filter:blur(20px)">
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg></span>
+              <button type="button" style="display:flex; width:44px; height:44px; flex-shrink:0; align-items:center; justify-content:center; border:0; border-radius:13px; background:var(--primary); color:var(--primary-fg); box-shadow:var(--shadow-action); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></span>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- ---------------- PRODUKTDETAIL ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Produktdetail · /item/[id]</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --faint:#9aa79c; --surface2:#f6f8f4; --primary:#37714c; --primary-fg:#ffffff; --primary-tint:#e6f0e8; --warning:#a9701a; --warning-tint:#faefd9; --danger:#b24734; --danger-tint:#f9e4df; width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; padding:36px 20px 0">
+            <div style="display:flex; align-items:center; justify-content:space-between">
+              <button type="button" style="display:flex; width:44px; height:44px; margin-left:-6px; align-items:center; justify-content:center; border:0; border-radius:16px; background:none; color:inherit; cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+              <div style="display:flex; gap:4px">
+                <a href="#" style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:16px; color:inherit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></a>
+                <button type="button" style="display:flex; width:44px; height:44px; margin-right:-6px; align-items:center; justify-content:center; border:0; border-radius:16px; background:none; color:var(--danger); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:14px 0 26px">
+              <span style="display:flex; width:92px; height:92px; align-items:center; justify-content:center; border-radius:30px; background:var(--warning-tint); color:var(--warning)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:46px; height:46px"><path d="M8 2h8M9 2v3.2L6 10v11a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10l-3-4.8V2"></path></svg>
+              </span>
+              <div style="text-align:center">
+                <h1 style="margin:0; font-size:24px; line-height:1.4; font-weight:800; letter-spacing:-0.02em; text-wrap:balance">Vollmilch 3,5 %</h1>
+                <p style="margin:6px 0 0; font-size:13.5px; font-weight:500; color:var(--muted-fg)">Milchprodukte</p>
+              </div>
+              <span style="display:inline-flex; height:34px; align-items:center; border-radius:12px; padding:0 16px; font-size:14px; font-weight:700; background:var(--warning-tint); color:var(--warning)">Heute</span>
+            </div>
+
+            <dl style="margin:0; overflow:hidden; border-radius:24px; border:1px solid var(--border); background:var(--card)">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Haltbar bis</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">03. September 2026</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Ort</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">Kühlschrank</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Menge</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">3×</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Hinzugefügt</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">28. August 2026</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Eingetragen von</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">Lena</dd></div>
+            </dl>
+
+            <p style="margin:12px 0 0; border-radius:20px; border:1px solid var(--border); background:var(--surface2); padding:14px 16px; font-size:14px; line-height:1.65; font-weight:500; text-wrap:balance; color:var(--muted-fg)">Zwei Packungen stehen hinten links, eine vorne.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--border); background:var(--card); padding:14px 20px 16px">
+            <button type="button" style="display:flex; height:56px; align-items:center; justify-content:center; gap:10px; border:0; border-radius:14px; background:var(--primary); font:inherit; font-size:16px; font-weight:700; color:var(--primary-fg); cursor:pointer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M20 6 9 17l-5-5"></path></svg>
+              Aufgebraucht
+            </button>
+            <div style="display:flex; gap:10px">
+              <button type="button" style="height:50px; flex:1; border-radius:14px; border:1px solid var(--border); background:var(--card); font:inherit; font-size:15px; font-weight:600; color:inherit; cursor:pointer">Nachgekauft</button>
+              <button type="button" style="height:50px; flex:1; border-radius:14px; border:1px solid var(--danger); background:var(--danger-tint); font:inherit; font-size:15px; font-weight:700; color:var(--danger); cursor:pointer">Weggeworfen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------- HINZUFÜGEN-BLATT ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Hinzufügen · Auswahl-Blatt</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --faint:#9aa79c; --surface2:#f6f8f4; --primary:#37714c; --primary-fg:#ffffff; --primary-tint:#e6f0e8; --track:#eef2ec; --track-ring:#e9f1ea; --shadow-card:0 1px 2px rgb(20 35 25/0.05), 0 10px 26px rgb(20 35 25/0.07); width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); position:relative">
+          <div style="padding:36px 20px 0; display:flex; flex-direction:column; gap:20px">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+              <div><h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Guten Morgen, Lena</h1><p style="margin:6px 0 0; font-size:13px; font-weight:500; color:var(--muted-fg)">Donnerstag, 03. September</p></div>
+              <button type="button" style="display:flex; height:38px; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit">Haushalt<svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m6 9 6 6 6-6"></path></svg></button>
+            </div>
+            <div style="border-radius:28px; border:1px solid var(--border); background:var(--card); padding:20px; box-shadow:var(--shadow-card)">
+              <div style="display:flex; align-items:center; gap:18px">
+                <div style="position:relative; width:116px; height:116px; flex-shrink:0">
+                  <svg viewBox="0 0 116 116" style="width:100%; height:100%; transform:rotate(-90deg)" aria-hidden="true">
+                    <circle cx="58" cy="58" r="50" fill="none" stroke="var(--track-ring)" stroke-width="11"></circle>
+                    <circle cx="58" cy="58" r="50" fill="none" stroke="var(--primary)" stroke-width="11" stroke-linecap="round" stroke-dasharray="245.04 314.16"></circle>
+                  </svg>
+                  <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center">
+                    <span style="font-size:24px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">78 %</span>
+                    <span style="margin-top:4px; font-size:10.5px; line-height:1; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint)">gerettet</span>
+                  </div>
+                </div>
+                <div style="display:flex; min-width:0; flex:1; flex-direction:column; gap:10px">
+                  <div style="display:flex; align-items:center; gap:8px">
+                    <span style="display:flex; height:30px; align-items:center; gap:4px; border-radius:10px; background:var(--primary-tint); padding:0 10px; font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--primary)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>
+                      12
+                    </span>
+                    <span style="min-width:0; font-size:12px; line-height:1.25; font-weight:700; color:var(--muted-fg)">Tage ohne Verschwendung</span>
+                  </div>
+                  <div>
+                    <p style="margin:0; font-size:16px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">18,40 € gespart</p>
+                    <p style="margin:2px 0 0; font-size:12px; font-weight:600; color:var(--muted-fg)">6,2 kg CO₂ vermieden</p>
+                  </div>
+                  <div>
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:11px; font-weight:700">
+                      <span style="color:var(--muted-fg)">Monatsziel 70 %</span>
+                      <span style="color:var(--primary)">78 %</span>
+                    </div>
+                    <div style="margin-top:6px; height:6px; overflow:hidden; border-radius:999px; background:var(--track)">
+                      <span style="display:block; height:100%; width:100%; border-radius:999px; background:var(--primary)"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:16px; display:flex; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:14px">
+                <div style="display:flex; align-items:center; gap:6px">
+                  <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"></path><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"></path><path d="M5 21h14"></path></svg></span>
+                  <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"></path></svg></span>
+                  <span style="display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></span>
+                </div>
+                <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:700; color:var(--faint)">+1 Abzeichen</span>
+                <button type="button" style="flex-shrink:0; border:0; background:none; padding:0; font:inherit; font-size:12.5px; font-weight:700; color:var(--primary); cursor:pointer">Alle ansehen</button>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute; inset:0; background:rgb(20 32 24 / 0.42)"></div>
+          <!-- Blatt -->
+          <div style="position:absolute; left:0; right:0; bottom:0; max-height:92%; overflow-y:auto; border-radius:24px 24px 0 0; background:var(--card); padding:12px 16px 32px">
+            <span aria-hidden="true" style="display:block; margin:0 auto 14px; height:4px; width:38px; border-radius:999px; background:var(--border)"></span>
+            <h2 style="margin:0; padding:0 6px 12px; font-size:19px; font-weight:800; letter-spacing:-0.02em">Wie möchtest du hinzufügen?</h2>
+            <div style="display:flex; flex-direction:column; gap:8px">
+              <button type="button" style="display:flex; align-items:center; gap:14px; border:1px solid transparent; border-radius:20px; padding:14px; text-align:left; background:var(--primary); color:var(--primary-fg); font:inherit; cursor:pointer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px; flex-shrink:0"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+                <span><span style="display:block; font-size:16px; font-weight:700">Barcode scannen</span><span style="margin-top:2px; display:block; font-size:13px; font-weight:500; opacity:.75">Am schnellsten für Verpacktes</span></span>
+              </button>
+              <button type="button" style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:20px; padding:14px; text-align:left; background:var(--surface2); color:inherit; font:inherit; cursor:pointer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px; flex-shrink:0"><path d="M3 5v14"></path><path d="M8 5v14"></path><path d="M12 5v14"></path><path d="M17 5v14"></path><path d="M21 5v14"></path></svg>
+                <span><span style="display:block; font-size:16px; font-weight:700">EAN eingeben</span><span style="margin-top:2px; display:block; font-size:13px; font-weight:500; color:var(--muted-fg)">Wenn die Kamera nicht mitspielt</span></span>
+              </button>
+              <button type="button" style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:20px; padding:14px; text-align:left; background:var(--surface2); color:inherit; font:inherit; cursor:pointer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px; flex-shrink:0"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg>
+                <span><span style="display:block; font-size:16px; font-weight:700">Von Hand eintragen</span><span style="margin-top:2px; display:block; font-size:13px; font-weight:500; color:var(--muted-fg)">Salat, Reste, Selbstgemachtes</span></span>
+              </button>
+              <button type="button" style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:20px; padding:14px; text-align:left; background:var(--surface2); color:inherit; font:inherit; cursor:pointer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px; flex-shrink:0"><path d="M12 17V7"></path><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"></path><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"></path></svg>
+                <span><span style="display:block; font-size:16px; font-weight:700">Rechnung einlesen</span><span style="margin-top:2px; display:block; font-size:13px; font-weight:500; color:var(--muted-fg)">Wenn Lebensmittel mal wieder geliefert wurden</span></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------- SCANNER ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Scanner · /scan</span>
+        <div style="width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:#0b0f0c; color:#fff; position:relative; display:flex; flex-direction:column">
+          <div style="position:absolute; inset:0; background:radial-gradient(120% 80% at 50% 30%, #2a332c 0%, #12170f 60%, #0b0f0c 100%)"></div>
+
+          <div style="position:relative; display:flex; align-items:center; justify-content:space-between; padding:14px 20px 0">
+            <button type="button" aria-label="Scannen abbrechen" style="display:flex; width:42px; height:42px; align-items:center; justify-content:center; border:0; border-radius:14px; background:rgba(255,255,255,.15); color:#fff; backdrop-filter:blur(4px); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+            <span style="font-size:15px; font-weight:700">Scanner</span>
+            <button type="button" aria-label="Licht einschalten" style="display:flex; width:42px; height:42px; align-items:center; justify-content:center; border:0; border-radius:14px; background:rgba(255,255,255,.15); color:#fff; backdrop-filter:blur(4px); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M12 13v1"></path><path d="M17 2a1 1 0 0 1 1 1v4a3 3 0 0 1-.6 1.8l-.6.8A4 4 0 0 0 16 12v8a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-8a4 4 0 0 0-.8-2.4l-.6-.8A3 3 0 0 1 6 7V3a1 1 0 0 1 1-1z"></path><path d="M6 6h12"></path></svg></button>
+          </div>
+
+          <div style="position:relative; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:0 28px">
+            <div style="position:relative; height:192px; width:270px; overflow:hidden; border-radius:26px; box-shadow:0 0 0 2px rgb(255 255 255/0.9), 0 0 0 2000px rgb(0 0 0/0.42)">
+              <span style="position:absolute; left:16px; right:16px; top:16px; height:3px; border-radius:2px; background:#4dc779; box-shadow:0 0 18px #4dc779; animation:bf-scan 2.1s ease-in-out infinite"></span>
+            </div>
+            <p style="margin:0; text-align:center; font-size:15px; line-height:1.65; font-weight:600; text-wrap:balance; color:rgba(255,255,255,.9)">
+              Einfach weiterscannen.
+              <span style="display:block; font-weight:500; color:rgba(255,255,255,.55)">Geprüft wird danach — ein Artikel nach dem anderen.</span>
+            </p>
+          </div>
+
+          <div style="position:relative; display:flex; flex-direction:column; gap:10px; padding:0 20px 40px">
+            <div style="border-radius:14px; border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.5); padding:14px; backdrop-filter:blur(8px)">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,.55)">Ablage · 3 erfasst</p>
+              <div style="margin-top:10px; display:flex; flex-direction:column; gap:4px">
+                <div style="display:flex; align-items:center; gap:8px; border-radius:6px; padding:4px 6px; font-size:14px; font-weight:600">
+                  <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Vollmilch 3,5 %</span>
+                  <span style="flex-shrink:0; color:rgba(255,255,255,.55)">×2</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; border-radius:6px; padding:4px 6px; font-size:14px; font-weight:600">
+                  <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Naturjoghurt 500g</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; border-radius:6px; padding:4px 6px; font-size:14px; font-weight:600; background:rgba(77,199,121,.12)">
+                  <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:'JetBrains Mono',monospace; font-size:13px">40084016</span>
+                  <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#4dc779">gerade erkannt</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" style="display:flex; height:52px; align-items:center; justify-content:center; border:0; border-radius:16px; background:#37714c; font:inherit; font-size:15px; font-weight:800; color:#fff; cursor:pointer">3 Artikel prüfen</button>
+            <a href="#" style="display:flex; height:44px; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:rgba(255,255,255,.6)">EAN von Hand eingeben</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------- ARCHIV ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Archiv · /archive</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --faint:#9aa79c; --surface2:#f6f8f4; --primary:#37714c; --primary-fg:#ffffff; --primary-tint:#e6f0e8; --danger:#b24734; --danger-tint:#f9e4df; --track:#eef2ec; --shadow-card:0 1px 2px rgb(20 35 25/0.05), 0 10px 26px rgb(20 35 25/0.07); --shadow-nav:0 8px 28px rgb(0 0 0/0.14); --shadow-action:0 4px 12px rgb(30 80 50/0.28); width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); position:relative; display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:18px; padding:36px 0 0">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:0 20px">
+              <div style="min-width:0">
+                <h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Archiv</h1>
+                <p style="margin:6px 0 0; font-size:13px; font-weight:500; color:var(--muted-fg)">Was du aufgebraucht oder entsorgt hast</p>
+              </div>
+              <button type="button" style="display:flex; height:38px; flex-shrink:0; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit">Haushalt<svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m6 9 6 6 6-6"></path></svg></button>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px; padding:0 20px 16px">
+              <div style="display:flex; flex-direction:column; gap:14px; border-radius:24px; border:1px solid var(--border); background:var(--card); padding:18px 16px; box-shadow:var(--shadow-card)">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px">
+                  <p style="margin:0; font-size:44px; line-height:1; font-weight:800; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; color:var(--primary)">78 %</p>
+                  <p style="margin:0; font-size:12.5px; font-weight:600; color:var(--muted-fg)">gerettet diesen Monat</p>
+                </div>
+                <div style="display:flex; height:10px; overflow:hidden; border-radius:8px; background:var(--track)"><span style="background:var(--primary); width:78%"></span></div>
+                <div style="display:flex; justify-content:center; gap:20px; font-size:12.5px; font-weight:600; color:var(--muted-fg)">
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:10px; height:10px; border-radius:3px; background:var(--primary)"></span>32 gerettet</span>
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:10px; height:10px; border-radius:3px; background:var(--danger)"></span>9 weggeworfen</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border); padding-top:10px">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                    <span style="font-size:12.5px; font-weight:600; color:var(--muted-fg)">Letzte 8 Wochen</span>
+                    <span style="text-align:right; font-size:12.5px; font-weight:700; color:var(--primary)">2 Wochen ohne Verschwendung</span>
+                  </div>
+                  <div style="display:flex; height:56px; align-items:flex-end; gap:6px">
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:22px; background:linear-gradient(to top, var(--danger) 20%, var(--primary) 20%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">28</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:30px; background:linear-gradient(to top, var(--danger) 33%, var(--primary) 33%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">29</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:14px; background:linear-gradient(to top, var(--danger) 0%, var(--primary) 0%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">30</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:38px; background:linear-gradient(to top, var(--danger) 25%, var(--primary) 25%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">31</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:24px; background:linear-gradient(to top, var(--danger) 14%, var(--primary) 14%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">32</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:6px; background:var(--surface2)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">33</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:28px; background:linear-gradient(to top, var(--danger) 0%, var(--primary) 0%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">34</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:20px; background:linear-gradient(to top, var(--danger) 0%, var(--primary) 0%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">35</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="position:relative; overflow-x:clip; border-radius:20px; background:var(--surface2)">
+                  <div style="display:flex; align-items:center; border-radius:20px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; min-width:0; flex:1; align-items:center; gap:12px; border:0; border-radius:20px; background:none; padding:12px 14px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; font-size:15px; line-height:1.25; font-weight:700">Vollmilch 3,5 %<span style="margin-left:8px; font-weight:600; color:var(--muted-fg)">×2</span></span>
+                        <span style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px">
+                          <span style="display:inline-flex; height:22px; align-items:center; border-radius:7px; padding:0 10px; font-size:11.5px; font-weight:700; white-space:nowrap; background:var(--primary-tint); color:var(--primary)">Aufgebraucht</span>
+                          <span style="font-size:12px; line-height:1.4; font-weight:600; color:var(--muted-fg)">Milchprodukte · 02.09.2026</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:20px; background:var(--surface2)">
+                  <div style="display:flex; align-items:center; border-radius:20px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; min-width:0; flex:1; align-items:center; gap:12px; border:0; border-radius:20px; background:none; padding:12px 14px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; font-size:15px; line-height:1.25; font-weight:700">Rucola 125g</span>
+                        <span style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px">
+                          <span style="display:inline-flex; height:22px; align-items:center; border-radius:7px; padding:0 10px; font-size:11.5px; font-weight:700; white-space:nowrap; background:var(--danger-tint); color:var(--danger)">Weggeworfen</span>
+                          <span style="font-size:12px; line-height:1.4; font-weight:600; color:var(--muted-fg)">Obst &amp; Gemüse · 31.08.2026</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:20px; background:var(--surface2)">
+                  <div style="display:flex; align-items:center; border-radius:20px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; min-width:0; flex:1; align-items:center; gap:12px; border:0; border-radius:20px; background:none; padding:12px 14px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; font-size:15px; line-height:1.25; font-weight:700">Butter 250g</span>
+                        <span style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px">
+                          <span style="display:inline-flex; height:22px; align-items:center; border-radius:7px; padding:0 10px; font-size:11.5px; font-weight:700; white-space:nowrap; background:var(--primary-tint); color:var(--primary)">Aufgebraucht</span>
+                          <span style="font-size:12px; line-height:1.4; font-weight:600; color:var(--muted-fg)">Milchprodukte · 30.08.2026</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div aria-hidden="true" style="height:88px; flex-shrink:0"></div>
+          </div>
+          <nav style="position:absolute; left:0; right:0; bottom:0; height:88px; padding:8px 16px 16px">
+            <div style="display:flex; align-items:center; justify-content:space-between; border-radius:22px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 85%, transparent); padding:10px 12px; box-shadow:var(--shadow-nav); backdrop-filter:blur(20px)">
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg></span>
+              <button type="button" style="display:flex; width:44px; height:44px; flex-shrink:0; align-items:center; justify-content:center; border:0; border-radius:13px; background:var(--primary); color:var(--primary-fg); box-shadow:var(--shadow-action); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></span>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- ---------------- GESPEICHERT ---------------- -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Gespeichert · /saved</span>
+        <div style="--bg:#f2f4f0; --fg:#151c17; --card:#ffffff; --border:#e3e7e0; --muted-fg:#6b7a6e; --primary:#37714c; --primary-fg:#ffffff; width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #d9ded8; background:var(--bg); color:var(--fg); display:flex; flex-direction:column">
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:40px 28px">
+            <span style="display:flex; width:104px; height:104px; align-items:center; justify-content:center; border-radius:34px; background:var(--primary); color:var(--primary-fg); animation:bf-pop .42s cubic-bezier(.2,.8,.3,1) both">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:52px; height:52px"><path d="M20 6 9 17l-5-5"></path></svg>
+            </span>
+            <div style="text-align:center; animation:bf-rise .35s ease both">
+              <h1 style="margin:0; font-size:24px; line-height:1.4; font-weight:800; letter-spacing:-0.02em">Gespeichert</h1>
+              <p style="margin:8px 0 0; font-size:15px; line-height:1.65; font-weight:500; text-wrap:balance; color:var(--muted-fg)">Vollmilch 3,5 % · haltbar bis 10. September 2026 · jetzt 3× im Vorrat</p>
+            </div>
+            <div style="margin-top:12px; display:flex; width:100%; flex-direction:column; gap:10px; animation:bf-rise .35s ease both">
+              <a href="#" style="display:flex; height:54px; align-items:center; justify-content:center; border-radius:16px; border:1px solid var(--border); background:var(--card); text-align:center; font-size:15px; font-weight:700; text-wrap:balance; color:var(--fg)">Nächsten Artikel von Hand eintragen</a>
+              <a href="#" style="display:flex; height:54px; align-items:center; justify-content:center; border-radius:16px; background:var(--primary); font-size:16px; font-weight:700; color:var(--primary-fg)">Fertig</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================ DUNKELMODUS ============================ -->
+  <div style="display:flex; flex-direction:column; gap:20px">
+    <span style="font-size:11px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#8a938c">Dunkelmodus · Anthrazit-Staffelung #191b1a / #232624 / #2a2d2b</span>
+    <div style="display:flex; gap:36px; align-items:flex-start">
+
+      <!-- START dunkel -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Start · /</span>
+        <div style="--bg:#191b1a; --fg:#f0f1ef; --card:#232624; --border:#363a37; --muted-fg:#a3aba4; --faint:#8e958f; --surface2:#2a2d2b; --primary:#8cc9a4; --primary-fg:#14211a; --primary-tint:#2a3a30; --warning:#e0b06a; --warning-tint:#3a2d14; --danger:#e08a77; --danger-tint:#3a1d15; --track:#313632; --track2:#2a2d2b; --track-ring:#2a2d2b; --shadow-card:inset 0 1px 0 rgb(255 255 255/0.06), 0 12px 32px rgb(0 0 0/0.3); --shadow-nav:inset 0 1px 0 rgb(255 255 255/0.06), 0 10px 34px rgb(0 0 0/0.38); --shadow-action:0 4px 14px rgb(140 201 164/0.22), 0 1px 4px rgb(0 0 0/0.35); --shadow-raise:inset 0 1px 0 rgb(255 255 255/0.06); width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #2c302e; background:var(--bg); color:var(--fg); position:relative; display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; padding-top:28px">
+            <div style="display:flex; flex-direction:column; gap:20px; padding:8px 20px 16px">
+              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+                <div style="min-width:0">
+                  <h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Guten Abend, Lena</h1>
+                  <p style="margin:6px 0 0; font-size:13px; font-weight:500; color:var(--muted-fg)">Donnerstag, 03. September</p>
+                </div>
+                <button type="button" style="display:flex; height:38px; flex-shrink:0; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit; cursor:pointer">Haushalt<svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m6 9 6 6 6-6"></path></svg></button>
+              </div>
+
+              <div>
+                <div style="border-radius:28px; border:1px solid var(--border); background:var(--card); padding:20px; box-shadow:var(--shadow-card)">
+                  <div style="display:flex; align-items:center; gap:18px">
+                    <div style="position:relative; width:116px; height:116px; flex-shrink:0">
+                      <svg viewBox="0 0 116 116" style="width:100%; height:100%; transform:rotate(-90deg)" aria-hidden="true">
+                        <circle cx="58" cy="58" r="50" fill="none" stroke="var(--track-ring)" stroke-width="11"></circle>
+                        <circle cx="58" cy="58" r="50" fill="none" stroke="var(--primary)" stroke-width="11" stroke-linecap="round" stroke-dasharray="245.04 314.16"></circle>
+                      </svg>
+                      <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center">
+                        <span style="font-size:24px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">78 %</span>
+                        <span style="margin-top:4px; font-size:10.5px; line-height:1; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint)">gerettet</span>
+                      </div>
+                    </div>
+                    <div style="display:flex; min-width:0; flex:1; flex-direction:column; gap:10px">
+                      <div style="display:flex; align-items:center; gap:8px">
+                        <span style="display:flex; height:30px; align-items:center; gap:4px; border-radius:10px; background:var(--primary-tint); padding:0 10px; font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>12</span>
+                        <span style="min-width:0; font-size:12px; line-height:1.25; font-weight:700; color:var(--muted-fg)">Tage ohne Verschwendung</span>
+                      </div>
+                      <div>
+                        <p style="margin:0; font-size:16px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums">18,40 € gespart</p>
+                        <p style="margin:2px 0 0; font-size:12px; font-weight:600; color:var(--muted-fg)">6,2 kg CO₂ vermieden</p>
+                      </div>
+                      <div>
+                        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:11px; font-weight:700">
+                          <span style="color:var(--muted-fg)">Monatsziel 70 %</span><span style="color:var(--primary)">78 %</span>
+                        </div>
+                        <div style="margin-top:6px; height:6px; overflow:hidden; border-radius:999px; background:var(--track)"><span style="display:block; height:100%; width:100%; border-radius:999px; background:var(--primary)"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="margin-top:16px; display:flex; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:14px">
+                    <div style="display:flex; align-items:center; gap:6px">
+                      <span style="display:flex; width:34px; height:34px; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"></path><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"></path><path d="M5 21h14"></path></svg></span>
+                      <span style="display:flex; width:34px; height:34px; align-items:center; justify-content:center; border-radius:999px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"></path></svg></span>
+                      <span style="display:flex; width:34px; height:34px; align-items:center; justify-content:center; border-radius:999px; background:var(--track); color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></span>
+                    </div>
+                    <span style="min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:700; color:var(--faint)">2 von 7 Abzeichen</span>
+                    <button type="button" style="flex-shrink:0; border:0; background:none; padding:0; font:inherit; font-size:12.5px; font-weight:700; color:var(--primary); cursor:pointer">Alle ansehen</button>
+                  </div>
+                </div>
+                <div style="margin-top:14px">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:700">
+                    <div style="display:flex; align-items:center; gap:14px">
+                      <a href="#" style="display:flex; align-items:center; gap:6px; color:var(--muted-fg)"><span style="width:7px; height:7px; border-radius:999px; background:var(--warning)"></span><span style="font-variant-numeric:tabular-nums">3</span> bald</a>
+                      <a href="#" style="display:flex; align-items:center; gap:6px; color:var(--muted-fg)"><span style="width:7px; height:7px; border-radius:999px; background:var(--danger)"></span><span style="font-variant-numeric:tabular-nums">2</span> abgelaufen</a>
+                    </div>
+                    <a href="#" style="color:var(--muted-fg); font-variant-numeric:tabular-nums">24 gesamt</a>
+                  </div>
+                  <div style="margin-top:7px; display:flex; height:4px; overflow:hidden; border-radius:999px; background:var(--track2)">
+                    <span style="background:var(--primary); width:79.17%"></span><span style="background:var(--warning); width:12.5%"></span><span style="background:var(--danger); width:8.33%"></span>
+                  </div>
+                </div>
+              </div>
+
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--danger)">Abgelaufen<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow-raise)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--danger-tint); color:var(--danger)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−2</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Naturjoghurt 500g</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow-raise)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--danger-tint); color:var(--danger)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">−1</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tag</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Feldsalat</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                  <h2 style="margin:0; padding-left:4px; font-size:11px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint)">Heute<span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums">2</span></h2>
+                  <a href="#" style="font-size:12.5px; font-weight:700; color:var(--primary)">Alle ansehen</a>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow-raise)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--warning-tint); color:var(--warning)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Vollmilch 3,5 %<span style="margin-left:8px; color:var(--muted-fg)">×3</span></span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div style="position:relative; overflow-x:clip; border-radius:15px; background:var(--surface2)">
+                  <div style="display:flex; height:60px; align-items:center; border-radius:15px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow-raise)">
+                    <button type="button" style="display:flex; height:100%; min-width:0; flex:1; align-items:center; gap:11px; border:0; border-radius:15px; background:none; padding:0 12px 0 8px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="display:flex; width:44px; height:44px; flex-shrink:0; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:var(--warning-tint); color:var(--warning)"><span style="line-height:1; font-weight:800; font-variant-numeric:tabular-nums; font-size:16px">0</span><span style="margin-top:2px; font-size:8.5px; line-height:1; font-weight:700; letter-spacing:0.05em; text-transform:uppercase">Tage</span></span>
+                      <span style="min-width:0; flex:1"><span style="display:block; font-size:14.5px; line-height:1.25; font-weight:700">Hähnchenbrust</span><span style="margin-top:2px; display:block; font-size:11.5px; line-height:1.25; font-weight:600; color:var(--faint)">Kühlschrank</span></span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; flex-shrink:0; color:var(--muted-fg); opacity:.35"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div aria-hidden="true" style="height:88px; flex-shrink:0"></div>
+          </div>
+          <nav style="position:absolute; left:0; right:0; bottom:0; height:88px; padding:8px 16px 16px">
+            <div style="display:flex; align-items:center; justify-content:space-between; border-radius:22px; border:1px solid var(--border); background:color-mix(in srgb, var(--card) 85%, transparent); padding:10px 12px; box-shadow:var(--shadow-nav); backdrop-filter:blur(20px)">
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; background:var(--primary-tint); color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M3 5h.01"></path><path d="M3 12h.01"></path><path d="M3 19h.01"></path><path d="M8 5h13"></path><path d="M8 12h13"></path><path d="M8 19h13"></path></svg></span>
+              <button type="button" style="display:flex; width:44px; height:44px; flex-shrink:0; align-items:center; justify-content:center; border:0; border-radius:13px; background:var(--primary); color:var(--primary-fg); box-shadow:var(--shadow-action); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg></span>
+              <span style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:13px; color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></span>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      <!-- PRODUKTDETAIL dunkel -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Produktdetail · /item/[id]</span>
+        <div style="--bg:#191b1a; --fg:#f0f1ef; --card:#232624; --border:#363a37; --muted-fg:#a3aba4; --faint:#8e958f; --surface2:#2a2d2b; --primary:#8cc9a4; --primary-fg:#14211a; --primary-tint:#2a3a30; --warning:#e0b06a; --warning-tint:#3a2d14; --danger:#e08a77; --danger-tint:#3a1d15; width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #2c302e; background:var(--bg); color:var(--fg); display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; padding:36px 20px 0">
+            <div style="display:flex; align-items:center; justify-content:space-between">
+              <button type="button" style="display:flex; width:44px; height:44px; margin-left:-6px; align-items:center; justify-content:center; border:0; border-radius:16px; background:none; color:inherit; cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+              <div style="display:flex; gap:4px">
+                <a href="#" style="display:flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:16px; color:inherit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></a>
+                <button type="button" style="display:flex; width:44px; height:44px; margin-right:-6px; align-items:center; justify-content:center; border:0; border-radius:16px; background:none; color:var(--danger); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:14px 0 26px">
+              <span style="display:flex; width:92px; height:92px; align-items:center; justify-content:center; border-radius:30px; background:var(--danger-tint); color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:46px; height:46px"><path d="M4 20C4 10.5 10.5 4 20 4c0 9.5-6.5 16-16 16Zm3.5-3.5 8-8"></path></svg></span>
+              <div style="text-align:center">
+                <h1 style="margin:0; font-size:24px; line-height:1.4; font-weight:800; letter-spacing:-0.02em; text-wrap:balance">Feldsalat</h1>
+                <p style="margin:6px 0 0; font-size:13.5px; font-weight:500; color:var(--muted-fg)">Obst &amp; Gemüse</p>
+              </div>
+              <span style="display:inline-flex; height:34px; align-items:center; border-radius:12px; padding:0 16px; font-size:14px; font-weight:700; background:var(--danger-tint); color:var(--danger)">Gestern abgelaufen</span>
+            </div>
+            <dl style="margin:0; overflow:hidden; border-radius:24px; border:1px solid var(--border); background:var(--card)">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Haltbar bis</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">02. September 2026</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Ort</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">Kühlschrank</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Menge</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">1×</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Hinzugefügt</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">29. August 2026</dd></div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px"><dt style="flex:1; font-size:14px; font-weight:500; color:var(--muted-fg)">Eingetragen von</dt><dd style="margin:0; text-align:right; font-size:14px; font-weight:700">Jonas</dd></div>
+            </dl>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--border); background:var(--card); padding:14px 20px 16px">
+            <button type="button" style="display:flex; height:56px; align-items:center; justify-content:center; gap:10px; border:0; border-radius:14px; background:var(--primary); font:inherit; font-size:16px; font-weight:700; color:var(--primary-fg); cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px"><path d="M20 6 9 17l-5-5"></path></svg>Aufgebraucht</button>
+            <div style="display:flex; gap:10px">
+              <button type="button" style="height:50px; flex:1; border-radius:14px; border:1px solid var(--border); background:var(--card); font:inherit; font-size:15px; font-weight:600; color:inherit; cursor:pointer">Nachgekauft</button>
+              <button type="button" style="height:50px; flex:1; border-radius:14px; border:1px solid var(--danger); background:var(--danger-tint); font:inherit; font-size:15px; font-weight:700; color:var(--danger); cursor:pointer">Weggeworfen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ARCHIV dunkel -->
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <span style="font-size:12px; font-weight:700; color:#5d675f">Archiv · /archive</span>
+        <div style="--bg:#191b1a; --fg:#f0f1ef; --card:#232624; --border:#363a37; --muted-fg:#a3aba4; --faint:#8e958f; --surface2:#2a2d2b; --primary:#8cc9a4; --primary-fg:#14211a; --primary-tint:#2a3a30; --danger:#e08a77; --danger-tint:#3a1d15; --track:#313632; --shadow-card:inset 0 1px 0 rgb(255 255 255/0.06), 0 12px 32px rgb(0 0 0/0.3); width:390px; height:844px; overflow:hidden; border-radius:40px; border:1px solid #2c302e; background:var(--bg); color:var(--fg); display:flex; flex-direction:column">
+          <div class="no-sb" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:18px; padding:36px 0 0">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:0 20px">
+              <div style="min-width:0"><h1 style="margin:0; font-size:26px; line-height:1.25; font-weight:800; letter-spacing:-0.02em">Archiv</h1><p style="margin:6px 0 0; font-size:13px; font-weight:500; color:var(--muted-fg)">Was du aufgebraucht oder entsorgt hast</p></div>
+              <button type="button" style="display:flex; height:38px; flex-shrink:0; align-items:center; gap:6px; border-radius:13px; border:1px solid var(--border); background:var(--card); padding:0 12px; font:inherit; font-size:13px; font-weight:700; color:inherit">Haushalt<svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px"><path d="m6 9 6 6 6-6"></path></svg></button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:18px; padding:0 20px 24px">
+              <div style="display:flex; flex-direction:column; gap:14px; border-radius:24px; border:1px solid var(--border); background:var(--card); padding:18px 16px; box-shadow:var(--shadow-card)">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px">
+                  <p style="margin:0; font-size:44px; line-height:1; font-weight:800; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; color:var(--primary)">78 %</p>
+                  <p style="margin:0; font-size:12.5px; font-weight:600; color:var(--muted-fg)">gerettet diesen Monat</p>
+                </div>
+                <div style="display:flex; height:10px; overflow:hidden; border-radius:8px; background:var(--track)"><span style="background:var(--primary); width:78%"></span></div>
+                <div style="display:flex; justify-content:center; gap:20px; font-size:12.5px; font-weight:600; color:var(--muted-fg)">
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:10px; height:10px; border-radius:3px; background:var(--primary)"></span>32 gerettet</span>
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:10px; height:10px; border-radius:3px; background:var(--danger)"></span>9 weggeworfen</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border); padding-top:10px">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+                    <span style="font-size:12.5px; font-weight:600; color:var(--muted-fg)">Letzte 8 Wochen</span>
+                    <span style="text-align:right; font-size:12.5px; font-weight:700; color:var(--primary)">2 Wochen ohne Verschwendung</span>
+                  </div>
+                  <div style="display:flex; height:56px; align-items:flex-end; gap:6px">
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:22px; background:linear-gradient(to top, var(--danger) 20%, var(--primary) 20%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">28</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:30px; background:linear-gradient(to top, var(--danger) 33%, var(--primary) 33%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">29</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:14px; background:var(--primary)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">30</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:38px; background:linear-gradient(to top, var(--danger) 25%, var(--primary) 25%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">31</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:24px; background:linear-gradient(to top, var(--danger) 14%, var(--primary) 14%)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">32</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:6px; background:var(--surface2)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">33</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:28px; background:var(--primary)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">34</span></div>
+                    <div style="display:flex; flex:1; flex-direction:column; align-items:center; gap:6px"><div style="width:100%; border-radius:4px; height:20px; background:var(--primary)"></div><span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; line-height:1; color:var(--faint)">35</span></div>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="position:relative; overflow-x:clip; border-radius:20px; background:var(--surface2)">
+                  <div style="display:flex; align-items:center; border-radius:20px; border:1px solid var(--border); background:var(--card)">
+                    <button type="button" style="display:flex; min-width:0; flex:1; align-items:center; gap:12px; border:0; border-radius:20px; background:none; padding:12px 14px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; font-size:15px; line-height:1.25; font-weight:700">Vollmilch 3,5 %<span style="margin-left:8px; font-weight:600; color:var(--muted-fg)">×2</span></span>
+                        <span style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px">
+                          <span style="display:inline-flex; height:22px; align-items:center; border-radius:7px; padding:0 10px; font-size:11.5px; font-weight:700; background:var(--primary-tint); color:var(--primary)">Aufgebraucht</span>
+                          <span style="font-size:12px; line-height:1.4; font-weight:600; color:var(--muted-fg)">Milchprodukte · 02.09.2026</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <!-- Wischgeste: wiederherstellen -->
+                <div style="position:relative; overflow-x:clip; border-radius:20px; background:var(--primary-tint)">
+                  <div aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; padding:0 20px; font-size:13px; font-weight:700"><span style="color:var(--primary)">Wiederherstellen</span><span style="color:var(--muted-fg); opacity:0">Ausblenden</span></div>
+                  <div style="position:relative; display:flex; align-items:center; border-radius:20px; border:1px solid var(--border); background:var(--card); transform:translateX(130px)">
+                    <button type="button" style="display:flex; min-width:0; flex:1; align-items:center; gap:12px; border:0; border-radius:20px; background:none; padding:12px 14px; text-align:left; font:inherit; color:inherit; cursor:pointer">
+                      <span style="min-width:0; flex:1">
+                        <span style="display:block; font-size:15px; line-height:1.25; font-weight:700">Rucola 125g</span>
+                        <span style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px">
+                          <span style="display:inline-flex; height:22px; align-items:center; border-radius:7px; padding:0 10px; font-size:11.5px; font-weight:700; background:var(--danger-tint); color:var(--danger)">Weggeworfen</span>
+                          <span style="font-size:12px; line-height:1.4; font-weight:600; color:var(--muted-fg)">Obst &amp; Gemüse · 31.08.2026</span>
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <!-- Toast, invertiert -->
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; border-radius:16px; background:var(--fg); color:var(--bg); padding:14px 16px">
+                <span style="font-size:14px; font-weight:600">1× Vollmilch 3,5 % aufgebraucht – noch 2 übrig</span>
+                <button type="button" style="flex-shrink:0; border:0; background:none; padding:0; font:inherit; font-size:14px; font-weight:700; color:#1a7039; cursor:pointer">Rückgängig</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

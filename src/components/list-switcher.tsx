@@ -81,10 +81,10 @@ export function ListSwitcher({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9.5 max-w-[55%] shrink-0 items-center gap-1.5 rounded-[13px] border border-border bg-card px-3 text-[13px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex h-10 max-w-[50%] shrink-0 items-center gap-1.5 rounded-full bg-card px-3.5 font-heading text-[13.5px] font-bold shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span className="truncate">{activeList?.name ?? "Vorrat"}</span>
-        <ChevronDown className="size-3.5 shrink-0 text-faint" strokeWidth={2.2} />
+        <ChevronDown className="size-3.5 shrink-0 text-faint" strokeWidth={2.6} />
       </button>
 
       <Sheet open={open} onOpenChange={setOpen} title="Liste wechseln">
@@ -98,8 +98,10 @@ export function ListSwitcher({
                 disabled={busy}
                 onClick={() => switchTo(list.id)}
                 className={cn(
-                  "flex items-center gap-3 rounded-[18px] border px-3.5 py-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
-                  active ? "border-primary bg-primary-tint" : "border-border bg-surface-2",
+                  // Kein Rand mehr -- die Fläche allein trägt den Zustand,
+                  // wie überall im Redesign (siehe "Ränder fallen weg").
+                  "flex items-center gap-3 rounded-[18px] px-3.5 py-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
+                  active ? "bg-primary-tint" : "bg-surface-2",
                 )}
               >
                 <span className="min-w-0 flex-1">
@@ -120,13 +122,13 @@ export function ListSwitcher({
             value={newListName}
             onChange={(event) => setNewListName(event.target.value)}
             placeholder="Neue Liste"
-            className="h-12.5 min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
+            className="h-12.5 min-w-0 flex-1 rounded-lg bg-surface-2 px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
           />
           <button
             type="button"
             disabled={busy}
             onClick={createList}
-            className="h-12.5 shrink-0 rounded-lg bg-primary px-4.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
+            className="h-12.5 shrink-0 rounded-lg bg-(image:--gradient-primary) px-4.5 font-heading text-sm font-bold text-primary-foreground shadow-cta disabled:opacity-60"
           >
             Erstellen
           </button>
