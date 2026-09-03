@@ -53,7 +53,7 @@ export function EanEntryPage() {
         eintippen.
       </p>
 
-      <label className="flex h-16.5 items-center gap-3 rounded-[20px] border border-border bg-card px-4">
+      <label className="flex h-14 items-center gap-3 rounded-[22px] bg-card px-4 shadow-row">
         <Barcode className="size-5.5 shrink-0 text-faint" strokeWidth={1.7} />
         <input
           inputMode="numeric"
@@ -65,13 +65,13 @@ export function EanEntryPage() {
         />
       </label>
 
-      <button
+      <Button
         type="submit"
         disabled={!barcode.trim()}
-        className="h-14 rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-50"
+        className="h-14 rounded-lg text-base"
       >
         Weiter
-      </button>
+      </Button>
 
       {/* Rueckweg zur Kamera und Ausweg nach unten: die Erfassungsseiten
           laufen ohne Navigationsleiste, und ohne Barcode waere die Seite

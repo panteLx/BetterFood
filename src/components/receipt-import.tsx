@@ -216,10 +216,15 @@ export function ReceiptImport() {
             if (file) void readFile(file);
           }}
           className={cn(
-            "rounded-3xl border border-dashed transition-colors",
-            dragging
-              ? "border-primary bg-primary-tint"
-              : "border-border bg-card",
+            // Eine gestrichelte Umrandung liest sich als unfertig -- die neue
+            // Formensprache ersetzt sie durch eine ruhende, geschattete
+            // Fläche mit einem zarten Ring als Zielhinweis. Erst beim
+            // tatsächlichen Ziehen kippt die Fläche in die satte
+            // Primärtönung: genau der Moment, in dem "hier loslassen"
+            // gemeint ist -- eine dauerhaft getönte Fläche würde das
+            // Rechnungssymbol darin (selbst auf --primary-tint) verschlucken.
+            "rounded-[30px] bg-card shadow-row ring-1 ring-primary/15 transition-all",
+            dragging && "bg-primary-tint shadow-card ring-2 ring-primary",
           )}
         >
           <EmptyState
@@ -242,7 +247,7 @@ export function ReceiptImport() {
         </div>
 
         {error && (
-          <p className="rounded-[18px] border border-danger/30 bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-semibold text-danger">
+          <p className="rounded-[18px] bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-semibold text-danger-ink">
             {error}
           </p>
         )}
@@ -270,7 +275,7 @@ export function ReceiptImport() {
       {draft.ignored.length > 0 && (
         // Nicht stillschweigend schlucken: wer 38 Zeilen auf dem Papier zaehlt
         // und 34 auf dem Schirm, sucht sonst nach dem Fehler.
-        <p className="text-[12.5px] leading-relaxed font-medium text-faint">
+        <p className="text-[12.5px] leading-relaxed font-medium text-muted-foreground">
           {draft.ignored.length} Zeile{draft.ignored.length === 1 ? "" : "n"}{" "}
           übersprungen:{" "}
           {draft.ignored
@@ -286,10 +291,10 @@ export function ReceiptImport() {
           return (
             <div
               key={line.id}
-              className="flex items-start gap-2.5 rounded-[16px] border border-border bg-card py-2.5 pr-3.5 pl-3.5"
+              className="flex items-start gap-2.5 rounded-[18px] bg-card py-2.5 pr-3.5 pl-3.5 shadow-row"
             >
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] leading-snug font-bold">
+                <span className="block font-heading text-[14px] leading-snug font-bold">
                   {line.name}
                 </span>
                 {/* Die Schreibweise vom Papier, sobald sie abweicht: der
@@ -307,7 +312,7 @@ export function ReceiptImport() {
                   </span>
                 )}
                 {doubt && (
-                  <span className="mt-1 flex items-center gap-1 text-[11.5px] leading-tight font-semibold text-warning">
+                  <span className="mt-1 flex items-center gap-1 text-[11.5px] leading-tight font-semibold text-warning-ink">
                     <TriangleAlert className="size-3 shrink-0" strokeWidth={2.4} />
                     Vermutlich kein Lebensmittel
                   </span>
@@ -329,9 +334,9 @@ export function ReceiptImport() {
           (bottom-nav-gate.tsx zeigt sie nur mit Sitzung, und die Seite
           gehört nicht zu ihren fünf Zielen), das `-mx-5` holt die Leiste aus
           dem Seitenrand der Route über die volle Breite. */}
-      <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-border bg-background/90 px-5 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur-[20px]">
+      <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-hairline bg-background/90 px-5 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur-[20px]">
         {doubtful > 0 && (
-          <p className="text-[12px] leading-relaxed font-medium text-faint">
+          <p className="text-[12px] leading-relaxed font-medium text-muted-foreground">
             {doubtful === 1
               ? "Eine Zeile trägt 19 % Mehrwertsteuer und ist als „vermutlich kein Lebensmittel“ markiert"
               : `${doubtful} Zeilen tragen 19 % Mehrwertsteuer und sind als „vermutlich kein Lebensmittel“ markiert`}{" "}
