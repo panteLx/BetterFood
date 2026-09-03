@@ -103,8 +103,17 @@ const PREVIEW_ROWS_PER_BUCKET = 3;
  */
 type PreviewSection = {
   title: (typeof EXPIRY_BUCKETS)[number]["title"];
-  danger: boolean;
-  /** Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. */
+  /**
+   * Anzeigetext -- ungleich `title`, siehe die Warnung an `SectionLabel`.
+   * "Schon drüber" statt "Abgelaufen", "Heute dran" statt "Heute".
+   */
+  label: (typeof EXPIRY_BUCKETS)[number]["label"];
+  /**
+   * Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. Trägt
+   * seit dem Frischling-Umbau auch die Farbrolle der Überschrift
+   * (SectionLabel leitet "abgelaufen" -> danger, "bald" -> warning, `null`
+   * -> primary daraus ab), ein eigenes `danger`-Feld ist damit überflüssig.
+   */
   filter: StatusFilter | null;
   entries: { item: Item; days: number }[];
   shown: number;
@@ -265,7 +274,7 @@ export function HomeOverview({
       total: withDays.length,
       urgentSections: PREVIEW_BUCKETS.map((bucket) => ({
         title: bucket.title,
-        danger: bucket.danger,
+        label: bucket.label,
         filter: bucket.filter,
         entries: byBucket.get(bucket.title)!,
       })).filter((section) => section.entries.length > 0),
@@ -307,7 +316,7 @@ export function HomeOverview({
     if (budget > 0 && later.length > 0) {
       result.push({
         title: LATER_BUCKET.title,
-        danger: LATER_BUCKET.danger,
+        label: LATER_BUCKET.label,
         filter: LATER_BUCKET.filter,
         entries: later,
         shown: Math.min(budget, later.length),
@@ -379,7 +388,7 @@ export function HomeOverview({
 
   const dateLine = today ? dayFormat.format(today) : "";
 
-  function row({ item, days }: { item: Item; days: number }) {
+  function row({ item, days }: { item: Item; days: number }, restless = false) {
     return (
       <ItemRow
         key={item.id}
@@ -392,6 +401,7 @@ export function HomeOverview({
         }
         onConsume={() => resolve(item, "used")}
         onDiscard={() => resolve(item, "thrown_away")}
+        restless={restless}
       />
     );
   }
@@ -441,12 +451,22 @@ export function HomeOverview({
                 sind der einzige Weg von der Startseite in den gefilterten
                 Vorrat. */}
             <SectionLabel
-              title={section.title}
-              tone={section.danger ? "danger" : "muted"}
+              title={section.label}
+              tone={
+                section.filter === "abgelaufen"
+                  ? "danger"
+                  : section.filter === "bald"
+                    ? "warning"
+                    : "primary"
+              }
               count={section.entries.length}
               href={href}
             />
-            {section.entries.slice(0, section.shown).map(row)}
+            {section.entries
+              .slice(0, section.shown)
+              // Nur die oberste Zeile des Abgelaufen-Abschnitts wackelt --
+              // siehe die Doku an ItemRows `restless`-Prop.
+              .map((entry, index) => row(entry, section.title === "Abgelaufen" && index === 0))}
             {/* Ohne diese Zeile sieht ein Ausschnitt aus wie der ganze
                 Rückstand. */}
             {hidden > 0 && (

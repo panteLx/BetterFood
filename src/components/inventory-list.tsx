@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Package, Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
 import { ItemRow } from "@/components/item-row";
-import { SectionLabel } from "@/components/section-label";
+import { SectionLabel, type SectionTone } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
@@ -207,28 +207,41 @@ export function InventoryList({
       return EXPIRY_BUCKETS.find((bucket) => bucket.test(entry.days))!.title;
     };
 
-    const order: { key: string | number; title: string; danger: boolean }[] =
+    // Farbrolle der Überschrift: nur die Ablauf-Gliederung kennt sie
+    // (abgeleitet aus dem Vorrat-Filter des Eimers, siehe SectionLabel);
+    // Ort und Kategorie haben keinen Ablauf-Bezug und bleiben bei "primary".
+    const order: { key: string | number; title: string; label: string; tone: SectionTone }[] =
       grouping === "ort"
         ? [
             ...places.map((place) => ({
               key: place.id as string | number,
               title: place.name,
-              danger: false,
+              label: place.name,
+              tone: "primary" as const,
             })),
             // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
             // statt stillschweigend aus der Ansicht zu fallen.
-            { key: "__unplaced", title: "Ohne Ort", danger: false },
+            { key: "__unplaced", title: "Ohne Ort", label: "Ohne Ort", tone: "primary" as const },
           ]
         : grouping === "kategorie"
           ? categories.map((category) => ({
               key: category.key as string | number,
               title: category.label,
-              danger: false,
+              label: category.label,
+              tone: "primary" as const,
             }))
           : EXPIRY_BUCKETS.map((bucket) => ({
               key: bucket.title as string | number,
               title: bucket.title,
-              danger: bucket.danger,
+              // Anzeigetext -- ungleich `title`, siehe die Warnung an
+              // SectionLabel: "Schon drüber" statt "Abgelaufen" usw.
+              label: bucket.label,
+              tone:
+                bucket.filter === "abgelaufen"
+                  ? ("danger" as const)
+                  : bucket.filter === "bald"
+                    ? ("warning" as const)
+                    : ("primary" as const),
             }));
 
     const grouped = new Map<string | number, { item: Item; days: number }[]>();
@@ -240,9 +253,10 @@ export function InventoryList({
     }
 
     return order
-      .map(({ key, title, danger }) => ({
+      .map(({ key, title, label, tone }) => ({
         title,
-        danger,
+        label,
+        tone,
         entries: grouped.get(key) ?? [],
       }))
       .filter((section) => section.entries.length > 0);
@@ -329,7 +343,7 @@ export function InventoryList({
               (_, index) => (
                 <div
                   key={index}
-                  className="h-15 animate-pulse rounded-[15px] bg-muted"
+                  className="h-[72px] animate-pulse rounded-[24px] bg-surface-2"
                 />
               ),
             )}
@@ -338,12 +352,8 @@ export function InventoryList({
 
         {sections?.map((section) => (
           <section key={section.title} className="flex flex-col gap-2.5">
-            <SectionLabel
-              title={section.title}
-              tone={section.danger ? "danger" : "muted"}
-              count={section.entries.length}
-            />
-            {section.entries.map(({ item, days }) => (
+            <SectionLabel title={section.label} tone={section.tone} count={section.entries.length} />
+            {section.entries.map(({ item, days }, index) => (
               <ItemRow
                 key={item.id}
                 item={item}
@@ -355,6 +365,9 @@ export function InventoryList({
                 meta={grouping === "ort" ? labelOf(item) : placeOf(item)}
                 onConsume={() => resolve(item, "used")}
                 onDiscard={() => resolve(item, "thrown_away")}
+                // Nur die oberste Zeile des Abgelaufen-Abschnitts wackelt --
+                // siehe die Doku an ItemRows `restless`-Prop.
+                restless={section.title === "Abgelaufen" && index === 0}
               />
             ))}
           </section>

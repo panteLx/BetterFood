@@ -124,6 +124,15 @@
   /* Die Leiste, die von unten hochkommt (Aktionsleiste im Detail,
      Speichern-Leiste im Formular): ihr Schatten fällt nach oben. */
   --shadow-sheet: var(--shadow-bottom-bar);
+  /* Der Abhaken-Knopf einer Vorratszeile sitzt im Hellen auf weißer Fläche
+     über einer bereits getönten Zeile (--danger-tint/--warning-tint) -- ein
+     neutraler Kartenschatten geht dort unter, ein zum Zustand getönter
+     Schatten löst die Fläche sichtbar vom Untergrund. Im Dunkelmodus
+     entfällt er ersatzlos (siehe .dark unten): dort trägt der Knopf selbst
+     --primary-tint als Fläche, ein zusätzlicher Schatten würde auf
+     dunklem Grund ohnehin kaum ankommen. */
+  --shadow-check-danger: var(--shadow-check-tint-danger);
+  --shadow-check-warning: var(--shadow-check-tint-warning);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -241,6 +250,11 @@
   --shadow-add-fab: 0 10px 22px rgb(35 168 98 / 0.4);
   --shadow-call-to-action: 0 10px 22px rgb(35 168 98 / 0.32);
   --shadow-bottom-bar: 0 -10px 30px rgb(22 48 42 / 0.08);
+  /* Dieselben Töne wie --danger-ink/--warning-ink, nur als Schatten statt
+     als Fläche -- der Abhaken-Knopf hebt sich damit farblich zur Zeile ab,
+     in der er steht. */
+  --shadow-check-tint-danger: 0 4px 10px rgb(226 96 58 / 0.18);
+  --shadow-check-tint-warning: 0 4px 10px rgb(169 112 26 / 0.16);
 
   --chart-1: #23a862;
   --chart-2: #ffc94d;
@@ -339,6 +353,10 @@
     0 10px 24px rgb(79 212 140 / 0.32), 0 2px 8px rgb(0 0 0 / 0.38);
   --shadow-call-to-action: 0 10px 24px rgb(79 212 140 / 0.26);
   --shadow-bottom-bar: 0 -10px 30px rgb(0 0 0 / 0.34);
+  /* Entfällt im Dunkeln -- der Abhaken-Knopf trägt dort --primary-tint als
+     Fläche statt eines Schattens (siehe item-row.tsx). */
+  --shadow-check-tint-danger: none;
+  --shadow-check-tint-warning: none;
 
   --chart-1: #4fd48c;
   --chart-2: #ffd166;
