@@ -1,5 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
+
+// TEMP-TESTING-ONLY: worktree node_modules is symlinked to the outer repo,
+// which sits outside Turbopack's auto-detected project root -- revert before commit.
+const TEMP_TURBOPACK_ROOT = path.join(__dirname, "../../..");
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -74,6 +79,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
+  turbopack: { root: TEMP_TURBOPACK_ROOT },
   async headers() {
     return [
       {

@@ -30,7 +30,9 @@ type Grouping = "ablauf" | "ort" | "kategorie";
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "alle", label: "Alle" },
   { value: "bald", label: "Bald fällig" },
-  { value: "abgelaufen", label: "Abgelaufen" },
+  // "Drüber" statt "Abgelaufen" -- reine Beschriftung, der Filterwert
+  // "abgelaufen" bleibt unverändert (siehe StatusFilter in expiry.ts).
+  { value: "abgelaufen", label: "Drüber" },
 ];
 
 const GROUPINGS: { value: Grouping; label: string }[] = [
@@ -207,27 +209,35 @@ export function InventoryList({
       return EXPIRY_BUCKETS.find((bucket) => bucket.test(entry.days))!.title;
     };
 
-    const order: { key: string | number; title: string; danger: boolean }[] =
+    // title bleibt der Gruppierungsschlüssel (identisch für Ort/Kategorie),
+    // label ist, was tatsächlich über dem Abschnitt steht. Bei den
+    // Ablauf-Eimern weichen beide voneinander ab ("Abgelaufen" gruppiert,
+    // "Schon drüber" steht da) -- siehe der Kommentar zu EXPIRY_BUCKETS.label
+    // in expiry.ts.
+    const order: { key: string | number; title: string; label: string; danger: boolean }[] =
       grouping === "ort"
         ? [
             ...places.map((place) => ({
               key: place.id as string | number,
               title: place.name,
+              label: place.name,
               danger: false,
             })),
             // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
             // statt stillschweigend aus der Ansicht zu fallen.
-            { key: "__unplaced", title: "Ohne Ort", danger: false },
+            { key: "__unplaced", title: "Ohne Ort", label: "Ohne Ort", danger: false },
           ]
         : grouping === "kategorie"
           ? categories.map((category) => ({
               key: category.key as string | number,
               title: category.label,
+              label: category.label,
               danger: false,
             }))
           : EXPIRY_BUCKETS.map((bucket) => ({
               key: bucket.title as string | number,
               title: bucket.title,
+              label: bucket.label,
               danger: bucket.danger,
             }));
 
@@ -240,8 +250,9 @@ export function InventoryList({
     }
 
     return order
-      .map(({ key, title, danger }) => ({
+      .map(({ key, title, label, danger }) => ({
         title,
+        label,
         danger,
         entries: grouped.get(key) ?? [],
       }))
@@ -275,15 +286,15 @@ export function InventoryList({
       </div>
 
       <div className="px-5">
-        <label className="flex h-12 items-center gap-2.5 rounded-lg border border-border bg-card px-3.5">
-          <Search className="size-4.5 shrink-0 text-faint" />
+        <label className="flex h-[50px] items-center gap-2.5 rounded-full bg-card px-[18px] shadow-row">
+          <Search className="size-4.5 shrink-0 text-muted-foreground" strokeWidth={2.4} />
           <input
             type="search"
             inputMode="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Artikel, Ort oder Kategorie suchen"
-            className="min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold outline-none placeholder:text-faint"
+            className="min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold outline-none placeholder:text-muted-foreground"
           />
         </label>
       </div>
@@ -309,7 +320,7 @@ export function InventoryList({
             key={group.value}
             active={grouping === group.value}
             onClick={() => setGrouping(group.value)}
-            className="h-7.5 px-2.5 text-xs"
+            className="h-7.5 px-3 text-[12.5px]"
           >
             {group.label}
           </Chip>
@@ -329,7 +340,7 @@ export function InventoryList({
               (_, index) => (
                 <div
                   key={index}
-                  className="h-15 animate-pulse rounded-[15px] bg-muted"
+                  className="h-[72px] animate-pulse rounded-[24px] bg-surface-2"
                 />
               ),
             )}
@@ -339,7 +350,7 @@ export function InventoryList({
         {sections?.map((section) => (
           <section key={section.title} className="flex flex-col gap-2.5">
             <SectionLabel
-              title={section.title}
+              title={section.label}
               tone={section.danger ? "danger" : "muted"}
               count={section.entries.length}
             />
@@ -402,8 +413,12 @@ function Header({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
-        <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
+        {/* 28px Quicksand -- breiter als die vorherige Manrope-Überschrift,
+            deshalb min-w-0 auf dem Wrapper und shrink-0 auf dem Listenwechsel
+            daneben: sonst würde "Dein Vorrat" bei 390px umbrechen, statt dem
+            Listenwechsel Platz abzugeben. */}
+        <h1 className="text-[28px] leading-tight">Dein Vorrat</h1>
+        <p className="mt-[5px] text-[13px] font-semibold text-muted-foreground">
           {/* Ohne gerechneten Filter nur die Gesamtzahl: "12 von 12" wäre in
               genau dem Moment gelogen, in dem über die Zähler der Startseite
               mit "abgelaufen" vorgefiltert hereinkommt. */}
