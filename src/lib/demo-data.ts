@@ -206,7 +206,6 @@ export function buildDemoItems(now: Date): Item[] {
     status: "active" as const,
     resolvedAt: null,
     hiddenAt: null,
-    lastNotifiedAt: null,
     listId: DEMO_LIST_ID,
     addedById: null,
   }));

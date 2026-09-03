@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { pushSubscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getWebPush } from "@/lib/push";
+import { getWebPush, sendToSubscriptions } from "@/lib/push";
 import { requireSession } from "@/lib/session";
 
 export async function POST() {
@@ -19,7 +19,7 @@ export async function POST() {
     return NextResponse.json(
       {
         error:
-          "Für dieses Konto ist keine Benachrichtigung registriert. Bitte unten erneut einrichten.",
+          "Für dieses Konto ist keine Benachrichtigung registriert. Bitte oben erneut einrichten.",
       },
       { status: 404 },
     );
@@ -31,26 +31,7 @@ export async function POST() {
     body: "Push-Benachrichtigungen funktionieren.",
   });
 
-  let sent = 0;
-  for (const sub of subscriptions) {
-    try {
-      await webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth },
-        },
-        payload,
-      );
-      sent++;
-    } catch (err: unknown) {
-      const statusCode = (err as { statusCode?: number }).statusCode;
-      if (statusCode === 404 || statusCode === 410) {
-        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
-      } else {
-        console.error("push notification failed", sub.endpoint, err);
-      }
-    }
-  }
+  const sent = await sendToSubscriptions(webpush, subscriptions, payload);
 
   // Alle Zustellversuche gescheitert: das ist ein Fehler und keine Erfolgs-
   // meldung mit sent: 0 -- typischerweise fehlen oder passen die VAPID-Keys
