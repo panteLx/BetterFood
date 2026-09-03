@@ -15,7 +15,7 @@ export function BrandMark({
   return (
     <span
       className={cn(
-        "flex size-14 items-center justify-center rounded-[19px] bg-primary text-primary-foreground",
+        "flex size-14 items-center justify-center rounded-lg bg-primary text-primary-foreground",
         className,
       )}
     >
