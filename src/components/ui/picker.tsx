@@ -37,14 +37,14 @@ export function PickerButton({
       onClick={onClick}
       aria-label={ariaLabel}
       className={cn(
-        "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[14px] border border-border bg-surface-2 px-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
+        "flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[16px] bg-surface-2 px-3.5 text-left shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
         className,
       )}
     >
       <Icon className="size-4 shrink-0 text-faint" strokeWidth={1.9} />
       <span
         className={cn(
-          "min-w-0 flex-1 truncate text-sm font-semibold",
+          "min-w-0 flex-1 truncate font-heading text-sm font-bold",
           muted && "text-muted-foreground",
         )}
       >
@@ -73,10 +73,8 @@ export function PickerOption({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-13 items-center gap-3 rounded-[18px] border px-3.5 text-left text-[15px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        selected
-          ? "border-primary bg-primary-tint text-primary"
-          : "border-border bg-surface-2",
+        "flex h-13 items-center gap-3 rounded-[20px] px-4 text-left font-heading text-[15px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        selected ? "bg-primary-tint text-primary-deep" : "bg-surface-2",
       )}
     >
       <span className="min-w-0 flex-1">

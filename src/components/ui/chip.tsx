@@ -12,6 +12,12 @@ import { cn } from "@/lib/utils";
  * Beide sind bewusst keine Button-Varianten: sie tragen einen
  * Auswahl-Zustand, kein Aktions-Gewicht, und brauchen deshalb aria-pressed
  * statt eines optisch aehnlichen, semantisch falschen Buttons.
+ *
+ * Voll rund und nicht 10-13px wie bisher: der Entwurf trennt Flaechen, die
+ * *ausgewaehlt* werden, von Flaechen, die etwas *enthalten*. Karten, Zeilen
+ * und Blaetter tragen weiterhin gemaessigte Radien um --radius herum; Chips,
+ * Pillen, Zaehler und Rundknoepfe sind vollstaendig rund. Ein Chip mit 12px
+ * Radius sitzt in dieser Palette wie ein kleiner Knopf, kein Etikett.
  */
 export function Chip({
   active,
@@ -23,10 +29,10 @@ export function Chip({
       type="button"
       aria-pressed={active}
       className={cn(
-        "inline-flex h-[34px] shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "inline-flex h-[34px] shrink-0 items-center justify-center rounded-full px-3.5 font-heading text-[13px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         active
-          ? "border-transparent bg-primary text-primary-foreground"
-          : "border-border bg-card text-muted-foreground",
+          ? "bg-primary-tint text-primary-deep"
+          : "bg-card text-muted-foreground shadow-row",
         className,
       )}
       {...props}
@@ -44,10 +50,10 @@ export function Segment({
       type="button"
       aria-pressed={active}
       className={cn(
-        "h-10 flex-1 rounded-[13px] border text-[13px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "h-10 flex-1 rounded-full font-heading text-[13px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         active
-          ? "border-transparent bg-primary text-primary-foreground"
-          : "border-border bg-card text-muted-foreground",
+          ? "bg-(image:--gradient-primary) text-primary-foreground shadow-cta"
+          : "bg-card text-muted-foreground shadow-row",
         className,
       )}
       {...props}
@@ -64,7 +70,7 @@ export function TabBar({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       role="tablist"
-      className={cn("flex gap-1 rounded-[15px] border border-border bg-surface-2 p-1", className)}
+      className={cn("flex gap-1 rounded-full bg-surface-2 p-1", className)}
       {...props}
     />
   );
@@ -81,8 +87,8 @@ export function Tab({
       role="tab"
       aria-selected={active}
       className={cn(
-        "h-9 flex-1 rounded-[11px] text-[13.5px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        active ? "bg-card text-foreground shadow-card" : "text-muted-foreground",
+        "h-9 flex-1 rounded-full font-heading text-[13.5px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        active ? "bg-card text-foreground shadow-row" : "text-muted-foreground",
         className,
       )}
       {...props}
