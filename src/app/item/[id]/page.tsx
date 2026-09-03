@@ -5,16 +5,16 @@ import { db } from "@/db";
 import { categories, items, places, user } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { ItemDetail } from "@/components/item-detail";
-import { requireSession, requireActiveList } from "@/lib/session";
+import { requireSession, isListMember } from "@/lib/session";
 
 /**
  * Der Artikel gibt der Seite ihren Titel: im Verlauf und in der
- * Tab-Uebersicht stehen sonst zehnmal "BetterFood" nebeneinander, und keiner
+ * Tab-Übersicht stehen sonst zehnmal "BetterFood" nebeneinander, und keiner
  * davon sagt, welcher Artikel gemeint war.
  *
- * Die Abfrage laeuft ueber dieselbe Listengrenze wie die Seite -- ein Titel
- * darf nicht verraten, wie ein Artikel in einer fremden Liste heisst. Findet
- * sie nichts, bleibt es beim Standardtitel; das notFound() faellt in der
+ * Die Abfrage läuft über dieselbe Listengrenze wie die Seite -- ein Titel
+ * darf nicht verraten, wie ein Artikel in einer fremden Liste heißt. Findet
+ * sie nichts, bleibt es beim Standardtitel; das notFound() fällt in der
  * Seite selbst.
  */
 export async function generateMetadata({
@@ -23,16 +23,15 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
   const { id } = await params;
 
   const row = await db
-    .select({ name: items.name })
+    .select({ name: items.name, listId: items.listId })
     .from(items)
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
+    .where(and(eq(items.id, Number(id)), isNull(items.hiddenAt)))
     .get();
 
-  return row ? { title: row.name } : {};
+  return row && (await isListMember(session.user.id, row.listId)) ? { title: row.name } : {};
 }
 
 // "await params" muss unterhalb einer <Suspense>-Grenze passieren, sonst
@@ -61,9 +60,18 @@ function ItemFallback() {
   );
 }
 
+/**
+ * Der Artikel bestimmt die Liste, nicht die aktive Liste den Artikel.
+ *
+ * Vorher filterte die Seite auf requireActiveList(): ein Deep-Link aus einer
+ * Benachrichtigung auf einen Artikel eines anderen Haushalts lief damit in
+ * ein 404, obwohl es die Zeile gibt und der Nutzer sie sehen darf. Jetzt
+ * entscheidet die Mitgliedschaft in der Liste des Artikels -- und die aktive
+ * Liste bleibt, wo sie war: eine angetippte Meldung soll niemanden
+ * unbemerkt in einen anderen Haushalt versetzen.
+ */
 async function ResolvedItem({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
   const row = await db
@@ -76,19 +84,20 @@ async function ResolvedItem({ params }: { params: Promise<{ id: string }> }) {
       addedByEmail: user.email,
     })
     .from(items)
-    // Kategorie und Ort gehoeren beide der Liste, aber keins von beidem muss
-    // es noch geben: eine geloeschte Kategorie oder ein aufgeloestes Fach
+    // Kategorie und Ort gehören beide der Liste, aber keins von beidem muss
+    // es noch geben: eine gelöschte Kategorie oder ein aufgelöstes Fach
     // darf den Artikel nicht unauffindbar machen.
     .leftJoin(
       categories,
-      and(eq(categories.key, items.category), eq(categories.listId, listId)),
+      and(eq(categories.key, items.category), eq(categories.listId, items.listId)),
     )
     .leftJoin(places, eq(places.id, items.placeId))
     .leftJoin(user, eq(user.id, items.addedById))
-    .where(and(eq(items.id, Number(id)), eq(items.listId, listId), isNull(items.hiddenAt)))
+    .where(and(eq(items.id, Number(id)), isNull(items.hiddenAt)))
     .get();
 
   if (!row) notFound();
+  if (!(await isListMember(session.user.id, row.item.listId))) notFound();
 
   return (
     <ItemDetail

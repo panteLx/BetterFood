@@ -1,18 +1,18 @@
 /**
  * Die vier Schreibzugriffe auf einen Artikel, die von mehreren Screens aus
- * ausgeloest werden: aufbrauchen/entsorgen, nachkaufen, ausblenden und das
- * Rueckgaengigmachen des ersten.
+ * ausgelöst werden: aufbrauchen/entsorgen, nachkaufen, ausblenden und das
+ * Rückgängigmachen des ersten.
  *
- * Als schlanke Funktionen ueber fetch und nicht als Hook: Vorratsliste und
- * Detailseite fuehren sehr unterschiedliche optimistische Zustaende, teilen
+ * Als schlanke Funktionen über fetch und nicht als Hook: Vorratsliste und
+ * Detailseite führen sehr unterschiedliche optimistische Zustände, teilen
  * sich aber exakt dieselben Endpunkte und dieselbe Undo-Mechanik. Vorher
  * stand diese Mechanik nur in der Vorratsliste -- und jeder weitere Screen
- * haette sie nachgebaut.
+ * hätte sie nachgebaut.
  */
 
 export type ResolveStatus = "used" | "thrown_away";
 
-/** Alles, was zum Zuruecknehmen eines Abhakens noetig ist (siehe /resolve). */
+/** Alles, was zum Zurücknehmen eines Abhakens nötig ist (siehe /resolve). */
 export type UndoInfo = { itemId: number; archiveId: number | null };
 
 async function expectOk(response: Response) {
@@ -36,9 +36,9 @@ export async function resolveItem(itemId: number, status: ResolveStatus): Promis
 }
 
 /**
- * Nimmt ein Abhaken zurueck.
+ * Nimmt ein Abhaken zurück.
  *
- * Bei quantity === 1 wurde die Zeile selbst umgestellt und muss nur zurueck
+ * Bei quantity === 1 wurde die Zeile selbst umgestellt und muss nur zurück
  * auf "active". Bei mehreren Einheiten hat der Server eine eigene Archivzeile
  * angelegt: die muss weg, und die Menge am aktiven Artikel wieder hoch.
  */
@@ -69,18 +69,24 @@ export async function setQuantity(itemId: number, quantity: number) {
 }
 
 /**
- * Traegt eine nachgekaufte Packung ein.
+ * Trägt eine nachgekaufte Packung ein.
  *
- * Bewusst ueber POST /api/items und nicht als "quantity + 1": eine frisch
- * gekaufte Packung hat ein eigenes MHD, und eine hochgezaehlte Menge haette
- * das der alten geerbt -- die neue Milch waere damit ab dem Tag als
+ * Bewusst über POST /api/items und nicht als "quantity + 1": eine frisch
+ * gekaufte Packung hat ein eigenes MHD, und eine hochgezählte Menge hätte
+ * das der alten geerbt -- die neue Milch wäre damit ab dem Tag als
  * abgelaufen gemeldet worden, an dem die alte es war. Die Route entscheidet
- * ueber findMergeTarget selbst, was daraus wird: bei gleichem MHD-Tag geht
- * die Packung in der vorhandenen Zeile auf (dann ist die hochgezaehlte Menge
+ * über findMergeTarget selbst, was daraus wird: bei gleichem MHD-Tag geht
+ * die Packung in der vorhandenen Zeile auf (dann ist die hochgezählte Menge
  * richtig), sonst entsteht eine zweite Zeile mit eigenem Datum.
  *
  * Ort und Notiz wandern mit: sie beschreiben, wo das Produkt in diesem
- * Haushalt liegt, und das aendert sich mit dem Nachkauf nicht.
+ * Haushalt liegt, und das ändert sich mit dem Nachkauf nicht.
+ *
+ * Die Liste wandert ebenfalls mit, und als einzige der Aktionen hier
+ * ausdrücklich: es gibt keine Artikel-ID, aus der die Route sie ableiten
+ * könnte, und hinter einem Deep-Link aus einer Benachrichtigung ist die
+ * aktive Liste nicht zwangsläufig die des Artikels. Die Packung landete
+ * sonst im falschen Haushalt.
  */
 export async function restockItem(
   item: {
@@ -90,6 +96,7 @@ export async function restockItem(
     barcode: string | null;
     placeId: number | null;
     note: string | null;
+    listId: number | null;
   },
   expiryDate: Date,
 ): Promise<{ id: number; merged: boolean }> {
@@ -105,6 +112,7 @@ export async function restockItem(
         note: item.note,
         quantity: 1,
         expiryDate: expiryDate.toISOString(),
+        listId: item.listId ?? undefined,
       }),
     }),
   );

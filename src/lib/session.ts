@@ -4,15 +4,15 @@ import { redirect } from "next/navigation";
 import { and, asc, count, eq, isNull, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { listMembers, lists, user } from "@/db/schema";
+import { items, listMembers, lists, user } from "@/db/schema";
 import type { Executor } from "@/lib/data";
 
-// Liefert null statt nach /login umzuleiten -- fuer Stellen, die eine fehlende
+// Liefert null statt nach /login umzuleiten -- für Stellen, die eine fehlende
 // Anmeldung selbst beantworten (die Navigationsleiste blendet sich aus, eine
 // API-Route antwortet mit 401).
 //
 // Das "use cache: private" ist hier nicht nur Caching: better-auth liest beim
-// Pruefen der Session new Date(), und ein solcher "unstable value" laesst den
+// Prüfen der Session new Date(), und ein solcher "unstable value" lässt den
 // Prerender die ganze Route abbrechen ("Route /confirm: Next.js encountered
 // the unstable value `new Date()` while prerendering"). Innerhalb der
 // Cache-Grenze passiert das nicht mehr.
@@ -38,6 +38,66 @@ export async function oldestActiveMembership(userId: string) {
     .get();
 }
 
+/**
+ * Darf dieser Nutzer diese Liste sehen?
+ *
+ * Genau der Join, der in requireActiveList() steckte -- dort an
+ * user.activeListId gebunden, hier frei. Gebraucht wird er, seit eine
+ * Benachrichtigung auf einen Artikel zeigen kann, der nicht in der gerade
+ * aktiven Liste liegt: die Frage ist dann nicht "welche Liste sieht der
+ * Nutzer gerade an", sondern "darf er diese Zeile sehen". Ein Deep-Link
+ * wechselt die aktive Liste bewusst nicht -- niemand soll durch das Antippen
+ * einer Meldung in einem anderen Haushalt landen.
+ *
+ * Archivierte Listen zählen nicht, dieselbe Grenze wie bisher. Eine
+ * fehlende listId ebenfalls nicht: es gibt Alt-Zeilen aus der Zeit vor der
+ * Spalte, und die gehören niemandem.
+ */
+export async function isListMember(userId: string, listId: number | null): Promise<boolean> {
+  if (listId === null) return false;
+
+  const membership = await db
+    .select({ listId: listMembers.listId })
+    .from(listMembers)
+    .innerJoin(lists, eq(lists.id, listMembers.listId))
+    .where(
+      and(
+        eq(listMembers.userId, userId),
+        eq(listMembers.listId, listId),
+        isNull(lists.archivedAt),
+      ),
+    )
+    .get();
+
+  return membership !== undefined;
+}
+
+/**
+ * Die Liste eines Artikels, sofern der Nutzer sie sehen darf -- sonst null.
+ *
+ * Vorher schnitten die Artikel-Routen über requireActiveList() zu: eine
+ * Änderung an einem Artikel war nur möglich, solange dessen Liste zufällig
+ * die aktive war. Seit eine Benachrichtigung direkt auf einen Artikel zeigen
+ * kann, entscheidet die Mitgliedschaft in seiner eigenen Liste. Der
+ * Rückgabewert ersetzt die aktive Liste überall dort, wo sie vorher stand --
+ * auch Kategorie und Ort werden gegen ihn geprüft.
+ *
+ * Für Aufrufer, die nur die Liste brauchen. Wer die ganze Zeile ohnehin
+ * lädt (Detailseite, Bearbeiten-Formular, /resolve), prüft stattdessen
+ * isListMember() gegen die listId der geladenen Zeile, statt sie ein zweites
+ * Mal abzufragen.
+ */
+export async function itemListId(userId: string, itemId: number): Promise<number | null> {
+  const row = await db
+    .select({ listId: items.listId })
+    .from(items)
+    .where(and(eq(items.id, itemId), isNull(items.hiddenAt)))
+    .get();
+
+  const listId = row?.listId ?? null;
+  return listId !== null && (await isListMember(userId, listId)) ? listId : null;
+}
+
 export async function requireActiveList(userId: string): Promise<number> {
   const row = await db
     .select({ activeListId: user.activeListId })
@@ -45,20 +105,8 @@ export async function requireActiveList(userId: string): Promise<number> {
     .where(eq(user.id, userId))
     .get();
 
-  if (row?.activeListId) {
-    const membership = await db
-      .select({ listId: listMembers.listId })
-      .from(listMembers)
-      .innerJoin(lists, eq(lists.id, listMembers.listId))
-      .where(
-        and(
-          eq(listMembers.userId, userId),
-          eq(listMembers.listId, row.activeListId),
-          isNull(lists.archivedAt),
-        ),
-      )
-      .get();
-    if (membership) return row.activeListId;
+  if (row?.activeListId && (await isListMember(userId, row.activeListId))) {
+    return row.activeListId;
   }
 
   const fallback = await oldestActiveMembership(userId);

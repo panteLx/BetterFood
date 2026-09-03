@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Leaf } from "lucide-react";
+import { Leaf, Minus, Plus } from "lucide-react";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { InstallHintSettings } from "@/components/install-hint";
 import { Chip } from "@/components/ui/chip";
 import { Switch } from "@/components/ui/switch";
+import { daysUntil, formatMedium } from "@/lib/expiry";
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -16,23 +17,75 @@ import {
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   LEAD_DAY_OPTIONS,
-  NOTIFICATION_TIMES,
+  NOTIFICATION_HOUR_MAX,
+  NOTIFICATION_HOUR_MIN,
+  NOTIFICATION_STAGES,
+  STAGES,
+  formatNotificationHour,
+  notificationHour,
   type NotificationSettings,
+  type Stage,
 } from "@/lib/notification-settings";
+import { notificationBody, notificationTitle } from "@/lib/notification-message";
+
+type ReminderSettings = NotificationSettings & { lastSentAt: string | null };
+
+/**
+ * Wie lange nach dem letzten Tipp auf − oder + gespeichert wird.
+ *
+ * Der Schrittschalter lädt zum mehrfachen Drücken ein, und jeder Druck wäre
+ * sonst eine eigene Anfrage -- von denen die zuletzt beantwortete gewinnt,
+ * nicht die zuletzt gestellte. Von 9 auf 20 Uhr sprang die Anzeige damit
+ * zwischendurch zurück.
+ */
+const TIME_SAVE_DELAY = 500;
+
+const clockFormat = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+/**
+ * Beispielartikel für die Vorschau -- einer je Stufe, zwei für den Ablauftag,
+ * damit der Titel auch seine Mehrzahl-Form zeigt. Die Vorschau baut ihren
+ * Text mit denselben Funktionen wie der Versand: schaltet jemand eine Stufe
+ * ab, verschwindet sie hier genauso wie später auf dem Sperrbildschirm.
+ */
+const PREVIEW_ITEMS: { item: { name: string }; stage: Stage }[] = [
+  { item: { name: "Naturjoghurt" }, stage: "expired" },
+  { item: { name: "Vollmilch" }, stage: "zero" },
+  { item: { name: "Hackfleisch" }, stage: "zero" },
+  { item: { name: "Blattspinat" }, stage: "lead" },
+];
+
+/** "Heute, 09:14" -- Zeilen aus PR 1 tragen nur ein Datum und bleiben ohne Uhrzeit. */
+function formatLastSent(raw: string): string | null {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const days = daysUntil(parsed);
+  const day = days === 0 ? "Heute" : days === -1 ? "Gestern" : formatMedium(parsed);
+
+  return raw.length === 10 ? day : `${day}, ${clockFormat.format(parsed)}`;
+}
 
 export default function RemindersPage() {
-  const [settings, setSettings] = useState<NotificationSettings>(
-    DEFAULT_NOTIFICATION_SETTINGS,
-  );
+  const [settings, setSettings] = useState<ReminderSettings>({
+    ...DEFAULT_NOTIFICATION_SETTINGS,
+    lastSentAt: null,
+  });
   const [loading, setLoading] = useState(true);
   const [permission, setPermission] = useState<string>("default");
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Die entprellte Stunde: `timePending` ist die noch nicht bestätigte,
+  // `timeBefore` die, auf die im Fehlerfall zurückgefallen wird.
+  const timeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timePending = useRef<string | null>(null);
+  const timeBefore = useRef<string | null>(null);
+
   useEffect(() => {
     fetch("/api/settings")
       .then((res) => res.json())
-      .then((data: NotificationSettings) => {
+      .then((data: ReminderSettings) => {
         setSettings(data);
         setPermission(getNotificationPermissionState());
       })
@@ -45,6 +98,10 @@ export default function RemindersPage() {
     // Den stillen Abgleich einer bereits erteilten Berechtigung übernimmt
     // <PushSync /> im Root-Layout -- er muss auf jeder Seite laufen, nicht
     // nur hier, weil das Abmelden die Subscription löscht.
+
+    return () => {
+      if (timeTimer.current) clearTimeout(timeTimer.current);
+    };
   }, []);
 
   /**
@@ -53,19 +110,75 @@ export default function RemindersPage() {
    * die Vorwarnzeit vorher praktisch nie verstellt wurde.
    */
   async function patch(change: Partial<NotificationSettings>) {
-    const previous = settings;
+    // Eine noch nicht gespeicherte Stunde reist mit. Ohne das antwortete der
+    // Server mit der alten Uhrzeit aus der Datenbank -- die Antwort ersetzt
+    // den ganzen Zustand, die Anzeige sprang also zurück, während der
+    // entprellte Lauf die neue Stunde gleich darauf doch schrieb. Danach
+    // zeigte die Seite bis zum Neuladen etwas anderes an als gespeichert war.
+    const pendingTime = timePending.current;
+    if (timeTimer.current) {
+      clearTimeout(timeTimer.current);
+      timeTimer.current = null;
+    }
+    const rollbackTime = timeBefore.current;
+    timePending.current = null;
+    timeBefore.current = null;
+
+    const previous = rollbackTime === null ? settings : { ...settings, time: rollbackTime };
     setSettings({ ...settings, ...change });
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(change),
+        body: JSON.stringify(pendingTime === null ? change : { time: pendingTime, ...change }),
       });
       if (!res.ok) throw new Error();
       setSettings(await res.json());
     } catch {
       toast.error("Konnte Einstellung nicht speichern.");
       setSettings(previous);
+    }
+  }
+
+  /**
+   * Wie patch, aber entprellt und ohne die Antwort zu übernehmen: die Anzeige
+   * steht bereits auf dem zuletzt gedrückten Wert, und eine verspätet
+   * eintreffende Antwort darf sie nicht auf einen älteren zurückziehen.
+   */
+  function stepHour(delta: number) {
+    const next = notificationHour(settings.time) + delta;
+    if (next < NOTIFICATION_HOUR_MIN || next > NOTIFICATION_HOUR_MAX) return;
+
+    if (timeBefore.current === null) timeBefore.current = settings.time;
+    const time = formatNotificationHour(next);
+    timePending.current = time;
+    setSettings((current) => ({ ...current, time }));
+
+    if (timeTimer.current) clearTimeout(timeTimer.current);
+    timeTimer.current = setTimeout(() => void saveTime(time), TIME_SAVE_DELAY);
+  }
+
+  async function saveTime(time: string) {
+    const previous = timeBefore.current;
+    timeTimer.current = null;
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ time }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Konnte Einstellung nicht speichern.");
+      // Nicht zurückfallen, wenn inzwischen weitergedrückt oder eine andere
+      // Einstellung gespeichert wurde: dann gilt deren Stunde, nicht diese.
+      if (previous && timePending.current === time) {
+        setSettings((current) => ({ ...current, time: previous }));
+      }
+    }
+    if (timePending.current === time) {
+      timePending.current = null;
+      timeBefore.current = null;
     }
   }
 
@@ -115,12 +228,16 @@ export default function RemindersPage() {
     }
   }
 
+  const hour = notificationHour(settings.time);
+  const preview = PREVIEW_ITEMS.filter((entry) => settings.stages[entry.stage]);
+  const lastSent = settings.lastSentAt ? formatLastSent(settings.lastSentAt) : null;
+
   return (
     <div className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-4">
       <SubPageHeader title="Erinnerungen" />
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">
+        <div className="flex items-center gap-3 px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold">Erinnerungen an</p>
             <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
@@ -134,20 +251,6 @@ export default function RemindersPage() {
             aria-label="Erinnerungen auf diesem Gerät"
           />
         </div>
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">Wochenübersicht</p>
-            <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
-              Sonntags, was diese Woche fällig ist
-            </p>
-          </div>
-          <Switch
-            checked={settings.weeklySummary}
-            disabled={loading}
-            onCheckedChange={(value) => patch({ weeklySummary: value })}
-            aria-label="Wochenübersicht"
-          />
-        </div>
       </div>
 
       {permission === "denied" && (
@@ -159,41 +262,111 @@ export default function RemindersPage() {
 
       <InstallHintSettings />
 
+      {/* Alle Anlässe in einer Karte, die Wochenübersicht eingeschlossen: sie
+          beantwortet dieselbe Frage wie die drei Stufen ("wann meldet sich die
+          App?") und stand vorher nur deshalb beim Geräte-Schalter, weil es die
+          Stufen noch nicht gab. */}
       <section className="flex flex-col gap-2.5">
         <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Wie früh?
+          Wann melden?
         </h2>
-        <div className="flex gap-2">
-          {LEAD_DAY_OPTIONS.map((option) => (
-            <Chip
-              key={option.days}
-              active={settings.leadDays === option.days}
-              disabled={loading}
-              onClick={() => patch({ leadDays: option.days })}
-              className="h-10 flex-1 px-1 text-[12.5px]"
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          {STAGES.map((stage) => (
+            <div
+              key={stage}
+              className="flex items-center gap-3 border-b border-border px-4 py-3.5"
             >
-              {option.label}
-            </Chip>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold">{NOTIFICATION_STAGES[stage].label}</p>
+                <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
+                  {NOTIFICATION_STAGES[stage].description}
+                </p>
+              </div>
+              <Switch
+                checked={settings.stages[stage]}
+                disabled={loading}
+                onCheckedChange={(value) =>
+                  patch({ stages: { ...settings.stages, [stage]: value } })
+                }
+                aria-label={NOTIFICATION_STAGES[stage].label}
+              />
+            </div>
           ))}
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-semibold">Wochenübersicht</p>
+              <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
+                Sonntags, was diese Woche fällig ist
+              </p>
+            </div>
+            <Switch
+              checked={settings.weeklySummary}
+              disabled={loading}
+              onCheckedChange={(value) => patch({ weeklySummary: value })}
+              aria-label="Wochenübersicht"
+            />
+          </div>
         </div>
+        {/* Kein Fehler, sondern eine Folge -- deshalb eine ruhige Zeile und
+            keine Warnfarbe. Ohne sie sucht man den Grund für die Stille zwei
+            Wochen später beim Server. */}
+        {preview.length === 0 && (
+          <p className="px-1 text-[13px] leading-relaxed font-medium text-muted-foreground">
+            {settings.weeklySummary
+              ? "So kommt nur noch sonntags die Wochenübersicht."
+              : "So kommt gar keine Erinnerung mehr."}
+          </p>
+        )}
       </section>
+
+      {/* Ohne Vorwarnung gibt es kein "wie früh" mehr zu beantworten. */}
+      {settings.stages.lead && (
+        <section className="flex flex-col gap-2.5">
+          <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Wie früh?
+          </h2>
+          <div className="flex gap-2">
+            {LEAD_DAY_OPTIONS.map((option) => (
+              <Chip
+                key={option.days}
+                active={settings.leadDays === option.days}
+                disabled={loading}
+                onClick={() => patch({ leadDays: option.days })}
+                className="h-10 flex-1 px-1 text-[12.5px]"
+              >
+                {option.label}
+              </Chip>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-2.5">
         <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
           Uhrzeit
         </h2>
-        <div className="flex gap-2">
-          {NOTIFICATION_TIMES.map((time) => (
-            <Chip
-              key={time}
-              active={settings.time === time}
-              disabled={loading}
-              onClick={() => patch({ time })}
-              className="h-10 flex-1 px-1"
-            >
-              {time}
-            </Chip>
-          ))}
+        <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-2">
+          <button
+            type="button"
+            onClick={() => stepHour(-1)}
+            disabled={loading || hour <= NOTIFICATION_HOUR_MIN}
+            aria-label="Eine Stunde früher"
+            className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+          >
+            <Minus className="size-5" strokeWidth={2.2} />
+          </button>
+          <span aria-live="polite" className="text-[17px] font-bold tabular-nums">
+            {settings.time}
+          </span>
+          <button
+            type="button"
+            onClick={() => stepHour(1)}
+            disabled={loading || hour >= NOTIFICATION_HOUR_MAX}
+            aria-label="Eine Stunde später"
+            className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+          >
+            <Plus className="size-5" strokeWidth={2.2} />
+          </button>
         </div>
       </section>
 
@@ -203,26 +376,28 @@ export default function RemindersPage() {
         </h2>
         {/* Eine Vorschau statt einer Beschreibung: wer eine Erinnerung
             einschaltet, soll vorher sehen, was ihn nachts weckt. Titel und
-            Text stehen hier genau so, wie expiry-check.ts sie baut -- vorher
-            versprach die Vorschau Menge, Ort und "Tippen, um als aufgebraucht
-            zu markieren", und nichts davon gab es je. */}
-        <div className="flex gap-3 rounded-[20px] border border-border bg-surface-2 p-3.5">
-          <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
-            <Leaf className="size-4.5" strokeWidth={1.7} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex justify-between text-[12.5px] leading-none font-bold">
-              <span>BetterFood</span>
-              <span className="font-medium text-muted-foreground">jetzt</span>
+            Text bauen dieselben Funktionen wie der Versand -- vorher stand
+            hier ein fester Satz, der nach dem Abschalten einer Stufe eine
+            Meldung versprach, die nie kommen würde. */}
+        {preview.length > 0 && (
+          <div className="flex gap-3 rounded-[20px] border border-border bg-surface-2 p-3.5">
+            <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+              <Leaf className="size-4.5" strokeWidth={1.7} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex justify-between text-[12.5px] leading-none font-bold">
+                <span>BetterFood</span>
+                <span className="font-medium text-muted-foreground">jetzt</span>
+              </div>
+              <p className="mt-1.5 text-sm leading-snug font-bold">
+                {notificationTitle(preview)}
+              </p>
+              <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
+                {notificationBody(preview.map((entry) => entry.item.name))}
+              </p>
             </div>
-            <p className="mt-1.5 text-sm leading-snug font-bold">
-              1 abgelaufen, 2 laufen heute ab
-            </p>
-            <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
-              Naturjoghurt, Vollmilch, Hackfleisch
-            </p>
           </div>
-        </div>
+        )}
         <button
           type="button"
           onClick={sendTest}
@@ -231,6 +406,12 @@ export default function RemindersPage() {
         >
           Testbenachrichtigung senden
         </button>
+        {/* Beantwortet "geht überhaupt etwas raus?", ohne dass jemand den Knopf
+            darüber drücken muss. Der Wert ist der Merker, den der stündliche
+            Lauf bei jeder zugestellten Erinnerung schreibt. */}
+        <p className="px-1 text-[12.5px] leading-snug font-medium text-muted-foreground">
+          {lastSent ? `Zuletzt gesendet: ${lastSent}` : "Bisher wurde nichts gesendet."}
+        </p>
       </section>
     </div>
   );

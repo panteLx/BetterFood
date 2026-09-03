@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { categories, items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { estimateExpiryDate } from "@/lib/categories";
-import { requireSession, requireActiveList } from "@/lib/session";
+import { requireSession, requireActiveList, isListMember } from "@/lib/session";
 import { rememberProduct, resolvePlace } from "@/lib/data";
 import { findMergeTarget } from "@/lib/item-merge";
 
@@ -28,25 +28,49 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
   const body = await req.json();
-  const { name, category, barcode, expiryDate, quantity, placeId, note } =
-    body as {
-      name: string;
-      category: string;
-      barcode?: string;
-      expiryDate?: string;
-      quantity?: number;
-      placeId?: number | null;
-      note?: string | null;
-    };
+  const {
+    name,
+    category,
+    barcode,
+    expiryDate,
+    quantity,
+    placeId,
+    note,
+    listId: targetListId,
+  } = body as {
+    name: string;
+    category: string;
+    barcode?: string;
+    expiryDate?: string;
+    quantity?: number;
+    placeId?: number | null;
+    note?: string | null;
+    listId?: number;
+  };
 
   if (!name || !category) {
     return NextResponse.json(
       { error: "name und category sind erforderlich" },
       { status: 400 },
     );
+  }
+
+  // Ohne Angabe die aktive Liste -- so rufen Formular, Scan und
+  // Rechnungsimport die Route auf und sollen es weiter tun. Angegeben wird
+  // die Liste nur vom Nachkaufen auf der Detailseite: dort gibt es keine
+  // Artikel-ID, aus der sich die Zielliste ableiten liesse, und hinter einem
+  // Deep-Link wäre die aktive Liste die falsche. Geprüft wird sie
+  // trotzdem -- ein Client darf sich keine fremde Liste aussuchen.
+  let listId: number;
+  if (targetListId === undefined) {
+    listId = await requireActiveList(session.user.id);
+  } else {
+    if (!Number.isInteger(targetListId) || !(await isListMember(session.user.id, targetListId))) {
+      return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
+    }
+    listId = targetListId;
   }
 
   const categoryRow = await db
@@ -60,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Der Ort ist optional, muss aber -- wenn angegeben -- zu dieser Liste
-  // gehoeren: sonst liesse sich ein Artikel in das Fach einer fremden Liste
+  // gehören: sonst liesse sich ein Artikel in das Fach einer fremden Liste
   // legen.
   const place = await resolvePlace(placeId, listId);
   if (place === "invalid") {
@@ -107,8 +131,8 @@ export async function POST(req: NextRequest) {
       .update(items)
       .set({
         quantity: existing.quantity + qty,
-        // Faellt ein gescannter Artikel mit einer von Hand angelegten Zeile
-        // zusammen, erbt sie den Barcode -- ab dem naechsten Scan trifft die
+        // Fällt ein gescannter Artikel mit einer von Hand angelegten Zeile
+        // zusammen, erbt sie den Barcode -- ab dem nächsten Scan trifft die
         // genauere Erkennung wieder zuerst.
         ...(barcode && !existing.barcode ? { barcode } : {}),
       })
@@ -137,9 +161,9 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
-  // Jeder gespeicherte Artikel ist zugleich eine Aussage darueber, wohin
-  // dieses Produkt in diesem Haushalt gehoert -- genau davon lebt die
-  // Vorauswahl beim naechsten Mal. Der Ort gehoert dazu: Joghurt liegt in
+  // Jeder gespeicherte Artikel ist zugleich eine Aussage darüber, wohin
+  // dieses Produkt in diesem Haushalt gehört -- genau davon lebt die
+  // Vorauswahl beim nächsten Mal. Der Ort gehört dazu: Joghurt liegt in
   // jedem Haushalt woanders, aber im selben immer am selben Platz.
   rememberProduct(listId, { barcode, name, category, placeId: place });
 
