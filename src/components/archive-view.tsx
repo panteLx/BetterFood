@@ -30,7 +30,7 @@ export function ArchiveView({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4.5 px-5">
+    <div className="flex flex-1 flex-col gap-5 px-[18px]">
       {/* Auf einem leeren Archiv haette die Statistik nichts zu sagen: eine
           Quote ohne Zahlen und acht leere Balken sind weniger als nichts. */}
       {items.length > 0 && <ArchiveStats items={items} />}
