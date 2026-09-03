@@ -3,10 +3,12 @@ import { db } from "@/db";
 import { pushSubscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getWebPush, sendToSubscriptions } from "@/lib/push";
-import { requireSession } from "@/lib/session";
+import { requireActiveList, requireSession } from "@/lib/session";
+import { buildPreviewNotification } from "@/lib/expiry-check";
 
 export async function POST() {
   const session = await requireSession();
+  const listId = await requireActiveList(session.user.id);
 
   const subscriptions = await db
     .select()
@@ -25,11 +27,19 @@ export async function POST() {
     );
   }
 
+  // Eine echte Meldung zu einem echten Artikel statt "Push-Benachrichtigungen
+  // funktionieren.": ein Druck beantwortet dann beide Fragen -- kommt sie an,
+  // und wie sieht sie aus. Nur wenn der Vorrat leer ist, bleibt es beim
+  // allgemeinen Satz; es gibt dann schlicht nichts vorzuzeigen.
+  const preview = await buildPreviewNotification(session.user.id, listId);
+
   const webpush = getWebPush();
-  const payload = JSON.stringify({
-    title: "Testbenachrichtigung",
-    body: "Push-Benachrichtigungen funktionieren.",
-  });
+  const payload = JSON.stringify(
+    preview ?? {
+      title: "🌱 Testbenachrichtigung",
+      body: "Push-Benachrichtigungen funktionieren.",
+    },
+  );
 
   const sent = await sendToSubscriptions(webpush, subscriptions, payload);
 

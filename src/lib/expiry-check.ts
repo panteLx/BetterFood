@@ -1,19 +1,30 @@
 import { db } from "@/db";
 import { itemNotifications, items, listMembers, lists, pushSubscriptions, settings } from "@/db/schema";
-import { and, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { getWebPush, sendToSubscriptions } from "@/lib/push";
+import { writeSetting } from "@/lib/data";
 import { addDays, daysUntil, startOfDay, toDateInputValue } from "@/lib/expiry";
 import {
-  DEFAULT_NOTIFICATION_SETTINGS,
+  NOTIFICATION_LAST_RUN_KEY,
+  NOTIFICATION_SETTING_KEYS,
   NOTIFICATION_CATCHUP_UNTIL_HOUR,
-  NOTIFICATION_KEYS,
-  NOTIFICATION_TIMES,
   notificationHour,
-  type NotificationTime,
+  parseNotificationSettings,
+  type NotificationSettings,
+  type Stage,
 } from "@/lib/notification-settings";
+import {
+  DIGEST_WINDOW_DAYS,
+  dueStage,
+  lookaheadDays,
+  digestBody,
+  digestTitle,
+  notificationBody,
+  notificationTitle,
+  stageOf,
+  wantsAnything,
+} from "@/lib/notification-message";
 import type { Item } from "@/db/schema";
-
-const DEFAULT_LEAD_DAYS = DEFAULT_NOTIFICATION_SETTINGS.leadDays;
 
 // Merker für die Wochenübersicht: der Job läuft ggf. stündlich, die Übersicht
 // darf sonntags aber nur einmal rausgehen. Steht als Einstellungs-Zeile beim
@@ -27,36 +38,7 @@ function weeklySentKey(listId: number): string {
   return `${WEEKLY_SENT_KEY}:${listId}`;
 }
 
-// Wann dieses Mitglied zuletzt überhaupt eine Erinnerung bekommen hat.
-//
-// Bewusst nur ein Protokoll und kein Filter: gegen doppelte Meldungen schützen
-// die Merker in item_notifications, und zwar je Artikel. Als Tagesfilter
-// benutzt hätte diese eine Zeile pro Nutzer -- ohne Liste im Schlüssel -- die
-// Meldungen aller weiteren Listen verschluckt, sobald die erste etwas
-// verschickt hat. Geschrieben wird er nur, wenn wirklich etwas zugestellt
-// wurde; /settings/erinnerungen zeigt ihn später als "Zuletzt gesendet".
-const LAST_RUN_KEY = "notification_last_run";
-
-// Wie oft sich ein bereits abgelaufener Artikel wieder meldet. Einmal und nie
-// wieder wäre genau der Fall, für den die App existiert -- täglich war der
-// Zustand vorher und der Grund, warum die Meldungen weggewischt wurden.
-const EXPIRED_REPEAT_DAYS = 7;
-
-// Wie weit die Wochenübersicht schaut. "Sonntags, was diese Woche fällig
-// ist" soll wörtlich stimmen: vorher zählte sie alles mit, was überhaupt
-// unter der Schwelle lag -- inklusive der Ware, die seit Monaten abgelaufen
-// im Kühlschrank stand.
-const DIGEST_WINDOW_DAYS = 7;
-
-// Ab hier wird der Meldungstext abgeschnitten. iOS zeigt ohnehin nur zwei
-// Zeilen; eine kommagetrennte Liste aus zwanzig Namen war weder lesbar noch
-// als Vorschau brauchbar.
-const BODY_NAME_LIMIT = 5;
-
-type MemberPreferences = {
-  leadDays: number;
-  time: NotificationTime;
-  weeklySummary: boolean;
+type MemberPreferences = NotificationSettings & {
   weeklyLastSent: string | null;
 };
 
@@ -67,147 +49,29 @@ async function readPreferences(userId: string, listId: number): Promise<MemberPr
     .where(
       and(
         eq(settings.userId, userId),
-        inArray(settings.key, [...Object.values(NOTIFICATION_KEYS), weeklySentKey(listId)]),
+        inArray(settings.key, [...NOTIFICATION_SETTING_KEYS, weeklySentKey(listId)]),
       ),
     );
 
   const byKey = new Map(rows.map((row) => [row.key, row.value]));
-  const leadDays = Number(byKey.get(NOTIFICATION_KEYS.leadDays));
-  const time = byKey.get(NOTIFICATION_KEYS.time);
-  const weekly = byKey.get(NOTIFICATION_KEYS.weeklySummary);
 
   return {
-    leadDays: Number.isFinite(leadDays) ? leadDays : DEFAULT_LEAD_DAYS,
-    time: NOTIFICATION_TIMES.includes(time as NotificationTime)
-      ? (time as NotificationTime)
-      : DEFAULT_NOTIFICATION_SETTINGS.time,
-    weeklySummary:
-      weekly === undefined ? DEFAULT_NOTIFICATION_SETTINGS.weeklySummary : weekly === "1",
+    ...parseNotificationSettings(byKey),
     weeklyLastSent: byKey.get(weeklySentKey(listId)) ?? null,
   };
 }
 
 function thresholdFor(leadDays: number): Date {
-  const threshold = new Date();
-  threshold.setDate(threshold.getDate() + leadDays);
+  const threshold = addDays(leadDays);
   threshold.setHours(23, 59, 59, 999);
   return threshold;
 }
 
-/**
- * Die drei Anlässe, zu denen ein Artikel etwas zu sagen hat.
- *
- * Vorher gab es nur einen: "liegt unter der Vorwarnschwelle" -- und weil die
- * Schwelle mehrere Tage umfasst, meldete sich dieselbe Ware an jedem dieser
- * Tage mit exakt demselben Satz, nach dem Ablauf dann täglich weiter. Die
- * Stufe macht aus dem Zustand ein Ereignis: jede sagt etwas anderes, und jede
- * sagt es einmal.
- */
-type Stage = "lead" | "zero" | "expired";
-
-/**
- * In welcher Stufe der Artikel heute steckt und wann diese Stufe begonnen hat.
- *
- * Der Beginn lässt sich allein aus dem MHD rechnen, es braucht also keine
- * Stufenspalte in der Datenbank. Das macht die Regel auch selbstheilend: war
- * der Server am Ablauftag aus, ist die Stufe am nächsten Tag immer noch
- * "abgelaufen" und der zugehörige Merker immer noch älter als ihr Beginn --
- * die Meldung kommt verspätet statt gar nicht.
- */
-function stageOf(
-  item: Item,
-  leadDays: number,
-  today: Date,
-): { stage: Stage; start: Date } | null {
-  const days = daysUntil(item.expiryDate, today);
-  const expiry = startOfDay(item.expiryDate);
-
-  if (days < 0) return { stage: "expired", start: addDays(1, expiry) };
-  if (days === 0) return { stage: "zero", start: expiry };
-  if (days <= leadDays) return { stage: "lead", start: addDays(-leadDays, expiry) };
-  return null;
-}
-
-/**
- * Hat dieses Mitglied die aktuelle Stufe schon gehört?
- *
- * Ein einziger Vergleich: liegt der letzte Merker vor dem Beginn der Stufe,
- * ist die Meldung fällig. Abgelaufene Ware kommt zusätzlich wöchentlich
- * wieder -- ein vergessener Artikel darf nicht für immer verstummen.
- */
-function isDue(
-  stage: Stage,
-  start: Date,
-  notifiedAt: Date | undefined,
-  today: Date,
-): boolean {
-  if (!notifiedAt) return true;
-  if (notifiedAt < start) return true;
-  return stage === "expired" && daysUntil(notifiedAt, today) <= -EXPIRED_REPEAT_DAYS;
-}
-
 type DueItem = { item: Item; stage: Stage };
-
-// Vom Dringlichsten zum Unwichtigsten -- die Reihenfolge, in der die Stufen
-// im Titel erscheinen.
-const STAGE_ORDER: Stage[] = ["expired", "zero", "lead"];
-
-function singleTitle(name: string, stage: Stage): string {
-  if (stage === "expired") return `${name} ist abgelaufen`;
-  if (stage === "zero") return `${name} läuft heute ab`;
-  return `${name} läuft bald ab`;
-}
-
-function soleStageTitle(stage: Stage, count: number): string {
-  if (stage === "expired") return `${count} Lebensmittel sind abgelaufen`;
-  if (stage === "zero") return `${count} Lebensmittel laufen heute ab`;
-  return `${count} Lebensmittel laufen bald ab`;
-}
-
-function stagePhrase(stage: Stage, count: number): string {
-  if (stage === "expired") return `${count} abgelaufen`;
-  if (stage === "zero") return count === 1 ? "1 läuft heute ab" : `${count} laufen heute ab`;
-  return count === 1 ? "1 läuft bald ab" : `${count} laufen bald ab`;
-}
-
-/**
- * Der Titel benennt jede vertretene Stufe mit ihrer Zahl.
- *
- * Vorher entschied allein der dringlichste Artikel über den Satz und die
- * Gesamtzahl füllte ihn auf: ein abgelaufener Joghurt neben zwei heute
- * fälligen ergab "3 Lebensmittel sind abgelaufen" -- eine Aussage, die für
- * zwei von drei Artikeln schlicht falsch war.
- */
-function notificationTitle(due: DueItem[]): string {
-  if (due.length === 1) return singleTitle(due[0].item.name, due[0].stage);
-
-  const present = STAGE_ORDER.map((stage) => ({
-    stage,
-    count: due.filter((entry) => entry.stage === stage).length,
-  })).filter((entry) => entry.count > 0);
-
-  if (present.length === 1) return soleStageTitle(present[0].stage, present[0].count);
-  return present.map((entry) => stagePhrase(entry.stage, entry.count)).join(", ");
-}
-
-/** Die Namen, gekappt -- der Rest wird gezählt statt aufgezählt. */
-function notificationBody(names: string[]): string {
-  if (names.length <= BODY_NAME_LIMIT) return names.join(", ");
-  const rest = names.length - BODY_NAME_LIMIT;
-  const suffix = rest === 1 ? "+ 1 weiteres" : `+ ${rest} weitere`;
-  return `${names.slice(0, BODY_NAME_LIMIT).join(", ")} ${suffix}`;
-}
 
 /** Nach MHD aufsteigend: was zuerst weg muss, steht im gekappten Text vorn. */
 function byExpiry(a: { expiryDate: Date }, b: { expiryDate: Date }): number {
   return a.expiryDate.getTime() - b.expiryDate.getTime();
-}
-
-async function writeSetting(userId: string, key: string, value: string): Promise<void> {
-  await db
-    .insert(settings)
-    .values({ userId, key, value })
-    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value } });
 }
 
 export type ExpiryCheckResult = {
@@ -266,16 +130,18 @@ export async function runExpiryCheck({
       preferencesByUser.set(member.userId, await readPreferences(member.userId, list.id));
     }
 
+    // Hat in dieser Liste überhaupt jemand etwas bestellt? Alle Stufen
+    // abzuschalten ist erlaubt, und für eine Liste, in der das alle getan
+    // haben, sparen die beiden Abfragen darunter ihren ganzen Tabellenlauf.
+    const preferences = [...preferencesByUser.values()];
+    if (!preferences.some((p) => wantsAnything(p, isSunday))) continue;
+
     // Einmal die weiteste Vorwarnzeit abfragen und danach pro Mitglied
-    // filtern -- statt pro Mitglied erneut die Datenbank zu befragen. Die
-    // Wochenübersicht schaut sieben Tage voraus und weitet das Fenster
-    // entsprechend. Nach unten ist das Fenster offen: abgelaufene Ware meldet
-    // sich weiter, nur eben wöchentlich statt täglich.
-    const maxLead = Math.max(
-      ...[...preferencesByUser.values()].map((p) =>
-        isSunday && p.weeklySummary ? Math.max(p.leadDays, DIGEST_WINDOW_DAYS) : p.leadDays,
-      ),
-    );
+    // filtern -- statt pro Mitglied erneut die Datenbank zu befragen. Wie weit
+    // ein einzelnes Mitglied vorausschaut, entscheidet lookaheadDays() neben
+    // der Stufenregel selbst: fragte das Fenster hier weniger ab, als der
+    // Filter unten durchließe, verstummten Meldungen ohne Fehlermeldung.
+    const maxLead = Math.max(...preferences.map((p) => lookaheadDays(p, isSunday)));
     const candidates = await db
       .select()
       .from(items)
@@ -307,6 +173,7 @@ export async function runExpiryCheck({
 
     for (const member of members) {
       const prefs = preferencesByUser.get(member.userId)!;
+      if (!wantsAnything(prefs, isSunday)) continue;
 
       // Das Nachholfenster: von der gewählten Stunde bis 22:00. Vorher musste
       // der Lauf exakt zur gewählten Stunde stattfinden -- ein Neustart um
@@ -327,11 +194,13 @@ export async function runExpiryCheck({
 
       const dueItems: DueItem[] = candidates
         .map((item) => {
-          const current = stageOf(item, prefs.leadDays, today);
-          if (!current) return null;
-          const notifiedAt = notifiedAtByKey.get(`${item.id}:${member.userId}`);
-          if (!isDue(current.stage, current.start, notifiedAt, today)) return null;
-          return { item, stage: current.stage };
+          const stage = dueStage(
+            item,
+            prefs,
+            notifiedAtByKey.get(`${item.id}:${member.userId}`),
+            today,
+          );
+          return stage === null ? null : { item, stage };
         })
         .filter((entry): entry is DueItem => entry !== null)
         .sort((a, b) => byExpiry(a.item, b.item));
@@ -358,13 +227,21 @@ export async function runExpiryCheck({
         );
       if (subscriptions.length === 0) continue;
 
+      let delivered = false;
+
       if (dueItems.length > 0) {
         const payload = JSON.stringify({
           title: notificationTitle(dueItems),
-          body: notificationBody(dueItems.map((entry) => entry.item.name)),
+          body: notificationBody(dueItems, today),
           // Eine Meldung pro Liste ersetzt die vorherige, statt sich zu stapeln.
           tag: `list-${list.id}`,
-          url: "/",
+          // Genau ein Artikel: direkt zu ihm. Bei mehreren führt der Weg auf
+          // die Startseite -- die gruppiert den Vorrat bereits in genau die
+          // Abschnitte, von denen die Meldung spricht (Abgelaufen / Heute /
+          // Morgen / Diese Woche). Es bleibt beim url-Feld: der Service Worker
+          // liest ausschließlich das, ein zusätzliches itemId würde er
+          // nirgends anfassen.
+          url: dueItems.length === 1 ? `/item/${dueItems[0].item.id}` : "/",
         });
 
         const sent = await sendToSubscriptions(webpush, subscriptions, payload);
@@ -387,15 +264,14 @@ export async function runExpiryCheck({
               set: { notifiedAt: now },
             });
           totalNotified += dueItems.length;
-
-          await writeSetting(member.userId, LAST_RUN_KEY, todayKey);
+          delivered = true;
         }
       }
 
       if (digestItems.length > 0) {
         const payload = JSON.stringify({
-          title: `Diese Woche: ${digestItems.length} Lebensmittel laufen ab`,
-          body: notificationBody(digestItems.map((item) => item.name)),
+          title: digestTitle(digestItems.length),
+          body: digestBody(digestItems.map((item) => item.name)),
           // Eigener tag: die Übersicht darf die Tagesmeldung nicht ersetzen.
           tag: `list-${list.id}-woche`,
           url: "/",
@@ -407,10 +283,61 @@ export async function runExpiryCheck({
         if (sent > 0) {
           await writeSetting(member.userId, weeklySentKey(list.id), todayKey);
           prefs.weeklyLastSent = todayKey;
+          delivered = true;
         }
+      }
+
+      // "Zuletzt gesendet" einmal für beide Meldungen: die Wochenübersicht
+      // zählt mit, weil an einem Sonntag, an dem sonst nichts fällig war, der
+      // Wert sonst älter wäre als die Meldung auf dem Sperrbildschirm. An
+      // einem Sonntag mit beiden Meldungen stand hier vorher zweimal derselbe
+      // Zeitstempel.
+      if (delivered) {
+        await writeSetting(member.userId, NOTIFICATION_LAST_RUN_KEY, now.toISOString());
       }
     }
   }
 
   return { sent: totalSent, itemsChecked: totalChecked, itemsNotified: totalNotified };
+}
+
+/**
+ * Die Meldung, die dieser Nutzer als nächstes zu diesem Artikel bekäme --
+ * für die Testbenachrichtigung.
+ *
+ * Genommen wird der Artikel mit dem nächstliegenden MHD, nicht ein gerade
+ * fälliger: im Normalfall ist nichts fällig, und ein Test, der dann doch nur
+ * "Push-Benachrichtigungen funktionieren." zeigt, beantwortet die zweite
+ * Frage nicht (kommt sie an -- und wie sieht sie aus). Liegt das MHD noch
+ * jenseits der Vorwarnzeit, wird die Meldung als Vorwarnung formuliert: das
+ * ist die Stufe, in der dieser Artikel als nächstes etwas sagen wird.
+ *
+ * Schreibt bewusst KEINE Merker in item_notifications -- ein Test darf die
+ * echte Meldung nicht verschlucken. Und einen eigenen tag, damit er eine
+ * bereits liegende Erinnerung nicht ersetzt.
+ */
+export async function buildPreviewNotification(
+  userId: string,
+  listId: number,
+): Promise<{ title: string; body: string; tag: string; url: string } | null> {
+  const item = await db
+    .select()
+    .from(items)
+    .where(and(eq(items.status, "active"), eq(items.listId, listId), isNull(items.hiddenAt)))
+    .orderBy(asc(items.expiryDate))
+    .get();
+
+  if (!item) return null;
+
+  const prefs = await readPreferences(userId, listId);
+  const today = startOfDay(new Date());
+  const stage: Stage = stageOf(item, prefs.leadDays, today)?.stage ?? "lead";
+  const due: DueItem[] = [{ item, stage }];
+
+  return {
+    title: notificationTitle(due),
+    body: notificationBody(due, today),
+    tag: "test",
+    url: `/item/${item.id}`,
+  };
 }

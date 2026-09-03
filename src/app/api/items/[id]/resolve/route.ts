@@ -2,43 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { requireSession, requireActiveList } from "@/lib/session";
+import { requireSession, visibleListId } from "@/lib/session";
 
 /**
- * Loest genau EINE Einheit eines Artikels auf.
+ * Löst genau EINE Einheit eines Artikels auf.
  *
  * Bei quantity === 1 wird die Zeile selbst auf "used"/"thrown_away" gesetzt --
  * wie bisher. Bei quantity > 1 wird sie stattdessen um eins verringert und
  * eine eigene Archiv-Zeile mit Menge 1 angelegt.
  *
- * Der Split ist wichtig fuer beides gleichzeitig: der Nutzer kann einen von
- * drei Joghurts abhaken, ohne die anderen zwei zu verlieren (vorher nur ueber
- * das Bearbeiten-Formular moeglich), UND die Rettungsquote zaehlt jede
+ * Der Split ist wichtig für beides gleichzeitig: der Nutzer kann einen von
+ * drei Joghurts abhaken, ohne die anderen zwei zu verlieren (vorher nur über
+ * das Bearbeiten-Formular möglich), UND die Rettungsquote zählt jede
  * einzelne Einheit korrekt, statt drei auf einmal oder gar nicht.
  *
- * Die Antwort enthaelt alles, was der Client zum Rueckgaengigmachen braucht:
- * bei "whole" reicht ein PATCH zurueck auf "active", bei "split" muss die
- * Archiv-Zeile geloescht und die Menge wieder erhoeht werden.
+ * Die Antwort enthält alles, was der Client zum Rückgängigmachen braucht:
+ * bei "whole" reicht ein PATCH zurück auf "active", bei "split" muss die
+ * Archiv-Zeile gelöscht und die Menge wieder erhöht werden.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
   const itemId = Number(id);
   const { status } = (await req.json()) as { status?: "used" | "thrown_away" };
 
   if (status !== "used" && status !== "thrown_away") {
-    return NextResponse.json({ error: "ungueltiger status" }, { status: 400 });
+    return NextResponse.json({ error: "ungültiger status" }, { status: 400 });
   }
 
   const item = await db
     .select()
     .from(items)
-    .where(and(eq(items.id, itemId), eq(items.listId, listId), eq(items.status, "active")))
+    .where(and(eq(items.id, itemId), eq(items.status, "active")))
     .get();
 
-  if (!item) {
+  // Die Liste kommt aus dem Artikel, nicht aus der Sitzung: sonst hätte ein
+  // Abhaken hinter einem Deep-Link entweder ins Leere gegriffen oder -- beim
+  // Anlegen der Archivzeile weiter unten -- in der falschen Liste gelandet.
+  const listId = await visibleListId(session.user.id, item);
+  if (!item || listId === null) {
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 

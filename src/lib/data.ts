@@ -149,6 +149,21 @@ export async function getMonthlyGoal(userId: string) {
 }
 
 /**
+ * Schreibt eine einzelne settings-Zeile.
+ *
+ * Steht hier, weil sowohl die Einstellungs-Route als auch der stündliche
+ * Lauf schreiben und beide vorher denselben Upsert eigenhändig aufgeschrieben
+ * hatten -- inklusive des zusammengesetzten Konfliktziels, das man genau
+ * einmal richtig hinschreiben will.
+ */
+export async function writeSetting(userId: string, key: string, value: string) {
+  await db
+    .insert(settings)
+    .values({ userId, key, value })
+    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value } });
+}
+
+/**
  * Die nicht archivierten Listen eines Nutzers samt Artikel- und
  * Mitgliederzahl -- das, was im Listen-Blatt unter jedem Namen steht.
  *

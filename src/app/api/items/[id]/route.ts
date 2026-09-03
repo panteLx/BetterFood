@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories, items, places } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireSession, requireActiveList } from "@/lib/session";
+import { requireSession, itemListId } from "@/lib/session";
 import { rememberProduct } from "@/lib/data";
 
 export async function PATCH(
@@ -10,9 +10,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
+  const listId = await itemListId(session.user.id, Number(id));
+  if (listId === null) {
+    return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
+  }
+
   const body = await req.json();
   const { name, category, expiryDate, quantity, status, placeId, note } = body as {
     name?: string;
@@ -79,7 +83,7 @@ export async function PATCH(
 
   if (status !== undefined) {
     if (!["active", "used", "thrown_away"].includes(status)) {
-      return NextResponse.json({ error: "ungueltiger status" }, { status: 400 });
+      return NextResponse.json({ error: "ungültiger status" }, { status: 400 });
     }
     update.status = status;
     update.resolvedAt = status === "active" ? null : new Date();
@@ -99,10 +103,10 @@ export async function PATCH(
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
-  // Wer einen falsch einsortierten Artikel oeffnet und Kategorie oder Ort
-  // korrigiert, korrigiert damit auch die Vorauswahl fuer das naechste Mal --
-  // der kuerzeste Weg, das Wissen richtigzustellen. Nur bei einer Aenderung
-  // an Name, Kategorie oder Ort: ein reines Umdatieren sagt darueber nichts
+  // Wer einen falsch einsortierten Artikel öffnet und Kategorie oder Ort
+  // korrigiert, korrigiert damit auch die Vorauswahl für das nächste Mal --
+  // der kürzeste Weg, das Wissen richtigzustellen. Nur bei einer Aenderung
+  // an Name, Kategorie oder Ort: ein reines Umdatieren sagt darüber nichts
   // aus, und ein "aufgebraucht" schon gar nicht.
   if (update.name !== undefined || update.category !== undefined || update.placeId !== undefined) {
     rememberProduct(listId, {
@@ -117,11 +121,11 @@ export async function PATCH(
 }
 
 /**
- * Blendet einen Artikel aus, statt ihn zu loeschen.
+ * Blendet einen Artikel aus, statt ihn zu löschen.
  *
  * Die Zeile bleibt in der Datenbank, taucht aber in keiner Ansicht mehr auf
- * (alle Abfragen filtern auf hiddenAt IS NULL) -- ein Aufraeumen im Archiv
- * soll nichts unwiederbringlich vernichten. Die Kategorie-Zuordnung haengt
+ * (alle Abfragen filtern auf hiddenAt IS NULL) -- ein Aufräumen im Archiv
+ * soll nichts unwiederbringlich vernichten. Die Kategorie-Zuordnung hängt
  * nicht daran: die steht in product_knowledge und bleibt so oder so.
  */
 export async function DELETE(
@@ -129,9 +133,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
   const { id } = await params;
+  const listId = await itemListId(session.user.id, Number(id));
+  if (listId === null) {
+    return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
+  }
+
   const hidden = await db
     .update(items)
     .set({ hiddenAt: new Date() })
