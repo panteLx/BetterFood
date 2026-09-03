@@ -34,31 +34,59 @@ export function expiryStatus(days: number): ExpiryStatus {
 /**
  * Tailwind-Klassen je Zustand. Als Tabelle statt als String-Bau, damit der
  * Tailwind-Scanner alle Klassen tatsächlich findet.
+ *
+ * Sechs Rollen, seit die Flächen pastellig sind. Vorher reichten drei, weil
+ * --warning und --danger dunkle, gesättigte Töne waren und sowohl füllen als
+ * auch beschriften konnten. Das geht mit einem Pastellgelb nicht mehr:
+ * #ffc94d als Text auf Weiß sind 1,7:1. Deshalb trennt die Tabelle jetzt
+ *
+ *   text   Zustandsfarbe als Text auf heller Fläche  (--*-ink)
+ *   tint   die getönte Zeilen- oder Kachelfläche     (--*-tint)
+ *   solid  die gesättigte Fläche des Tage-Blocks     (--*) plus ihre
+ *          Schriftfarbe (--*-on)
+ *   chip   Statuspille: getönte Fläche + ink-Text
+ *   dot    der volle Ton als reine Fläche
+ *   meta   die Meta-Zeile *auf* der getönten Fläche -- sie übernimmt deren
+ *          Farbton, damit sie nicht grau auf Pastell sitzt
+ *
+ * `border` ist ersatzlos entfallen: es trug die linke Kante einer Zeile
+ * (border-l-danger), und das Redesign nimmt die Ränder ganz heraus -- Tiefe
+ * kommt jetzt aus getönten Schatten. Kein Aufrufer las das Feld.
  */
 export const STATUS_CLASSES: Record<
   ExpiryStatus,
-  { text: string; tint: string; border: string; chip: string; dot: string }
+  {
+    text: string;
+    tint: string;
+    chip: string;
+    dot: string;
+    solid: string;
+    meta: string;
+  }
 > = {
   fresh: {
-    text: "text-primary",
+    text: "text-primary-deep",
     tint: "bg-primary-tint",
-    border: "border-l-primary",
-    chip: "bg-primary-tint text-primary",
+    chip: "bg-primary-tint text-primary-deep",
     dot: "bg-primary",
+    solid: "bg-primary-tint text-primary-deep",
+    meta: "text-faint",
   },
   soon: {
-    text: "text-warning",
+    text: "text-warning-ink",
     tint: "bg-warning-tint",
-    border: "border-l-warning",
-    chip: "bg-warning-tint text-warning",
+    chip: "bg-warning-tint text-warning-ink",
     dot: "bg-warning",
+    solid: "bg-warning text-warning-on",
+    meta: "text-meta-on-warning",
   },
   expired: {
-    text: "text-danger",
+    text: "text-danger-ink",
     tint: "bg-danger-tint",
-    border: "border-l-danger",
-    chip: "bg-danger-tint text-danger",
+    chip: "bg-danger-tint text-danger-ink",
     dot: "bg-danger",
+    solid: "bg-danger text-danger-on",
+    meta: "text-meta-on-danger",
   },
 };
 
@@ -152,25 +180,54 @@ export type StatusFilter = "alle" | "bald" | "abgelaufen";
  * lieber mehr zeigen als das Gemeinte wegfiltern. Das Feld steht hier und
  * nicht als Titelvergleich auf der Startseite, weil eine reine Textänderung
  * an einer Überschrift sonst lautlos den Link umbiegt.
+ *
+ * Aus demselben Grund gibt es `label` neben `title`. `title` ist der
+ * Schlüssel: Startseite und Vorrat gruppieren ihre Artikel danach und
+ * sortieren ihre Abschnitte in dieser Reihenfolge. `label` ist das, was der
+ * Nutzer liest. Das Redesign nennt zwei Eimer anders ("Schon drüber",
+ * "Heute dran") -- würde man dafür `title` umschreiben, fiele die
+ * Gruppierung stillschweigend auseinander, weil beide Ansichten dann nach
+ * einem Schlüssel suchen, den niemand mehr vergibt.
  */
 export const EXPIRY_BUCKETS = [
   {
     title: "Abgelaufen",
+    label: "Schon drüber",
     danger: true,
     filter: "abgelaufen",
     test: (days: number) => days < 0,
   },
-  { title: "Heute", danger: false, filter: "bald", test: (days: number) => days === 0 },
-  { title: "Morgen", danger: false, filter: "bald", test: (days: number) => days === 1 },
+  {
+    title: "Heute",
+    label: "Heute dran",
+    danger: false,
+    filter: "bald",
+    test: (days: number) => days === 0,
+  },
+  {
+    title: "Morgen",
+    label: "Morgen",
+    danger: false,
+    filter: "bald",
+    test: (days: number) => days === 1,
+  },
   {
     title: "Diese Woche",
+    label: "Diese Woche",
     danger: false,
     filter: null,
     test: (days: number) => days >= 2 && days <= 7,
   },
-  { title: "Später", danger: false, filter: null, test: (days: number) => days > 7 },
+  {
+    title: "Später",
+    label: "Später",
+    danger: false,
+    filter: null,
+    test: (days: number) => days > 7,
+  },
 ] as const satisfies readonly {
   title: string;
+  label: string;
   danger: boolean;
   filter: StatusFilter | null;
   test: (days: number) => boolean;

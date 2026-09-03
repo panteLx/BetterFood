@@ -1,26 +1,39 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Manrope } from "next/font/google";
+import { JetBrains_Mono, Manrope, Quicksand } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { BottomNavGate } from "@/components/bottom-nav-gate";
 import { ReviewBatchGuard } from "@/components/review-batch-guard";
 import { APP_DESCRIPTION, APP_NAME, APP_TITLE, TITLE_TEMPLATE } from "@/lib/metadata";
 import "./globals.css";
 
-// Manrope traegt die gesamte Typografie: die Oberflaeche setzt Ueberschriften
-// in 800 gegen halbfette Labels in 600/700, und genau diese Spanne hat Geist
-// nicht. JetBrains Mono steht ausschliesslich fuer Ziffernfolgen, bei denen
-// die Stellen untereinander stehen muessen (EAN, Kalenderwochen).
+// Drei Schriften mit je einer klaren Aufgabe. Quicksand traegt alles, was
+// die Form der Oberflaeche ausmacht -- Ueberschriften, Zeilentitel, Zahlen,
+// Knopfbeschriftungen, Chips: ihre runden Endungen sind der typografische
+// Teil des verspielten Auftritts. Manrope bleibt fuer Fliesstext, Meta-Zeilen
+// und Platzhalter, wo eine humanistische Grotesk besser liest. JetBrains Mono
+// steht ausschliesslich fuer Ziffernfolgen, bei denen die Stellen
+// untereinander stehen muessen (EAN, Kalenderwochen, Mengen).
+//
+// Von Quicksand nur 500/600/700 laden: ein 800 gibt es in dieser Familie
+// nicht, und next/font wuerde ein angefordertes Gewicht stillschweigend
+// synthetisieren statt zu scheitern.
 const manrope = Manrope({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
 
+const quicksand = Quicksand({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -87,8 +100,8 @@ export const viewport: Viewport = {
   // Navigationsleiste haette unter dem Indikator gelegen.
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f4f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#191b1a" },
+    { media: "(prefers-color-scheme: light)", color: "#eef8ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#131a16" },
   ],
 };
 
@@ -96,7 +109,7 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
   return (
     <html
       lang="de"
-      className={`${manrope.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${quicksand.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
