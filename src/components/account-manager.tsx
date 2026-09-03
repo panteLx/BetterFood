@@ -52,17 +52,17 @@ const DEVICE_ICONS: Record<DeviceKind, LucideIcon> = {
 const MIN_PASSWORD_LENGTH = 8;
 
 // Dieselbe Feldform wie auf den Anmeldeseiten, nur mit dem Radius, den Blätter
-// und Dialoge tragen (--radius statt der 18px der Vollbild-Formulare).
+// und Dialoge tragen (--radius statt der 18px der Vollbild-Formulare). Kein
+// Rand mehr: die Tiefe kommt aus shadow-row, wie beim Input-Baustein.
 const fieldClass =
-  "h-12 w-full rounded-lg border border-border bg-surface-2 px-3.5 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-12 w-full rounded-lg bg-surface-2 px-3.5 text-[15px] font-semibold shadow-row outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 const sheetButtonClass =
-  "h-13 w-full rounded-lg bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-60";
+  "h-13 w-full rounded-lg bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta disabled:opacity-60";
 const rowClass = "flex items-center gap-3 px-4 py-3.5";
-const cardClass = "overflow-hidden rounded-2xl border border-border bg-card";
-const sectionTitleClass =
-  "pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+const cardClass = "overflow-hidden rounded-[30px] bg-card shadow-card";
+const sectionTitleClass = "pl-1 text-xs font-semibold tracking-wider text-faint uppercase";
 const secondaryButtonClass =
-  "h-12 w-full rounded-lg border border-border bg-card text-sm font-semibold disabled:opacity-50";
+  "h-12 w-full rounded-lg bg-card font-heading text-sm font-semibold shadow-row disabled:opacity-50";
 
 /**
  * Das eigene Konto: Profil, Anmeldung, Geräte.
@@ -341,7 +341,7 @@ export function AccountManager() {
         {Array.from({ length: 3 }).map((_, index) => (
           <div
             key={index}
-            className="h-[92px] animate-pulse rounded-[20px] bg-muted"
+            className="h-[92px] animate-pulse rounded-[30px] bg-muted"
           />
         ))}
       </div>
@@ -372,7 +372,7 @@ export function AccountManager() {
               setNameDraft(account.name);
               openSheetFor("name");
             }}
-            className={cn(rowClass, "w-full border-b border-border text-left")}
+            className={cn(rowClass, "w-full border-b border-hairline text-left")}
           >
             <span className="min-w-0 flex-1 text-[15px] font-semibold">Name</span>
             <span className="max-w-[9.5rem] shrink-0 truncate text-[13px] font-medium text-muted-foreground">
@@ -437,7 +437,7 @@ export function AccountManager() {
           // Passwort beim Anmeldedienst, und ein ausgegrauter Knopf hier
           // würde etwas versprechen, das dieser Server nicht halten kann.
           <div className={cn(cardClass, "flex items-center gap-3.5 p-3.5")}>
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
               <ShieldCheck className="size-5.5" strokeWidth={1.8} />
             </span>
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed font-medium text-balance text-muted-foreground">
@@ -458,12 +458,12 @@ export function AccountManager() {
                 key={entry.id}
                 className={cn(
                   rowClass,
-                  index < sessions.length - 1 && "border-b border-border",
+                  index < sessions.length - 1 && "border-b border-hairline",
                 )}
               >
                 <span
                   className={cn(
-                    "flex size-9.5 shrink-0 items-center justify-center rounded-[12px]",
+                    "flex size-9.5 shrink-0 items-center justify-center rounded-lg",
                     entry.current
                       ? "bg-primary-tint text-primary"
                       : "bg-surface-2 text-muted-foreground",
@@ -491,7 +491,7 @@ export function AccountManager() {
                   </span>
                 </span>
                 {entry.current ? (
-                  <span className="inline-flex h-6.5 shrink-0 items-center rounded-[9px] bg-primary-tint px-2.5 text-[11.5px] font-bold text-primary">
+                  <span className="inline-flex h-6.5 shrink-0 items-center rounded-full bg-primary-tint px-2.5 text-[11.5px] font-bold text-primary">
                     Dieses Gerät
                   </span>
                 ) : (
@@ -500,7 +500,7 @@ export function AccountManager() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="shrink-0 rounded-[12px]"
+                        className="shrink-0 rounded-full"
                         disabled={busy}
                         aria-label={`${entry.device} abmelden`}
                       >
@@ -550,7 +550,7 @@ export function AccountManager() {
         type="button"
         onClick={handleSignOut}
         disabled={signingOut}
-        className="h-12 w-full rounded-lg border border-border bg-surface-2 text-sm font-semibold disabled:opacity-50"
+        className="h-12 w-full rounded-lg bg-surface-2 font-heading text-sm font-semibold shadow-row disabled:opacity-50"
       >
         {signingOut ? "Abmelden…" : "Abmelden"}
       </button>
@@ -670,7 +670,7 @@ export function AccountManager() {
             aria-label="Neues Passwort wiederholen"
             className={fieldClass}
           />
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2 px-3.5 py-3">
+          <div className="flex items-center gap-3 rounded-lg bg-surface-2 px-3.5 py-3 shadow-row">
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">
                 Andere Geräte abmelden

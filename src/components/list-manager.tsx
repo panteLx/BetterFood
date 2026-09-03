@@ -210,7 +210,7 @@ export function ListManager() {
           {Array.from({ length: 2 }).map((_, index) => (
             <div
               key={index}
-              className="h-[70px] animate-pulse rounded-[20px] bg-muted"
+              className="h-[70px] animate-pulse rounded-[24px] bg-muted"
             />
           ))}
         </div>
@@ -226,8 +226,12 @@ export function ListManager() {
               <div
                 key={list.id}
                 className={cn(
-                  "overflow-hidden rounded-[20px] border bg-card",
-                  isActive ? "border-primary" : "border-border",
+                  "overflow-hidden rounded-[24px] bg-card shadow-card",
+                  // Der aktive Zustand braucht weiterhin eine Kante, aber keinen
+                  // Rand -- ring-inset ist selbst ein Schatten und traegt sie ohne
+                  // Layoutverschiebung, genau wie der unbestaetigte Richtwert im
+                  // Kalender.
+                  isActive && "ring-[1.5px] ring-primary ring-inset",
                 )}
               >
                 <div className="flex items-center gap-3 p-3.5">
@@ -255,7 +259,7 @@ export function ListManager() {
                     </span>
                   </button>
                   {isActive ? (
-                    <span className="inline-flex h-6.5 shrink-0 items-center rounded-[9px] bg-primary-tint px-2.5 text-[11.5px] font-bold text-primary">
+                    <span className="inline-flex h-6.5 shrink-0 items-center rounded-full bg-primary-tint px-2.5 text-[11.5px] font-bold text-primary">
                       Aktiv
                     </span>
                   ) : (
@@ -263,7 +267,7 @@ export function ListManager() {
                       type="button"
                       disabled={busy}
                       onClick={() => switchTo(list.id)}
-                      className="inline-flex h-6.5 shrink-0 items-center rounded-[9px] bg-surface-2 px-2.5 text-[11.5px] font-bold text-muted-foreground disabled:opacity-60"
+                      className="inline-flex h-6.5 shrink-0 items-center rounded-full bg-surface-2 px-2.5 text-[11.5px] font-bold text-muted-foreground disabled:opacity-60"
                     >
                       Wechseln
                     </button>
@@ -271,7 +275,7 @@ export function ListManager() {
                 </div>
 
                 {expanded && (
-                  <div className="flex flex-col gap-3 border-t border-border p-3.5">
+                  <div className="flex flex-col gap-3 border-t border-hairline p-3.5">
                     {!listMembers ? (
                       <p className="text-xs font-medium text-muted-foreground">
                         Lädt…
@@ -291,7 +295,7 @@ export function ListManager() {
                             >
                               <span
                                 className={cn(
-                                  "flex size-9 shrink-0 items-center justify-center rounded-[12px] text-[13px] font-extrabold",
+                                  "flex size-9 shrink-0 items-center justify-center rounded-lg text-[13px] font-extrabold",
                                   member.isOwner
                                     ? "bg-primary-tint text-primary"
                                     : "bg-surface-2 text-muted-foreground",
@@ -313,7 +317,7 @@ export function ListManager() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="shrink-0 rounded-[12px]"
+                                  className="shrink-0 rounded-full"
                                   aria-label={
                                     isSelf
                                       ? "Liste verlassen"
@@ -347,11 +351,10 @@ export function ListManager() {
                     )}
 
                     {isOwner && (
-                      <div className="flex justify-end gap-2 border-t border-border pt-3">
+                      <div className="flex justify-end gap-2 border-t border-hairline pt-3">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="rounded-[10px]"
                           disabled={busy}
                           onClick={() => setArchived(list.id, true)}
                         >
@@ -363,7 +366,6 @@ export function ListManager() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              className="rounded-[10px]"
                               disabled={busy}
                             >
                               <Trash2 className="size-4" />
@@ -404,7 +406,7 @@ export function ListManager() {
             archivedLists.map((list) => (
               <div
                 key={list.id}
-                className="flex items-center gap-3 rounded-[20px] border border-dashed border-border p-3.5"
+                className="flex items-center gap-3 rounded-[24px] bg-surface-2 p-3.5"
               >
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-muted-foreground">
                   {list.name}
@@ -412,7 +414,6 @@ export function ListManager() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-[10px]"
                   disabled={busy}
                   onClick={() => setArchived(list.id, false)}
                 >
@@ -429,14 +430,14 @@ export function ListManager() {
           value={newListName}
           onChange={(event) => setNewListName(event.target.value)}
           placeholder="Neue Liste"
-          className="h-12 min-w-0 flex-1 rounded-lg border border-border bg-card px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
+          className="h-12 min-w-0 flex-1 rounded-lg bg-card px-3.5 text-sm font-semibold shadow-row outline-none placeholder:text-faint"
         />
         <button
           type="button"
           disabled={busy}
           onClick={createList}
           aria-label="Liste erstellen"
-          className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
+          className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-(image:--gradient-primary) text-primary-foreground shadow-cta disabled:opacity-60"
         >
           <Plus className="size-5" strokeWidth={2.3} />
         </button>
