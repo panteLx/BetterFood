@@ -90,7 +90,7 @@ export function ReviewSkeleton() {
     <div className="flex flex-1 flex-col gap-4 px-5 pt-2">
       <div className="h-7 w-40 animate-pulse rounded-lg bg-muted" />
       <div className="h-1 animate-pulse rounded-full bg-muted" />
-      <div className="h-[520px] animate-pulse rounded-[24px] bg-muted" />
+      <div className="h-[520px] animate-pulse rounded-[30px] bg-muted" />
     </div>
   );
 }
@@ -267,7 +267,7 @@ function ReviewFlow({
           action={
             <Link
               href="/scan"
-              className="flex h-11 items-center justify-center rounded-[14px] bg-primary px-5 text-[14px] font-bold text-primary-foreground"
+              className="flex h-11 items-center justify-center rounded-[20px] bg-(image:--gradient-primary) px-5 font-heading text-[14px] font-bold text-primary-foreground shadow-cta"
             >
               Zum Scanner
             </Link>
@@ -306,10 +306,10 @@ function ReviewFlow({
           <ConfirmDialog
             trigger={
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon-touch"
                 aria-label="Zur Startseite"
-                className="-ml-2 rounded-2xl"
+                className="rounded-full"
               >
                 <Home className="size-5" />
               </Button>
@@ -329,7 +329,7 @@ function ReviewFlow({
             onConfirm={() => router.push("/")}
           />
 
-          <h1 className="min-w-0 flex-1 text-[20px] leading-tight font-extrabold">
+          <h1 className="min-w-0 flex-1 font-heading text-[20px] leading-tight font-bold tracking-tight">
             Kurz prüfen
           </h1>
 
@@ -337,7 +337,7 @@ function ReviewFlow({
             <button
               type="button"
               onClick={() => router.replace(`/review/${index - 1}`)}
-              className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card pr-3 pl-2 text-[12px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full bg-card pr-3 pl-2 font-heading text-[12px] font-bold shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <ChevronLeft className="size-3.5" strokeWidth={2.4} />
               Voriger Artikel
@@ -555,9 +555,9 @@ function StepCard({
 
   return (
     <>
-      <div className="rounded-[24px] border border-border bg-card p-[18px] shadow-card">
+      <div className="rounded-[30px] bg-card p-[18px] shadow-card">
         <div className="flex items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-primary-tint text-primary">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
             <CategoryIcon categoryKey={category ?? "sonstiges"} className="size-6" />
           </span>
 
@@ -572,13 +572,13 @@ function StepCard({
                 }}
                 autoFocus
                 aria-label="Name des Artikels"
-                className="h-10 min-w-0 flex-1 rounded-[12px] border border-primary bg-surface-2 px-2.5 text-[15px] font-bold outline-none"
+                className="h-10 min-w-0 flex-1 rounded-[14px] bg-surface-2 px-2.5 font-heading text-[15px] font-bold shadow-row outline-none ring-2 ring-primary/60"
               />
               <button
                 type="button"
                 aria-label="Namen übernehmen"
                 onClick={commitRename}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <Check className="size-4" strokeWidth={2.6} />
               </button>
@@ -586,7 +586,7 @@ function StepCard({
                 type="button"
                 aria-label="Umbenennen abbrechen"
                 onClick={() => setDraftName(null)}
-                className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-surface-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted-foreground shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <X className="size-4" strokeWidth={2.4} />
               </button>
@@ -610,7 +610,7 @@ function StepCard({
                 type="button"
                 onClick={() => setDraftName(name)}
                 aria-label={`${name || entry.barcode || "Artikel"} umbenennen`}
-                className="line-clamp-2 min-w-0 flex-1 rounded-[10px] text-left text-[17px] leading-tight font-extrabold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="line-clamp-2 min-w-0 flex-1 rounded-[10px] text-left font-heading text-[17px] leading-tight font-bold tracking-[-0.01em] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {name || entry.barcode || "Unbenannt"}
               </button>
@@ -618,13 +618,13 @@ function StepCard({
               {/* Der Stepper und nicht nur ein "×3": eine falsch erkannte
                   Belegmenge war bis hierher nicht mehr zu korrigieren, und im
                   Vorrat steht sie danach als drei Flaschen, die es nie gab. */}
-              <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-[12px] border border-border bg-surface-2 px-1">
+              <div className="flex h-9 shrink-0 items-center gap-0.5 rounded-full bg-surface-2 px-1 shadow-row">
                 <button
                   type="button"
                   aria-label="Menge verringern"
                   disabled={quantity <= 1}
                   onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-                  className="flex size-7 items-center justify-center rounded-[9px] text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                  className="flex size-7 items-center justify-center rounded-full text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
                 >
                   <Minus className="size-3.5" strokeWidth={2.6} />
                 </button>
@@ -641,7 +641,7 @@ function StepCard({
                   onClick={() =>
                     setQuantity((current) => Math.min(MAX_QUANTITY, current + 1))
                   }
-                  className="flex size-7 items-center justify-center rounded-[9px] text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                  className="flex size-7 items-center justify-center rounded-full bg-primary-tint text-primary-deep outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
                 >
                   <Plus className="size-3.5" strokeWidth={2.6} />
                 </button>
@@ -678,7 +678,7 @@ function StepCard({
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="shrink-0 text-[12.5px] font-bold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="shrink-0 font-heading text-[12.5px] font-bold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               Ändern
             </button>
@@ -693,7 +693,7 @@ function StepCard({
             Lebensmittel. Jetzt wird die Zeile abgefragt wie jede andere und
             trägt nur ihren Hinweis mit. */}
         {entry.foodDoubt && (
-          <p className="mt-2.5 flex items-start gap-1.5 rounded-[12px] bg-warning-tint px-2.5 py-2 text-[12px] leading-snug font-semibold text-warning">
+          <p className="mt-2.5 flex items-start gap-1.5 rounded-[14px] bg-warning-tint px-2.5 py-2 text-[12px] leading-snug font-semibold text-warning-ink">
             <TriangleAlert className="mt-px size-3.5 shrink-0" strokeWidth={2.4} />
             <span>
               19 % Mehrwertsteuer — laut Beleg vermutlich kein Lebensmittel.
@@ -705,7 +705,7 @@ function StepCard({
         {categoryRow ? (
           <>
             <div className="mt-4 flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-semibold tracking-[0.05em] uppercase">
+              <span className="text-[11.5px] font-extrabold tracking-[0.08em] text-faint uppercase">
                 MHD eingeben
               </span>
               <span className="text-[11.5px] font-semibold text-faint">
@@ -729,14 +729,14 @@ function StepCard({
             <button
               type="button"
               onClick={() => onCommit({ ...patch, expiryDate: date })}
-              className="mt-3.5 h-[50px] w-full rounded-[14px] bg-primary text-[15px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="mt-3.5 h-[50px] w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               Übernehmen &amp; weiter
             </button>
             <button
               type="button"
               onClick={() => onSkip(patch)}
-              className="h-10 w-full text-[13px] font-bold text-danger outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-10 w-full font-heading text-[13px] font-bold text-danger-ink outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               Nicht übernehmen
             </button>
@@ -747,7 +747,7 @@ function StepCard({
              Monat, in dem der Kalender sinnvoll aufginge -- die Einordnung
              ist deshalb die erste Frage, nicht eine nebenbei. */
           <>
-            <p className="mt-4 text-[15px] font-bold">Wozu gehört es?</p>
+            <p className="mt-4 font-heading text-[15px] font-bold">Wozu gehört es?</p>
             <p className="mt-1 text-[12.5px] font-semibold text-faint">
               Danach merkt sich die Liste die Einordnung für den nächsten Einkauf.
             </p>
@@ -774,7 +774,7 @@ function StepCard({
             <button
               type="button"
               onClick={() => onSkip(patch)}
-              className="mt-3 h-10 w-full text-[13px] font-bold text-danger outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="mt-3 h-10 w-full font-heading text-[13px] font-bold text-danger-ink outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               Nicht übernehmen
             </button>
@@ -783,7 +783,9 @@ function StepCard({
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Einordnung">
-        <p className="px-1.5 pb-2 text-[12.5px] font-semibold text-faint">Kategorie</p>
+        <p className="px-1.5 pb-2 text-[11.5px] font-extrabold tracking-[0.08em] text-faint uppercase">
+          Kategorie
+        </p>
         <div className="flex flex-wrap gap-2 px-1.5">
           {categories.map((option) => (
             <Chip
@@ -799,7 +801,7 @@ function StepCard({
 
         {places.length > 0 && (
           <>
-            <p className="px-1.5 pt-4 pb-2 text-[12.5px] font-semibold text-faint">
+            <p className="px-1.5 pt-4 pb-2 text-[11.5px] font-extrabold tracking-[0.08em] text-faint uppercase">
               Wo liegt es?
             </p>
             <div className="flex flex-wrap gap-2 px-1.5">
@@ -821,7 +823,7 @@ function StepCard({
           type="button"
           disabled={category === null}
           onClick={() => setSheetOpen(false)}
-          className="mt-5 h-13.5 w-full rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-40"
+          className="mt-5 h-14 w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-base font-bold text-primary-foreground shadow-cta disabled:opacity-40"
         >
           Übernehmen
         </button>
@@ -846,11 +848,11 @@ function FinishCard({
   onCommit: () => void;
 }) {
   return (
-    <div className="rounded-[24px] border border-border bg-card p-[18px] text-center shadow-card">
-      <span className="mx-auto flex size-14 items-center justify-center rounded-[20px] bg-primary-tint text-primary">
+    <div className="rounded-[30px] bg-card p-[18px] text-center shadow-card">
+      <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary-tint text-primary">
         <Check className="size-7" strokeWidth={2.2} />
       </span>
-      <p className="mt-3 text-[17px] leading-tight font-extrabold">Alles geprüft</p>
+      <p className="mt-3 font-heading text-[17px] leading-tight font-bold">Alles geprüft</p>
       <p className="mt-1.5 text-[12.5px] font-semibold text-faint">
         {doneCount === 0
           ? "Kein Artikel zum Übernehmen."
@@ -861,7 +863,7 @@ function FinishCard({
         type="button"
         disabled={busy}
         onClick={onCommit}
-        className="mt-4 h-[50px] w-full rounded-[14px] bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-60"
+        className="mt-4 h-[50px] w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta disabled:opacity-60"
       >
         {busy
           ? "Wird gespeichert…"
@@ -896,13 +898,13 @@ function DoneList({ batch, categories }: { batch: BatchEntry[]; categories: Cate
             key={entry.id}
             type="button"
             onClick={() => router.push(`/review/${index}`)}
-            className="flex items-center gap-2.5 rounded-[16px] border border-border bg-card py-2.5 pr-3.5 pl-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="flex items-center gap-2.5 rounded-[24px] bg-card py-2.5 pr-3.5 pl-2.5 text-left shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-primary-tint text-primary">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
               <CategoryIcon categoryKey={entry.category ?? "sonstiges"} className="size-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[14px] leading-tight font-bold">
+              <span className="block truncate font-heading text-[14px] leading-tight font-bold">
                 {entry.name}
                 {entry.quantity > 1 && (
                   <span className="ml-1.5 text-muted-foreground">×{entry.quantity}</span>
@@ -936,7 +938,7 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
       {rows.map(({ entry, index }) => (
         <div
           key={entry.id}
-          className="flex items-center gap-2.5 rounded-[16px] border border-border bg-surface-2 py-2.5 pr-3.5 pl-3.5"
+          className="flex items-center gap-2.5 rounded-[24px] bg-surface-2 py-2.5 pr-3.5 pl-3.5"
         >
           {/* Durchgestrichen und nicht ausgeblendet: übersprungen heißt "nicht
               in den Vorrat und nicht in die Produkt-DB", nicht "war nie da" --
@@ -945,7 +947,7 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
               Milch gescannt und dann übersprungen hat, muss sehen, dass beide
               draußen bleiben -- "Vollmilch" allein liest sich wie eine. */}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] font-bold text-faint line-through">
+            <span className="block truncate font-heading text-[14px] font-bold text-faint line-through">
               {entry.name}
               {entry.quantity > 1 && <span className="ml-1.5">×{entry.quantity}</span>}
             </span>
@@ -955,7 +957,7 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
                 Einlesens aus -- nach einer Zeile, die die App verschluckt
                 hat, statt nach einer Frage, die sie stellt. */}
             {entry.foodDoubt && (
-              <span className="mt-0.5 flex items-center gap-1 text-[11.5px] leading-tight font-semibold text-warning">
+              <span className="mt-0.5 flex items-center gap-1 text-[11.5px] leading-tight font-semibold text-warning-ink">
                 <TriangleAlert className="size-3 shrink-0" strokeWidth={2.4} />
                 Vermutlich kein Lebensmittel
               </span>
@@ -971,7 +973,7 @@ function SkippedList({ batch }: { batch: BatchEntry[] }) {
               );
               router.push(`/review/${index}`);
             }}
-            className="shrink-0 text-[12px] font-bold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="shrink-0 font-heading text-[12px] font-bold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             Doch übernehmen
           </button>
