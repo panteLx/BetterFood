@@ -9,7 +9,13 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-heading: var(--font-sans);
+  /* Quicksand traegt Ueberschriften, Zahlen, Knopfbeschriftungen und
+     Zeilentitel; Manrope bleibt die Schrift fuer Fliesstext und Meta-Zeilen.
+     --font-heading zeigt deshalb nicht mehr auf --font-sans, sondern auf die
+     Display-Schrift -- alle Stellen, die font-heading schon benutzten, ziehen
+     damit ohne eigene Aenderung mit. */
+  --font-display: var(--font-display);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,30 +60,70 @@
   --color-danger: var(--danger);
   --color-danger-tint: var(--danger-tint);
 
+  /* Jede Zustandsfarbe existiert in drei Rollen, seit die Flächen pastellig
+     sind: als Fläche (--warning), als Text auf heller Fläche (--warning-ink)
+     und als Text auf der gesättigten Fläche selbst (--warning-on). Vorher
+     fielen die ersten beiden zusammen, weil --warning ein dunkles Braun war
+     und sowohl fuellen als auch beschriften konnte. Ein Pastellgelb kann das
+     nicht: #ffc94d als Text auf Weiß sind 1,7:1.
+
+     --primary-light ist ausschliesslich der helle Anteil in --gradient-primary
+     und nie eine Textfarbe. */
+  --color-primary-light: var(--primary-light);
+  --color-primary-deep: var(--primary-deep);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-on: var(--warning-on);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-on: var(--danger-on);
+
+  /* Abzeichen sind die einzige Rolle, die keinen Ablauf-Zustand meint --
+     deshalb ein eigener Ton statt einer vierten Stufe von primary. */
+  --color-badge: var(--badge);
+  --color-badge-ink: var(--badge-ink);
+  --color-badge-tint: var(--badge-tint);
+
+  /* Die Meta-Zeile einer Vorratszeile übernimmt den Farbton ihrer Fläche,
+     damit sie nicht grau auf Pastell sitzt. Auf Karte und surface-2 bleibt
+     sie --faint. */
+  --color-meta-on-danger: var(--meta-on-danger);
+  --color-meta-on-warning: var(--meta-on-warning);
+
+  /* Ränder tragen die Kante nicht mehr -- das übernehmen die getönten
+     Schatten. Übrig bleibt die Trennlinie *innerhalb* einer Karte, und die
+     ist deutlich heller als der bisherige --border: eine Linie zwischen zwei
+     Datenzeilen darf die Karte nicht in Kacheln zerlegen. */
+  --color-hairline: var(--hairline);
+
   /* Die unbefüllte Spur hinter einem Fortschritt ist eine eigene Rolle: sie
      darf weder Fläche (surface-2, sitzt zu nah an der Karte) noch Warnfarbe
      sein — die Quotenleiste trug bisher danger-tint und las sich dadurch, als
      wäre der leere Rest ein Fehler.
 
-     Drei Werte, weil der Entwurf die Spur je nach Dicke unterschiedlich tönt.
-     Verwendet wird bisher nur --track (die beiden Balken auf Startseite und
-     im Archiv); --track-2 und --track-ring gehören zur Hero-Karte, die als
-     Nächstes kommt — sie stehen hier, weil eine Palette an einer Stelle
-     stehen muss und nicht in der Komponente, die sie zufällig zuerst
-     braucht. Im Dunkeln fallen die letzten beiden zusammen: der feine
-     Unterschied des Hellmodus trägt auf dunklem Grund nicht. */
+     Die frühere Dreiteilung (--track / --track-2 / --track-ring) fällt mit
+     der neuen Palette zusammen: der Entwurf tönt Spur, Ring und Segmentleiste
+     gleich. Die beiden Aliasse bleiben stehen, damit bestehende Aufrufer
+     nicht brechen. */
   --color-track: var(--track);
   --color-track-2: var(--track-2);
   --color-track-ring: var(--track-ring);
 
   /* Tiefe ist im Dunkelmodus ein eigenes Material: der Schatten allein
-     trägt dort nichts, die helle Oberkante schon. Deshalb liegen alle vier
-     Stufen als Tokens hier und nicht als shadow-[...] in den Komponenten. */
+     trägt dort nichts, die helle Oberkante schon. Deshalb liegen alle
+     Stufen als Tokens hier und nicht als shadow-[...] in den Komponenten.
+
+     --shadow-row ist der neue, sprechende Name für die Zeilenstufe;
+     --shadow-raise bleibt als Alias daneben stehen, weil es an bestehenden
+     Aufrufern hängt. Beide zeigen auf denselben Wert. */
   --shadow-card: var(--shadow-elevated);
+  --shadow-row: var(--shadow-hairline);
   --shadow-raise: var(--shadow-hairline);
   --shadow-nav: var(--shadow-navbar);
   --shadow-action: var(--shadow-add-button);
   --shadow-fab: var(--shadow-add-fab);
+  --shadow-cta: var(--shadow-call-to-action);
+  /* Die Leiste, die von unten hochkommt (Aktionsleiste im Detail,
+     Speichern-Leiste im Formular): ihr Schatten fällt nach oben. */
+  --shadow-sheet: var(--shadow-bottom-bar);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -87,168 +133,318 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  --animate-pop: bf-pop 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  /* Die Bewegung des Entwurfs, vollständig als Tokens. Reines CSS, kein
+     JavaScript.
+
+     Die Dauern hier sind die häufigsten; wo der Entwurf eine Stelle bewusst
+     anders taktet (Avo bobbt je nach Screen zwischen 3,0s und 4,6s), setzt
+     die Komponente `animate-bob [animation-duration:4.6s]` daneben. Das hält
+     die Keyframes an einer Stelle und die Abweichung sichtbar dort, wo sie
+     gemeint ist. */
+  --animate-bob: bf-bob 4s ease-in-out infinite;
+  --animate-blink: bf-blink 5.2s infinite;
+  --animate-wobble: bf-wobble 2.2s ease-in-out infinite;
+  --animate-squish: bf-squish 1.6s ease-in-out infinite;
+  --animate-tilt: bf-tilt 4.6s ease-in-out infinite;
+  --animate-shake: bf-shake 3.4s ease-in-out infinite;
+  --animate-pop: bf-pop 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
   --animate-rise: bf-rise 0.35s ease both;
+  --animate-slide-in: bf-slide-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-grow-h: bf-grow-h 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-grow-up: bf-grow-up 0.5s ease both;
+  --animate-ring: bf-ring 1.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  --animate-confetti: bf-confetti 2.5s ease-in infinite;
+  --animate-burst: bf-burst 2s ease-out infinite;
+  --animate-bubble: bf-bubble 4.4s ease-out infinite;
   --animate-scan: bf-scan 2.1s ease-in-out infinite;
+  --animate-sheen: bf-sheen 3s ease-in-out infinite;
 }
 
 :root {
-  --background: #f2f4f0;
-  --foreground: #151c17;
+  --background: #eef8ef;
+  --foreground: #16302a;
   --card: #ffffff;
-  --card-foreground: #151c17;
+  --card-foreground: #16302a;
   --popover: #ffffff;
-  --popover-foreground: #151c17;
-  --primary: #37714c;
+  --popover-foreground: #16302a;
+  --primary: #23a862;
   --primary-foreground: #ffffff;
-  --secondary: #f6f8f4;
-  --secondary-foreground: #151c17;
-  --muted: #f6f8f4;
-  --muted-foreground: #6b7a6e;
-  --accent: #e6f0e8;
-  --accent-foreground: #37714c;
-  --destructive: #b24734;
-  --border: #e3e7e0;
-  --input: #e3e7e0;
-  --ring: #37714c;
+  --secondary: #f5fbf6;
+  --secondary-foreground: #16302a;
+  --muted: #f5fbf6;
+  /* Trägt jeden Satz, jede Meta-Zeile und jeden Platzhalter: 5,00:1 auf der
+     Karte, 4,60:1 auf dem Grund -- über AA und über dem bisherigen #6b7a6e. */
+  --muted-foreground: #5d7566;
+  --accent: #d5f4e2;
+  --accent-foreground: #1c8f52;
+  --destructive: #e2603a;
+  --border: #eaf4ec;
+  --input: #eaf4ec;
+  --ring: #23a862;
 
-  --surface-2: #f6f8f4;
-  --faint: #9aa79c;
-  --primary-tint: #e6f0e8;
+  --surface-2: #f5fbf6;
+  /* Die Stufe unter muted-foreground, 3,04:1. Bewusst unter AA und deshalb
+     nur für kurze Beschriftungen: Ring-Untertitel, Segment-Labels,
+     Wochentage, Kalenderwochen. Kein Text darf heller werden als dieser
+     Wert.
+
+     Bis zum Frischling-Umbau trug --faint auch die Meta-Zeile jeder
+     Vorratszeile -- daher die frühere Forderung nach 4,5:1. Die Meta-Zeile
+     liegt jetzt auf --muted-foreground bzw. auf den beiden getönten
+     Varianten darunter, damit ist die Forderung an dieser Stelle hinfällig. */
+  --faint: #7f9a8c;
+  --primary-light: #4fd48c;
+  --primary-deep: #1c8f52;
+  --primary-tint: #d5f4e2;
   /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primärton hat dort
      zu wenig Kontrast, deshalb ein eigener, aufgehellter Wert. */
-  --primary-inv: #8ed4a3;
-  --warning: #a9701a;
-  --warning-tint: #faefd9;
-  --danger: #b24734;
-  --danger-tint: #f9e4df;
-  --track: #eef2ec;
-  --track-2: #e9ece7;
-  --track-ring: #e9f1ea;
-  --scrim: rgb(20 32 24 / 0.42);
-  --shadow-elevated: 0 1px 2px rgb(20 35 25 / 0.05), 0 10px 26px rgb(20 35 25 / 0.07);
-  /* Im Hellen heben sich die Vorratszeilen über ihren Rand ab, sie brauchen
-     keine zusätzliche Kante. */
-  --shadow-hairline: none;
-  --shadow-navbar: 0 8px 28px rgb(0 0 0 / 0.14);
-  --shadow-add-button: 0 4px 12px rgb(30 80 50 / 0.28);
-  --shadow-add-fab: 0 10px 28px rgb(30 80 50 / 0.34);
+  --primary-inv: #7ce8a8;
+  --warning: #ffc94d;
+  --warning-ink: #a9701a;
+  --warning-on: #4a3608;
+  --warning-tint: #fff4d6;
+  --danger: #ff8a5c;
+  --danger-ink: #e2603a;
+  --danger-on: #ffffff;
+  --danger-tint: #ffe8dd;
+  --badge: #7c6cf0;
+  --badge-ink: #6a58e8;
+  --badge-tint: #e9e6ff;
+  --track: #e4f4e9;
+  --track-2: #e4f4e9;
+  --track-ring: #e4f4e9;
+  --hairline: #eaf4ec;
+  --meta-on-danger: #b4705a;
+  --meta-on-warning: #a08a53;
+  --scrim: rgb(16 42 32 / 0.46);
+  --gradient-primary: linear-gradient(160deg, var(--primary-light), var(--primary));
 
-  --chart-1: #37714c;
-  --chart-2: #a9701a;
-  --chart-3: #b24734;
-  --chart-4: #6b7a6e;
-  --chart-5: #9aa79c;
-  --radius: 0.875rem;
+  /* Das Maskottchen ist kein SVG und keine Bilddatei, sondern ein Stapel
+     div-Formen -- seine Farben müssen deshalb hier stehen und nicht in der
+     Komponente, sonst geht es im Dunkelmodus nicht mit. */
+  --avo-shell: #2f7f3e;
+  /* Auf dauerhaft dunklem Grund (Scanner, invertierter Toast) saeuft die
+     dunkle Schale ab -- dort steht dieselbe Figur eine Stufe heller. Im
+     Dunkelmodus ist das ohnehin der Normalfall, deshalb fallen die beiden
+     Werte dort zusammen. */
+  --avo-shell-light: #3fbd7a;
+  --avo-flesh: #dbe86f;
+  --avo-pit: #a9713f;
+  --avo-face: #3b2413;
+
+  --shadow-elevated: 0 12px 30px rgb(22 48 42 / 0.09);
+  /* Im Hellen war das bisher `none`: die Zeilen hoben sich über ihren Rand
+     ab. Ohne Rand muss der Schatten die Kante tragen. */
+  --shadow-hairline: 0 6px 16px rgb(22 48 42 / 0.05);
+  --shadow-navbar: 0 10px 30px rgb(22 48 42 / 0.14);
+  --shadow-add-button: 0 8px 18px rgb(35 168 98 / 0.3);
+  --shadow-add-fab: 0 10px 22px rgb(35 168 98 / 0.4);
+  --shadow-call-to-action: 0 10px 22px rgb(35 168 98 / 0.32);
+  --shadow-bottom-bar: 0 -10px 30px rgb(22 48 42 / 0.08);
+
+  --chart-1: #23a862;
+  --chart-2: #ffc94d;
+  --chart-3: #ff8a5c;
+  --chart-4: #5d7566;
+  --chart-5: #7f9a8c;
+  --radius: 1.25rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #151c17;
-  --sidebar-primary: #37714c;
+  --sidebar-foreground: #16302a;
+  --sidebar-primary: #23a862;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e6f0e8;
-  --sidebar-accent-foreground: #37714c;
-  --sidebar-border: #e3e7e0;
-  --sidebar-ring: #37714c;
+  --sidebar-accent: #d5f4e2;
+  --sidebar-accent-foreground: #1c8f52;
+  --sidebar-border: #eaf4ec;
+  --sidebar-ring: #23a862;
 }
 
 .dark {
-  /* Anthrazit statt Beinahe-Schwarz. Der alte Grund (#0b0d0c) war praktisch
-     schwarz: darauf trug jede Karte einen sichtbaren Rand, und der Primärton
-     musste bis #4dc779 hochgezogen werden, um überhaupt zu leuchten — ein
-     Neongrün, das im Hellmodus nirgends vorkam. Der neue Grund liegt zwei
-     Stufen höher, die Flächen darüber staffeln sich in gleichmäßigen
-     Schritten (#191b1a Grund, #232624 Karte, #2a2d2b darüber), und der Akzent
-     kann auf einen gedämpften Salbeiton zurück. Der Farbton bleibt derselbe
-     wie hell, nur Sättigung und Helligkeit sind für dunklen Grund gestimmt. */
-  --background: #191b1a;
-  --foreground: #f0f1ef;
-  --card: #232624;
-  --card-foreground: #f0f1ef;
+  /* Anthrazit statt Beinahe-Schwarz, wie schon vor dem Frischling-Umbau --
+     nur im neuen Farbton. Grund, Karte und Fläche staffeln sich in
+     gleichmäßigen Schritten (#131a16 / #1c2620 / #232f28); die Pastelltöne
+     der Zeilen werden zu getönten Tiefen statt zu abgedunkelten Pastellen,
+     weil ein abgedunkeltes Pastell auf Anthrazit grau wird. */
+  --background: #131a16;
+  --foreground: #eef6f0;
+  --card: #1c2620;
+  --card-foreground: #eef6f0;
   /* Eine Stufe über allem anderen: Sheets und Dialoge liegen über Karte und
      surface-2 und dürfen nicht denselben Wert tragen, sonst verschwindet die
-     Kante. Die Notiz setzt popover, secondary und muted gemeinsam auf
-     #2a2d2b — damit läge ein Dialog über einem surface-2-Feld (Erinnerungs-
-     Einstellungen, Onboarding) bei 1.00:1 und wäre nur noch am Rand zu
-     erkennen. Der Wert unten hält denselben Abstand zu surface-2, den die
-     bisherige Palette hatte (1.09:1), und bleibt unter dem Rand (1.11:1),
-     damit die Kante weiter die stärkere Linie ist. */
-  --popover: #2f3331;
-  --popover-foreground: #f0f1ef;
-  --primary: #8cc9a4;
-  --primary-foreground: #14211a;
-  --secondary: #2a2d2b;
-  --secondary-foreground: #f0f1ef;
-  --muted: #2a2d2b;
-  --muted-foreground: #a3aba4;
-  --accent: #2a3a30;
-  --accent-foreground: #8cc9a4;
-  --destructive: #e08a77;
+     Kante. */
+  --popover: #2a382f;
+  --popover-foreground: #eef6f0;
+  --primary: #4fd48c;
+  --primary-foreground: #0c2116;
+  --secondary: #232f28;
+  --secondary-foreground: #eef6f0;
+  --muted: #232f28;
+  --muted-foreground: #a5bbaf;
+  --accent: #1e3b2b;
+  --accent-foreground: #4fd48c;
+  --destructive: #ff9c73;
   /* Deckend und im Farbton, nicht Weiß mit Alpha: über einer getönten
      Fläche wird aus Weiß ein grauer Strich, der den Farbton zerlegt. */
-  --border: #363a37;
-  --input: #363a37;
-  --ring: #8cc9a4;
+  --border: #26332c;
+  --input: #26332c;
+  --ring: #4fd48c;
 
-  --surface-2: #2a2d2b;
-  /* Die Notiz nennt hier #7e857f. Das sind 4.04:1 auf der Karte (#232624)
-     und 3.7:1 auf surface-2 — unter der AA-Schwelle von 4.5:1, und die
-     Meta-Zeile jeder Vorratszeile trägt genau diesen Ton. Der Wert unten ist
-     der hellste Punkt, der im exakt selben Farbton auf allen drei Flächen
-     über 4.5 kommt: 4.98:1 auf der Karte, 5.64:1 auf dem Grund, 4.54:1 auf
-     surface-2 (Leerzustände, Dialoge). Die Stufe unter muted-foreground
-     (6.49:1 auf der Karte) bleibt dabei deutlich erhalten. */
-  --faint: #8e958f;
-  --primary-tint: #2a3a30;
+  --surface-2: #232f28;
+  --faint: #7d9187;
+  /* Im Dunkeln gibt es keine helle Fläche, auf der eine Zustandsfarbe als
+     Text sitzen müsste -- die getönten Flächen sind selbst dunkel. Deshalb
+     fallen die -ink-Rollen hier mit der Flächenfarbe zusammen, und nur die
+     -on-Rollen (Text auf der gesättigten Fläche) bleiben dunkel. */
+  --primary-light: #6fe09d;
+  --primary-deep: #4fd48c;
+  --primary-tint: #1e3b2b;
   /* Der Toast ist invertiert, seine Fläche also hell — der Akzent darauf ist
-     hier dunkel, genau andersherum als im Hellmodus. Bleibt unverändert:
-     dieser Wert richtet sich nach der hellen Fläche, nicht nach dem Grund. */
+     hier dunkel, genau andersherum als im Hellmodus. */
   --primary-inv: #1a7039;
-  --warning: #e0b06a;
-  --warning-tint: #3a2d14;
-  --danger: #e08a77;
-  --danger-tint: #3a1d15;
-  /* Die Spur liegt eine Stufe über der Karte, damit sie sich auf ihr
-     abhebt. Ring und Segmentleiste teilen sich einen Wert — die feine
-     Dreiteilung des Hellmodus trägt auf dunklem Grund nicht. */
-  --track: #313632;
-  --track-2: #2a2d2b;
-  --track-ring: #2a2d2b;
+  --warning: #ffd166;
+  --warning-ink: #ffd166;
+  --warning-on: #2f2405;
+  --warning-tint: #322d17;
+  --danger: #ff9c73;
+  --danger-ink: #ff9c73;
+  --danger-on: #2a1109;
+  --danger-tint: #33211b;
+  --badge: #9b8cff;
+  --badge-ink: #9b8cff;
+  --badge-tint: #262046;
+  --track: #26332c;
+  --track-2: #26332c;
+  --track-ring: #26332c;
+  --hairline: #26332c;
+  --meta-on-danger: #c49582;
+  --meta-on-warning: #bda877;
   --scrim: rgb(9 11 10 / 0.66);
+  --gradient-primary: linear-gradient(160deg, #6fe09d, #3fbd7a);
+
+  /* Eine Stufe heller, damit die Figur auf dunklem Grund nicht absäuft.
+     Fleisch, Kern und Züge bleiben -- sie liegen innen und sehen den Grund
+     nie. */
+  --avo-shell: #3fbd7a;
+  --avo-shell-light: #3fbd7a;
+
   /* Tiefe entsteht nachts nicht durch den Schatten — der ist auf dunklem
      Grund fast unsichtbar — sondern durch die helle Oberkante. Der Schatten
-     darunter löst die Karte nur vom Grund; auf Anthrazit reicht dafür
-     deutlich weniger Schwarz als auf dem alten, fast schwarzen Grund, wo er
-     bis 0.55 gehen musste, um überhaupt zu erscheinen. */
-  --shadow-elevated: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 32px rgb(0 0 0 / 0.3);
-  --shadow-hairline: inset 0 1px 0 rgb(255 255 255 / 0.06);
+     darunter löst die Fläche nur vom Grund. */
+  --shadow-elevated: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 32px rgb(0 0 0 / 0.32);
+  --shadow-hairline: inset 0 1px 0 rgb(255 255 255 / 0.05);
   --shadow-navbar:
-    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 10px 34px rgb(0 0 0 / 0.38);
+    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 10px 34px rgb(0 0 0 / 0.42);
   --shadow-add-button:
-    0 4px 14px rgb(140 201 164 / 0.22), 0 1px 4px rgb(0 0 0 / 0.35);
+    0 4px 14px rgb(79 212 140 / 0.24), 0 1px 4px rgb(0 0 0 / 0.35);
   --shadow-add-fab:
-    0 10px 30px rgb(140 201 164 / 0.28), 0 2px 8px rgb(0 0 0 / 0.38);
+    0 10px 24px rgb(79 212 140 / 0.32), 0 2px 8px rgb(0 0 0 / 0.38);
+  --shadow-call-to-action: 0 10px 24px rgb(79 212 140 / 0.26);
+  --shadow-bottom-bar: 0 -10px 30px rgb(0 0 0 / 0.34);
 
-  --chart-1: #8cc9a4;
-  --chart-2: #e0b06a;
-  --chart-3: #e08a77;
-  --chart-4: #a3aba4;
-  --chart-5: #8e958f;
-  --sidebar: #232624;
-  --sidebar-foreground: #f0f1ef;
-  --sidebar-primary: #8cc9a4;
-  --sidebar-primary-foreground: #14211a;
-  --sidebar-accent: #2a3a30;
-  --sidebar-accent-foreground: #8cc9a4;
-  --sidebar-border: #363a37;
-  --sidebar-ring: #8cc9a4;
+  --chart-1: #4fd48c;
+  --chart-2: #ffd166;
+  --chart-3: #ff9c73;
+  --chart-4: #a5bbaf;
+  --chart-5: #7d9187;
+  --sidebar: #1c2620;
+  --sidebar-foreground: #eef6f0;
+  --sidebar-primary: #4fd48c;
+  --sidebar-primary-foreground: #0c2116;
+  --sidebar-accent: #1e3b2b;
+  --sidebar-accent-foreground: #4fd48c;
+  --sidebar-border: #26332c;
+  --sidebar-ring: #4fd48c;
+}
+
+/* Die Bewegung des Entwurfs. Die Keyframes stehen hier vollständig und
+   unverändert aus dem Prototyp; welche Dauer eine Stelle benutzt, steht bei
+   den --animate-*-Tokens oben. */
+
+/* Avo im Ruhezustand: ±6px senkrecht. */
+@keyframes bf-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Nur die Augen, und nur am Ende des Zyklus -- ein Blinzeln in der Mitte
+   sähe aus wie ein Zucken. */
+@keyframes bf-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes bf-wobble {
+  0%,
+  100% {
+    transform: rotate(-2.5deg);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+
+@keyframes bf-squish {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  45% {
+    transform: scale(1.05, 0.94);
+  }
+  70% {
+    transform: scale(0.98, 1.03);
+  }
+}
+
+@keyframes bf-tilt {
+  0%,
+  100% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@keyframes bf-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
 }
 
 @keyframes bf-pop {
   0% {
-    transform: scale(0.7);
+    transform: scale(0.4);
     opacity: 0;
   }
-  60% {
-    transform: scale(1.06);
+  55% {
+    transform: scale(1.18);
+  }
+  75% {
+    transform: scale(0.94);
   }
   100% {
     transform: scale(1);
@@ -267,13 +463,106 @@
   }
 }
 
+@keyframes bf-slide-in {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Breite statt scaleX: eine skalierte Leiste zieht ihre abgerundeten Enden
+   mit in die Breite. */
+@keyframes bf-grow-h {
+  from {
+    width: 0;
+  }
+}
+
+/* Die beiden Hälften eines Wochenbalkens teilen sich diese Animation und
+   setzen gegenläufige transform-origin, damit sie aus der Naht heraus
+   wachsen. */
+@keyframes bf-grow-up {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* 314,16 ist der Umfang des Quote-Rings (2·π·50) und steht als
+   RING_CIRCUMFERENCE auch in home-overview.tsx. Beide Werte meinen dasselbe
+   und müssen zusammen wandern. */
+@keyframes bf-ring {
+  from {
+    stroke-dashoffset: 314.16;
+  }
+}
+
+/* Jedes Konfetti-Teil setzt sein eigenes --dx und --dr, sonst fallen alle
+   auf derselben Bahn. */
+@keyframes bf-confetti {
+  0% {
+    transform: translate3d(0, -14px, 0) rotate(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--dx, 0), 300px, 0) rotate(var(--dr, 540deg));
+    opacity: 0;
+  }
+}
+
+@keyframes bf-burst {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes bf-bubble {
+  0% {
+    transform: translateY(10px) scale(0.7);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(-70px) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 140px, passend zum 186px hohen Sucherausschnitt minus der 18px-Einzüge
+   oben und unten. Ändert sich der Ausschnitt, ändert sich dieser Wert mit. */
 @keyframes bf-scan {
   0%,
   100% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(150px);
+    transform: translateY(140px);
+  }
+}
+
+@keyframes bf-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(240%);
   }
 }
 
@@ -306,11 +595,28 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
-  /* Die Oberfläche lebt von halbfetten Labels und sehr fetten Überschriften
-     — Manrope liefert beides bis 800. */
+  /* Quicksand kennt kein 800 -- die Überschriften stehen deshalb in 700
+     statt wie bisher in Manrope 800. */
   h1,
   h2,
   h3 {
-    @apply font-extrabold tracking-tight;
+    @apply font-heading font-bold tracking-tight;
+  }
+
+  /* Ohne diese Regel zappelt die Startseite dauerhaft: Avo bobbt, das
+     Bläschen steigt, das Konfetti fällt, der Glanz wandert -- alles endlos.
+     Die Einmal-Animationen laufen weiterhin, nur sofort, und landen dadurch
+     auf ihrem Endzustand (bf-pop bei scale(1), bf-grow-h bei voller Breite).
+     Genau deshalb wird hier nicht `animation: none` gesetzt: das ließe die
+     Elemente auf ihrem *Anfangs*zustand stehen, also unsichtbar. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
