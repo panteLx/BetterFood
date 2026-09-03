@@ -293,7 +293,7 @@ export function SortingManager({
       {groups.byPlace.map(({ place, categories: inPlace }) => (
         <section key={place.id} className="flex flex-col gap-2">
           <header className="flex items-center gap-2.5 px-1">
-            <span className="flex size-9.5 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-primary">
+            <span className="flex size-9.5 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
               <Refrigerator className="size-4.5" strokeWidth={1.7} />
             </span>
             {/* Abbrechen setzt nur den Bearbeitungsmodus zurück und fasst
@@ -317,11 +317,11 @@ export function SortingManager({
                   disabled={saving}
                   autoFocus
                   aria-label="Name des Fachs"
-                  className="h-10.5 min-w-0 flex-1 rounded-[13px] border border-primary bg-surface-2 px-3 text-[14.5px] font-bold outline-none"
+                  className="h-10.5 min-w-0 flex-1 rounded-lg bg-surface-2 px-3 font-heading text-[14.5px] font-bold ring-[1.5px] ring-primary ring-inset outline-none"
                 />
                 <Button
                   size="icon"
-                  className="size-10 shrink-0 rounded-[13px]"
+                  className="size-10 shrink-0"
                   disabled={saving}
                   onClick={() => renamePlace(place)}
                   aria-label="Speichern"
@@ -335,7 +335,7 @@ export function SortingManager({
                 <Button
                   size="icon"
                   variant="outline"
-                  className="size-10 shrink-0 rounded-[13px]"
+                  className="size-10 shrink-0"
                   disabled={saving}
                   onClick={() => setEditingPlaceId(null)}
                   aria-label="Abbrechen"
@@ -346,7 +346,9 @@ export function SortingManager({
             ) : (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] leading-tight font-bold">{place.name}</p>
+                  <p className="truncate font-heading text-[14.5px] leading-tight font-bold">
+                    {place.name}
+                  </p>
                   <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
                     {place.itemCount} Artikel
                   </p>
@@ -354,7 +356,7 @@ export function SortingManager({
                 <Button
                   size="icon"
                   variant="outline"
-                  className="size-10 shrink-0 rounded-[13px]"
+                  className="size-10 shrink-0"
                   disabled={saving}
                   onClick={() => {
                     setEditingPlaceId(place.id);
@@ -370,7 +372,7 @@ export function SortingManager({
                 <Button
                   size="icon"
                   variant="outline"
-                  className="size-10 shrink-0 rounded-[13px] text-danger"
+                  className="size-10 shrink-0 text-danger"
                   disabled={saving}
                   onClick={() => setPendingDeletePlace(place)}
                   aria-label={`Fach „${place.name}“ entfernen`}
@@ -404,11 +406,11 @@ export function SortingManager({
       {groups.orphans.length > 0 && (
         <section className="flex flex-col gap-2">
           <header className="flex items-center gap-2.5 px-1">
-            <span className="flex size-9.5 shrink-0 items-center justify-center rounded-[13px] bg-surface-2 text-faint">
+            <span className="flex size-9.5 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-faint">
               <CircleDashed className="size-4.5" strokeWidth={1.7} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14.5px] leading-tight font-bold">
+              <p className="truncate font-heading text-[14.5px] leading-tight font-bold">
                 Ohne Standardfach
               </p>
               <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">
@@ -669,13 +671,15 @@ function CategoryRow({
       disabled={disabled}
       onClick={onClick}
       aria-label={`${category.label} bearbeiten`}
-      className="flex items-center gap-2.5 rounded-[18px] border border-border bg-card px-3.5 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+      className="flex items-center gap-2.5 rounded-[24px] bg-card px-3.5 py-2.5 text-left shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-primary-tint text-primary">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
         <CategoryIcon categoryKey={category.key} className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14.5px] leading-tight font-bold">{category.label}</p>
+        <p className="truncate font-heading text-[14.5px] leading-tight font-bold">
+          {category.label}
+        </p>
         <p className="mt-1 text-xs leading-none font-medium text-muted-foreground">{meta}</p>
       </div>
       <ChevronRight className="size-4 shrink-0 text-faint" strokeWidth={2} />
@@ -697,7 +701,7 @@ function AddRow({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-11.5 items-center justify-center gap-1.5 rounded-[18px] border border-dashed border-border text-[13.5px] font-semibold text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+      className="flex h-11.5 items-center justify-center gap-1.5 rounded-[24px] bg-primary-tint font-heading text-[13.5px] font-bold text-primary-deep ring-[1.5px] ring-primary ring-inset outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
     >
       <Plus className="size-4" strokeWidth={2.4} />
       {label}
