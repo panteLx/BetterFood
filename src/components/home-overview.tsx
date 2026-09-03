@@ -138,6 +138,19 @@ type PreviewSection = {
  */
 const RING_CIRCUMFERENCE = 314.16;
 
+/**
+ * Die Staerke des Rings, in Einheiten der 116er viewBox -- auf den 78px, in
+ * denen er steht, also knapp 6,7px.
+ *
+ * Vorher 13 (8,7px): der Ring war damit so breit, dass innen kaum Platz fuer
+ * die Zahl blieb, und "100 %" stiess fast an seine Innenkante. Duenner liest
+ * sich das Verhaeltnis genauso deutlich und die Karte wirkt ruhiger.
+ */
+const RING_STROKE = 10;
+
+/** Feste ID, weil die Karte genau einmal auf der Seite steht. */
+const RING_GRADIENT_ID = "frischling-ring-gradient";
+
 /** Ein Icon je Abzeichen. Die Zuordnung ist Darstellung und gehört nicht in stats.ts. */
 const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
   first_save: Sprout,
@@ -675,28 +688,62 @@ function FrischlingCard({
         <div className="relative size-[78px] shrink-0">
           {/* Farben als var() am SVG-Attribut statt als Tailwind-Klasse:
               stroke ist hier kein Rand, sondern die Linie selbst, und der
-              Wert stammt aus derselben Token-Tabelle wie jede Klasse. */}
-          <svg viewBox="0 0 116 116" className="size-full -rotate-90" aria-hidden="true">
-            <circle cx="58" cy="58" r="50" fill="none" stroke="var(--track)" strokeWidth="13" />
-            {quota !== null && quota > 0 && (
+              Wert stammt aus derselben Token-Tabelle wie jede Klasse.
+
+              Gedreht wird die Gruppe und nicht das <svg>: der Bogen muss oben
+              anfangen, der Verlauf darin aber weiter von links oben nach
+              rechts unten laufen wie ueberall sonst in der App. Eine Drehung
+              am <svg> haette ihn mitgedreht. */}
+          <svg viewBox="0 0 116 116" className="size-full" aria-hidden="true">
+            <defs>
+              {/* Dieselben zwei Anteile wie --gradient-primary; als Token und
+                  nicht als Hexwert, damit der Dunkelmodus mitkommt. Ein
+                  Verlauf laesst sich einer SVG-Linie nur ueber eine solche
+                  Definition zuweisen, `stroke` nimmt keine CSS-Verlaeufe. */}
+              <linearGradient id={RING_GRADIENT_ID} x1="0.15" y1="0" x2="0.85" y2="1">
+                <stop offset="0%" stopColor="var(--primary-light)" />
+                <stop offset="100%" stopColor="var(--primary)" />
+              </linearGradient>
+            </defs>
+            <g transform="rotate(-90 58 58)">
               <circle
                 cx="58"
                 cy="58"
                 r="50"
                 fill="none"
-                stroke="var(--primary)"
-                strokeWidth="13"
-                strokeLinecap="round"
-                strokeDasharray={`${(quota / 100) * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-                className="animate-ring"
+                stroke="var(--track-ring)"
+                strokeWidth={RING_STROKE}
               />
-            )}
+              {quota !== null && quota > 0 && (
+                <circle
+                  cx="58"
+                  cy="58"
+                  r="50"
+                  fill="none"
+                  stroke={`url(#${RING_GRADIENT_ID})`}
+                  strokeWidth={RING_STROKE}
+                  // Bei einem vollen Ring stossen die beiden runden Enden
+                  // aufeinander und stehen als sichtbare Kerbe an der
+                  // Zwoelf-Uhr-Stelle -- genau bei 100 %, wo der Ring am
+                  // besten aussehen sollte. Stumpf endet er dort nahtlos.
+                  strokeLinecap={quota >= 100 ? "butt" : "round"}
+                  strokeDasharray={`${(quota / 100) * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                  className="animate-ring"
+                />
+              )}
+            </g>
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-heading text-[21px] leading-none font-bold tabular-nums">
-              {quota === null ? "–" : `${quota} %`}
+            {/* Das Prozentzeichen eine Stufe kleiner und zurueckgenommen: bei
+                dreistelligen Quoten stand "100 %" sonst fast an der Innenkante
+                des Rings, und die Zahl ist ohnehin die Aussage. */}
+            <span className="flex items-baseline gap-[2px] font-heading leading-none font-bold tabular-nums">
+              <span className="text-[22px]">{quota === null ? "–" : quota}</span>
+              {quota !== null && (
+                <span className="text-[12px] text-muted-foreground">%</span>
+              )}
             </span>
-            <span className="mt-0.5 text-[10.5px] leading-none font-bold text-faint">
+            <span className="mt-[3px] text-[10px] leading-none font-bold text-faint">
               gerettet
             </span>
           </div>
