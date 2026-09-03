@@ -7,7 +7,7 @@ import { SubPageHeader } from "@/components/sub-page-header";
 import { InstallHintSettings } from "@/components/install-hint";
 import { Chip } from "@/components/ui/chip";
 import { Switch } from "@/components/ui/switch";
-import { daysUntil, formatMedium } from "@/lib/expiry";
+import { addDays, daysUntil, formatMedium, startOfDay } from "@/lib/expiry";
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -47,13 +47,23 @@ const clockFormat = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: 
  * damit der Titel auch seine Mehrzahl-Form zeigt. Die Vorschau baut ihren
  * Text mit denselben Funktionen wie der Versand: schaltet jemand eine Stufe
  * ab, verschwindet sie hier genauso wie später auf dem Sperrbildschirm.
+ *
+ * Mit MHD und nicht nur mit Namen, weil der Meldungstext bei genau einem
+ * Artikel die Zeitangabe trägt. Das Beispiel der Vorwarnung hängt deshalb an
+ * der gewählten Vorwarnzeit: wer auf "3 Tage vorher" tippt, soll in der
+ * Vorschau "Noch 3 Tage" lesen und nicht eine erfundene Zahl.
  */
-const PREVIEW_ITEMS: { item: { name: string }; stage: Stage }[] = [
-  { item: { name: "Naturjoghurt" }, stage: "expired" },
-  { item: { name: "Vollmilch" }, stage: "zero" },
-  { item: { name: "Hackfleisch" }, stage: "zero" },
-  { item: { name: "Blattspinat" }, stage: "lead" },
-];
+function previewItems(
+  leadDays: number,
+  today: Date,
+): { item: { name: string; expiryDate: Date }; stage: Stage }[] {
+  return [
+    { item: { name: "Naturjoghurt", expiryDate: addDays(-3, today) }, stage: "expired" },
+    { item: { name: "Vollmilch", expiryDate: today }, stage: "zero" },
+    { item: { name: "Hackfleisch", expiryDate: today }, stage: "zero" },
+    { item: { name: "Blattspinat", expiryDate: addDays(leadDays, today) }, stage: "lead" },
+  ];
+}
 
 /** "Heute, 09:14" -- Zeilen aus PR 1 tragen nur ein Datum und bleiben ohne Uhrzeit. */
 function formatLastSent(raw: string): string | null {
@@ -229,10 +239,13 @@ export default function RemindersPage() {
   }
 
   const hour = notificationHour(settings.time);
-  // Getrennt von der Vorschau: die hängt an PREVIEW_ITEMS und wäre als
+  // Getrennt von der Vorschau: die hängt an den Beispielartikeln und wäre als
   // Ersatzfrage nur so lange richtig, wie dort je Stufe ein Beispiel steht.
   const anyStage = STAGES.some((stage) => settings.stages[stage]);
-  const preview = PREVIEW_ITEMS.filter((entry) => settings.stages[entry.stage]);
+  const today = startOfDay(new Date());
+  const preview = previewItems(settings.leadDays, today).filter(
+    (entry) => settings.stages[entry.stage],
+  );
   const lastSent = settings.lastSentAt ? formatLastSent(settings.lastSentAt) : null;
 
   return (
@@ -396,7 +409,7 @@ export default function RemindersPage() {
                 {notificationTitle(preview)}
               </p>
               <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
-                {notificationBody(preview)}
+                {notificationBody(preview, today)}
               </p>
             </div>
           </div>

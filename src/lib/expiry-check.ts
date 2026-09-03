@@ -232,7 +232,7 @@ export async function runExpiryCheck({
       if (dueItems.length > 0) {
         const payload = JSON.stringify({
           title: notificationTitle(dueItems),
-          body: notificationBody(dueItems),
+          body: notificationBody(dueItems, today),
           // Eine Meldung pro Liste ersetzt die vorherige, statt sich zu stapeln.
           tag: `list-${list.id}`,
           // Genau ein Artikel: direkt zu ihm. Bei mehreren führt der Weg auf
@@ -330,12 +330,13 @@ export async function buildPreviewNotification(
   if (!item) return null;
 
   const prefs = await readPreferences(userId, listId);
-  const stage: Stage = stageOf(item, prefs.leadDays, startOfDay(new Date()))?.stage ?? "lead";
+  const today = startOfDay(new Date());
+  const stage: Stage = stageOf(item, prefs.leadDays, today)?.stage ?? "lead";
   const due: DueItem[] = [{ item, stage }];
 
   return {
     title: notificationTitle(due),
-    body: notificationBody(due),
+    body: notificationBody(due, today),
     tag: "test",
     url: `/item/${item.id}`,
   };

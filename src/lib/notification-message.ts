@@ -7,7 +7,7 @@
  * Client-Komponente -- deshalb ist diese Datei frei von Datenbankzugriffen und
  * kennt vom Artikel nur, was sie liest: Name und MHD.
  */
-import { addDays, daysUntil, startOfDay } from "@/lib/expiry";
+import { addDays, daysUntil, formatShort, startOfDay } from "@/lib/expiry";
 import { STAGES, type NotificationSettings, type Stage } from "@/lib/notification-settings";
 
 // Wie oft sich ein bereits abgelaufener Artikel wieder meldet. Einmal und nie
@@ -149,6 +149,11 @@ export function wantsAnything(settings: NotificationSettings, isSunday: boolean)
  * Satz. Bewusst alte Zeichen (Unicode 6.0, 2010) statt der ausdrucksstärkeren
  * neuen wie 🫠: die rendern auf älteren Android-Versionen als leeres Kästchen,
  * und ein Kästchen ist das Gegenteil von verspielt.
+ *
+ * detail() ist die Zeile unter einer Meldung über genau einen Artikel. Dort
+ * stand vorher noch einmal sein Name -- den der Titel schon nennt. Sie
+ * beantwortet stattdessen, was "bald" heißt: bei drei Tagen Vorwarnzeit sagt
+ * der Titel denselben Satz wie bei einem.
  */
 const STAGE_TEXT: Record<
   Stage,
@@ -158,6 +163,7 @@ const STAGE_TEXT: Record<
     phrase: (count: number) => string;
     prefix: string;
     emoji: string;
+    detail: (days: number) => string;
   }
 > = {
   lead: {
@@ -166,6 +172,7 @@ const STAGE_TEXT: Record<
     phrase: (count) => (count === 1 ? "1 läuft bald ab" : `${count} laufen bald ab`),
     prefix: "Bald",
     emoji: "🌱",
+    detail: (days) => `Noch ${days} ${days === 1 ? "Tag" : "Tage"}`,
   },
   zero: {
     single: (name) => `${name} läuft heute ab`,
@@ -173,6 +180,7 @@ const STAGE_TEXT: Record<
     phrase: (count) => (count === 1 ? "1 läuft heute ab" : `${count} laufen heute ab`),
     prefix: "Heute",
     emoji: "⏰",
+    detail: () => "Letzter Tag",
   },
   expired: {
     single: (name) => `${name} ist abgelaufen`,
@@ -180,6 +188,7 @@ const STAGE_TEXT: Record<
     phrase: (count) => `${count} abgelaufen`,
     prefix: "Abgelaufen",
     emoji: "😵",
+    detail: (days) => `Seit ${-days} ${days === -1 ? "Tag" : "Tagen"}`,
   },
 };
 
@@ -239,13 +248,24 @@ function restSuffix(rest: number): string {
  * iOS in der eingeklappten Meldung nicht, dort bliebe die zweite Gruppe
  * unsichtbar.
  *
- * Ein einzelner Artikel bleibt ohne Präfix -- bei ihm nennt der Titel Name
- * und Stufe schon in einem Satz ("Naturjoghurt ist abgelaufen").
+ * Ein einzelner Artikel bekommt statt einer Gruppe seine Zeitangabe: der
+ * Titel nennt Name und Stufe schon in einem Satz ("Blattspinat läuft bald
+ * ab"), der Name darunter wäre reine Wiederholung. "Noch 2 Tage · MHD
+ * 05.09.2026" sagt dagegen das, was im Titel fehlt.
+ *
+ * Das kurze Datumsformat und nicht formatMedium: "05. September 2026" frisst
+ * in einer zweizeiligen Meldung die halbe Zeile für eine Angabe, die daneben
+ * schon in Tagen dasteht.
  */
 export function notificationBody(
-  due: readonly { item: { name: string }; stage: Stage }[],
+  due: readonly { item: { name: string; expiryDate: Date }; stage: Stage }[],
+  today: Date,
 ): string {
-  if (due.length === 1) return due[0].item.name;
+  if (due.length === 1) {
+    const { item, stage } = due[0];
+    const days = daysUntil(item.expiryDate, today);
+    return `${STAGE_TEXT[stage].detail(days)} · MHD ${formatShort(item.expiryDate)}`;
+  }
 
   // Das Namensbudget wandert von der dringendsten Gruppe nach unten: läuft es
   // aus, fehlt am Ende die Vorwarnung und nicht die abgelaufene Ware. Eine
