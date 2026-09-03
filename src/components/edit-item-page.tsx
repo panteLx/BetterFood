@@ -3,7 +3,7 @@ import { ItemForm } from "@/components/item-form";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireSession, isListMember } from "@/lib/session";
+import { requireSession, visibleListId } from "@/lib/session";
 import { getCategoriesForList, getPlacesForList } from "@/lib/data";
 
 /** standalone: siehe AddItemPage -- verhindert router.back() aus der App heraus. */
@@ -20,8 +20,8 @@ export async function EditItemPage({ id, standalone = false }: { id: string; sta
     .where(and(eq(items.id, Number(id)), isNull(items.hiddenAt)))
     .get();
 
-  const listId = item?.listId ?? null;
-  if (!item || listId === null || !(await isListMember(session.user.id, listId))) notFound();
+  const listId = await visibleListId(session.user.id, item);
+  if (!item || listId === null) notFound();
 
   const [allCategories, allPlaces] = await Promise.all([
     getCategoriesForList(listId),

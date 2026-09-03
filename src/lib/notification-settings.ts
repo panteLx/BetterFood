@@ -23,9 +23,6 @@
  */
 export type Stage = "lead" | "zero" | "expired";
 
-/** Chronologisch -- die Reihenfolge, in der die Schalter auf der Seite stehen. */
-export const STAGES: Stage[] = ["lead", "zero", "expired"];
-
 /**
  * Anlass -> Schlüssel, Voreinstellung und Beschriftung.
  *
@@ -62,6 +59,14 @@ export const NOTIFICATION_STAGES: Record<
     description: "Am Tag danach, dann wöchentlich",
   },
 };
+
+/**
+ * Chronologisch -- die Reihenfolge, in der die Schalter auf der Seite stehen.
+ * Aus der Karte gelesen statt daneben noch einmal aufgezählt: die Karte ist
+ * chronologisch geschrieben, und für Zeichenketten-Schlüssel ist die
+ * Einfügereihenfolge garantiert.
+ */
+export const STAGES = Object.keys(NOTIFICATION_STAGES) as Stage[];
 
 export const NOTIFICATION_KEYS = {
   leadDays: "notification_lead_days",
@@ -143,6 +148,15 @@ export function notificationHour(time: string): number {
 /** 9 -> "09:00". Die Uhrzeit bleibt als Text gespeichert wie bisher. */
 export function formatNotificationHour(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`;
+}
+
+/**
+ * Die Spanne der Vorwarnzeit. Steht wie die Uhrzeit-Prüfung hier und nicht in
+ * der Route: zwei Fassungen derselben Grenze sind zwei, die auseinanderlaufen
+ * können. Dieselbe Aufteilung wie in monthly-goal.ts.
+ */
+export function isValidLeadDays(value: unknown): value is number {
+  return Number.isFinite(value) && (value as number) >= 0 && (value as number) <= 30;
 }
 
 export function isValidNotificationTime(value: unknown): value is string {

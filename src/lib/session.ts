@@ -73,7 +73,8 @@ export async function isListMember(userId: string, listId: number | null): Promi
 }
 
 /**
- * Die Liste eines Artikels, sofern der Nutzer sie sehen darf -- sonst null.
+ * Die Liste einer bereits geladenen Artikel-Zeile, sofern der Nutzer sie sehen
+ * darf -- sonst null.
  *
  * Vorher schnitten die Artikel-Routen über requireActiveList() zu: eine
  * Änderung an einem Artikel war nur möglich, solange dessen Liste zufällig
@@ -82,20 +83,40 @@ export async function isListMember(userId: string, listId: number | null): Promi
  * Rückgabewert ersetzt die aktive Liste überall dort, wo sie vorher stand --
  * auch Kategorie und Ort werden gegen ihn geprüft.
  *
- * Für Aufrufer, die nur die Liste brauchen. Wer die ganze Zeile ohnehin
- * lädt (Detailseite, Bearbeiten-Formular, /resolve), prüft stattdessen
- * isListMember() gegen die listId der geladenen Zeile, statt sie ein zweites
- * Mal abzufragen.
+ * Als eigene Funktion, weil die Regel sonst an jeder Stelle neu
+ * zusammengesetzt wird, die die Zeile schon in der Hand hat (Detailseite,
+ * Bearbeiten-Formular, /resolve) -- und "eine Zeile ohne listId gehört
+ * niemandem" ist eine Sichtbarkeitsgrenze, die genau eine Fassung haben soll.
+ */
+export async function visibleListId(
+  userId: string,
+  row: { listId: number | null } | undefined,
+): Promise<number | null> {
+  const listId = row?.listId ?? null;
+  return (await isListMember(userId, listId)) ? listId : null;
+}
+
+/**
+ * Dasselbe für Aufrufer, die den Artikel gar nicht laden -- die Schreibrouten
+ * unter /api/items/[id] brauchen nur die Liste.
+ *
+ * Ein Join und nicht Zeile-lesen-dann-Mitgliedschaft-prüfen: die Frage steht
+ * auf dem Weg jedes Mengenschritts, jedes Speicherns und jedes
+ * Rückgängigmachens, und zwei Abfragen beantworten sie nicht besser als eine.
  */
 export async function itemListId(userId: string, itemId: number): Promise<number | null> {
   const row = await db
     .select({ listId: items.listId })
     .from(items)
+    .innerJoin(
+      listMembers,
+      and(eq(listMembers.listId, items.listId), eq(listMembers.userId, userId)),
+    )
+    .innerJoin(lists, and(eq(lists.id, items.listId), isNull(lists.archivedAt)))
     .where(and(eq(items.id, itemId), isNull(items.hiddenAt)))
     .get();
 
-  const listId = row?.listId ?? null;
-  return listId !== null && (await isListMember(userId, listId)) ? listId : null;
+  return row?.listId ?? null;
 }
 
 export async function requireActiveList(userId: string): Promise<number> {

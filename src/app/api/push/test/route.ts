@@ -36,7 +36,7 @@ export async function POST() {
   const webpush = getWebPush();
   const payload = JSON.stringify(
     preview ?? {
-      title: "Testbenachrichtigung",
+      title: "🌱 Testbenachrichtigung",
       body: "Push-Benachrichtigungen funktionieren.",
     },
   );

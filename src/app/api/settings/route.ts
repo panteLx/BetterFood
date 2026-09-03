@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { requireSession } from "@/lib/session";
+import { writeSetting } from "@/lib/data";
 import {
   NOTIFICATION_HOUR_MAX,
   NOTIFICATION_HOUR_MIN,
@@ -11,6 +12,7 @@ import {
   NOTIFICATION_SETTING_KEYS,
   NOTIFICATION_STAGES,
   STAGES,
+  isValidLeadDays,
   isValidNotificationTime,
   parseNotificationSettings,
   type Stage,
@@ -66,7 +68,7 @@ export async function PUT(req: NextRequest) {
   const updates: { key: string; value: string }[] = [];
 
   if (leadDays !== undefined) {
-    if (!Number.isFinite(leadDays) || leadDays < 0 || leadDays > 30) {
+    if (!isValidLeadDays(leadDays)) {
       return NextResponse.json({ error: "leadDays muss zwischen 0 und 30 liegen" }, { status: 400 });
     }
     updates.push({ key: NOTIFICATION_KEYS.leadDays, value: String(Math.round(leadDays)) });
@@ -117,13 +119,7 @@ export async function PUT(req: NextRequest) {
   }
 
   for (const update of updates) {
-    await db
-      .insert(settings)
-      .values({ userId: session.user.id, key: update.key, value: update.value })
-      .onConflictDoUpdate({
-        target: [settings.userId, settings.key],
-        set: { value: update.value },
-      });
+    await writeSetting(session.user.id, update.key, update.value);
   }
 
   return GET();

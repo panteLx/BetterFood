@@ -60,18 +60,16 @@ export async function POST(req: NextRequest) {
   // Ohne Angabe die aktive Liste -- so rufen Formular, Scan und
   // Rechnungsimport die Route auf und sollen es weiter tun. Angegeben wird
   // die Liste nur vom Nachkaufen auf der Detailseite: dort gibt es keine
-  // Artikel-ID, aus der sich die Zielliste ableiten liesse, und hinter einem
+  // Artikel-ID, aus der sich die Zielliste ableiten ließe, und hinter einem
   // Deep-Link wäre die aktive Liste die falsche. Geprüft wird sie
   // trotzdem -- ein Client darf sich keine fremde Liste aussuchen.
-  let listId: number;
-  if (targetListId === undefined) {
-    listId = await requireActiveList(session.user.id);
-  } else {
-    if (!Number.isInteger(targetListId) || !(await isListMember(session.user.id, targetListId))) {
-      return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
-    }
-    listId = targetListId;
+  if (
+    targetListId !== undefined &&
+    (!Number.isInteger(targetListId) || !(await isListMember(session.user.id, targetListId)))
+  ) {
+    return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
+  const listId = targetListId ?? (await requireActiveList(session.user.id));
 
   const categoryRow = await db
     .select()
@@ -84,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Der Ort ist optional, muss aber -- wenn angegeben -- zu dieser Liste
-  // gehören: sonst liesse sich ein Artikel in das Fach einer fremden Liste
+  // gehören: sonst ließe sich ein Artikel in das Fach einer fremden Liste
   // legen.
   const place = await resolvePlace(placeId, listId);
   if (place === "invalid") {

@@ -229,6 +229,9 @@ export default function RemindersPage() {
   }
 
   const hour = notificationHour(settings.time);
+  // Getrennt von der Vorschau: die hängt an PREVIEW_ITEMS und wäre als
+  // Ersatzfrage nur so lange richtig, wie dort je Stufe ein Beispiel steht.
+  const anyStage = STAGES.some((stage) => settings.stages[stage]);
   const preview = PREVIEW_ITEMS.filter((entry) => settings.stages[entry.stage]);
   const lastSent = settings.lastSentAt ? formatLastSent(settings.lastSentAt) : null;
 
@@ -310,7 +313,7 @@ export default function RemindersPage() {
         {/* Kein Fehler, sondern eine Folge -- deshalb eine ruhige Zeile und
             keine Warnfarbe. Ohne sie sucht man den Grund für die Stille zwei
             Wochen später beim Server. */}
-        {preview.length === 0 && (
+        {!anyStage && (
           <p className="px-1 text-[13px] leading-relaxed font-medium text-muted-foreground">
             {settings.weeklySummary
               ? "So kommt nur noch sonntags die Wochenübersicht."
@@ -319,11 +322,11 @@ export default function RemindersPage() {
         )}
       </section>
 
-      {/* Ohne Vorwarnung gibt es kein "wie früh" mehr zu beantworten. */}
+      {/* Ohne Vorwarnung gibt es keinen Vorlauf mehr zu wählen. */}
       {settings.stages.lead && (
         <section className="flex flex-col gap-2.5">
           <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Wie früh?
+            Vorlauf der Vorwarnung
           </h2>
           <div className="flex gap-2">
             {LEAD_DAY_OPTIONS.map((option) => (
@@ -393,7 +396,7 @@ export default function RemindersPage() {
                 {notificationTitle(preview)}
               </p>
               <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
-                {notificationBody(preview.map((entry) => entry.item.name))}
+                {notificationBody(preview)}
               </p>
             </div>
           </div>

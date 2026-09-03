@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { requireSession, isListMember } from "@/lib/session";
+import { requireSession, visibleListId } from "@/lib/session";
 
 /**
  * Löst genau EINE Einheit eines Artikels auf.
@@ -40,8 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Die Liste kommt aus dem Artikel, nicht aus der Sitzung: sonst hätte ein
   // Abhaken hinter einem Deep-Link entweder ins Leere gegriffen oder -- beim
   // Anlegen der Archivzeile weiter unten -- in der falschen Liste gelandet.
-  const listId = item?.listId ?? null;
-  if (!item || listId === null || !(await isListMember(session.user.id, listId))) {
+  const listId = await visibleListId(session.user.id, item);
+  if (!item || listId === null) {
     return NextResponse.json({ error: "nicht gefunden" }, { status: 404 });
   }
 
