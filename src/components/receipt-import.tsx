@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Receipt, TriangleAlert } from "lucide-react";
+import { Check, Loader2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SubPageHeader } from "@/components/sub-page-header";
@@ -227,8 +227,13 @@ export function ReceiptImport() {
             dragging && "bg-primary-tint shadow-card ring-2 ring-primary",
           )}
         >
+          {/* Avo statt des Belegsymbols, wie im leeren Vorrat und im leeren
+              Archiv -- waehrend gelesen wird aber weiterhin der Spinner: er
+              ist an dieser Stelle kein Schmuck, sondern die einzige Auskunft
+              darueber, dass die PDF gerade verarbeitet wird. */}
           <EmptyState
-            icon={reading ? Loader2 : Receipt}
+            mascot={!reading}
+            icon={Loader2}
             tone="primary"
             className={reading ? "[&_svg]:animate-spin" : undefined}
             title={reading ? "Rechnung wird gelesen …" : "Rechnung einlesen"}
@@ -236,7 +241,7 @@ export function ReceiptImport() {
             Ein Foto oder eingescannter Kassenbon funktioniert noch nicht!"
             action={
               <Button
-                className="mt-1 h-12 rounded-lg px-6"
+                className="mt-1 h-[54px] rounded-[20px] px-[26px] text-[16px]"
                 disabled={reading}
                 onClick={() => fileInputRef.current?.click()}
               >

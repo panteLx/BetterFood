@@ -205,9 +205,19 @@
   --primary-light: #4fd48c;
   --primary-deep: #1c8f52;
   --primary-tint: #d5f4e2;
-  /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primärton hat dort
-     zu wenig Kontrast, deshalb ein eigener, aufgehellter Wert. */
+  /* Akzent auf dunklem Grund (Scanner-Linie, Blasen auf der Frischling-Karte):
+     der Primärton hat dort zu wenig Kontrast, deshalb ein eigener,
+     aufgehellter Wert. */
   --primary-inv: #7ce8a8;
+  /* Der Toast ist die eine Fläche, die in beiden Themes dunkel bleibt --
+     deshalb eigene Tokens statt --foreground/--background und kein
+     Gegenstück im .dark-Block weiter unten. Vorher war er invertiert, im
+     Dunkelmodus also cremeweiß: eine kurz aufblitzende helle Fläche über
+     einer dunklen Liste, die genau so hell war wie die Meldung wichtig war.
+     Dunkel in beiden Themes ist ruhiger und trifft den Entwurf. */
+  --toast: #16302a;
+  --toast-foreground: #eef8ef;
+  --toast-accent: #7ce8a8;
   --warning: #ffc94d;
   --warning-ink: #a9701a;
   --warning-on: #4a3608;
@@ -311,8 +321,9 @@
   --primary-light: #6fe09d;
   --primary-deep: #4fd48c;
   --primary-tint: #1e3b2b;
-  /* Der Toast ist invertiert, seine Fläche also hell — der Akzent darauf ist
-     hier dunkel, genau andersherum als im Hellmodus. */
+  /* Auf der hellen Frischling-Karte des Dunkelmodus ist der aufgehellte
+     Akzent unsichtbar, hier steht deshalb der dunkle Gegenwert. Der Toast
+     benutzt ihn nicht mehr (siehe --toast-accent). */
   --primary-inv: #1a7039;
   --warning: #ffd166;
   --warning-ink: #ffd166;

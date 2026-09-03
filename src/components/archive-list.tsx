@@ -5,7 +5,6 @@ import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import {
-  Archive as ArchiveIcon,
   EyeOff,
   RotateCcw,
   type LucideIcon,
@@ -64,11 +63,17 @@ export function ArchiveList({
 
   if (items.length === 0) {
     return (
-      <EmptyState
-        icon={ArchiveIcon}
-        title="Das Archiv ist leer"
-        body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
-      />
+      // Dieselbe Karte wie der leere Vorrat: ein leeres Archiv ist genauso ein
+      // Bildschirm ohne einen einzigen Datenpunkt, und die Statistik darueber
+      // faellt dann ohnehin weg (siehe ArchiveView). Ohne die Karte stand hier
+      // nur Text auf dem nackten Seitengrund.
+      <div className="rounded-[30px] bg-card shadow-card">
+        <EmptyState
+          mascot
+          title="Das Archiv ist leer"
+          body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
+        />
+      </div>
     );
   }
 

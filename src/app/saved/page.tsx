@@ -141,15 +141,19 @@ async function Saved({ searchParams }: { searchParams: SavedParams }) {
       </div>
 
       {expiry && (
+        // text-left auf den Beschriftungen: die Seite steht komplett auf
+        // text-center, und flex-1 macht aus jeder Beschriftung eine breite
+        // Spalte -- der Text sass dadurch mitten in der Zeile statt an ihrem
+        // linken Rand.
         <div className="relative w-full animate-slide-in rounded-[26px] bg-card px-[18px] py-1.5 shadow-card [animation-delay:220ms]">
           <div className="flex items-center gap-2.5 border-b border-hairline py-[13px]">
-            <span className="flex-1 text-[13.5px] font-semibold text-muted-foreground">
+            <span className="flex-1 text-left text-[13.5px] font-semibold text-muted-foreground">
               Haltbar bis
             </span>
             <span className="font-heading text-[14.5px] font-bold">{formatMedium(expiry)}</span>
           </div>
           <div className="flex items-center gap-2.5 py-[13px]">
-            <span className="flex-1 text-[13.5px] font-semibold text-muted-foreground">
+            <span className="flex-1 text-left text-[13.5px] font-semibold text-muted-foreground">
               Im Vorrat
             </span>
             <span className="inline-flex h-[26px] items-center rounded-full bg-primary-tint px-[11px] font-heading text-sm font-bold text-primary-deep">

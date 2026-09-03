@@ -9,7 +9,6 @@ import {
   CalendarCheck,
   ChevronRight,
   Flame,
-  Package,
   Sprout,
   Target,
   Trophy,
@@ -499,7 +498,12 @@ export function HomeOverview({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-[18px] pt-[34px]">
+    // pt-1.5 und nicht die 34px des Entwurfs: das Layout setzt die Safe Area
+    // oben bereits als pt-[max(env(safe-area-inset-top),1.75rem)] (im Browser
+    // also 28px), und beides zusammen ergab 62px Luft ueber der Begruessung --
+    // sichtbar mehr als jede andere Seite. 6px darauf treffen die 34px, ohne
+    // den Abstand ein zweites Mal zu setzen.
+    <div className="flex flex-1 flex-col gap-5 px-[18px] pt-1.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] leading-[1.15] tracking-[-0.01em]">
@@ -580,12 +584,17 @@ export function HomeOverview({
 
       {items.length === 0 && (
         <div className="rounded-[30px] bg-card shadow-card">
+          {/* Avo statt des grauen Paket-Quadrats -- dieselbe Begruendung wie im
+              leeren Vorrat (siehe EmptyState.mascot): der erste Bildschirm
+              ohne einen einzigen Datenpunkt ist die falsche Stelle fuer ein
+              graues Symbol. Die Beschriftung nennt seitdem auch hier den
+              ersten Artikel, weil es auf einem leeren Vorrat genau darum
+              geht. */}
           <EmptyState
-            icon={Package}
-            tone="muted"
+            mascot
             title="Hier ist noch nichts drin"
             body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
-            action={<AddItemButton label="Artikel hinzufügen" />}
+            action={<AddItemButton label="Ersten Artikel hinzufügen" />}
           />
         </div>
       )}
