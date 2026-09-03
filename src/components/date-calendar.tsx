@@ -113,24 +113,24 @@ export function DateCalendar({
           type="button"
           aria-label="Vorheriger Monat"
           onClick={() => setMonthCursor(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-          className="flex size-9.5 items-center justify-center rounded-[13px] border border-border bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex size-9 items-center justify-center rounded-full bg-surface-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <ChevronLeft className="size-4" strokeWidth={2.1} />
+          <ChevronLeft className="size-[15px]" strokeWidth={2.6} />
         </button>
-        <span className="text-[15px] font-bold">{monthFormat.format(month)}</span>
+        <span className="font-heading text-base font-bold">{monthFormat.format(month)}</span>
         <button
           type="button"
           aria-label="Nächster Monat"
           onClick={() => setMonthCursor(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-          className="flex size-9.5 items-center justify-center rounded-[13px] border border-border bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex size-9 items-center justify-center rounded-full bg-surface-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <ChevronRight className="size-4" strokeWidth={2.1} />
+          <ChevronRight className="size-[15px]" strokeWidth={2.6} />
         </button>
       </div>
 
       <div className="grid grid-cols-7 gap-0.5 pb-1.5">
         {WEEKDAYS.map((weekday) => (
-          <span key={weekday} className="py-1 text-center text-[11px] font-semibold text-faint">
+          <span key={weekday} className="py-1 text-center text-[11px] font-bold text-faint">
             {weekday}
           </span>
         ))}
@@ -168,16 +168,27 @@ export function DateCalendar({
                 onChange(key);
               }}
               className={cn(
-                "h-10 rounded-[13px] text-sm font-semibold tabular-nums transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                !inMonth && "opacity-35",
-                isPast && "cursor-default text-faint",
-                isValue && confirmed && "bg-primary text-primary-foreground",
+                "h-[38px] rounded-[14px] font-heading text-sm font-semibold tabular-nums transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                // Randtage des Nachbarmonats und vergangene Tage schliessen
+                // sich hier gegenseitig aus (nie beide Opacity-Klassen auf
+                // derselben Zelle) -- zwei Utilities auf derselben
+                // CSS-Eigenschaft haetten sonst je nach Stylesheet-Reihenfolge
+                // unvorhersehbar gewonnen.
+                !inMonth && !isPast && "opacity-35",
+                // #cdd8cf aus dem Entwurf ist kein eigenes Token -- die
+                // Vergangenheit bekommt stattdessen --faint bei reduzierter
+                // Deckkraft, das trifft den Ton ohne einen rohen Hex-Wert.
+                isPast && "cursor-default text-faint opacity-40",
+                isValue &&
+                  confirmed &&
+                  "bg-(image:--gradient-primary) font-bold text-primary-foreground",
                 // Ein Ring, eine Bedeutung: "beachtenswert, aber nicht deine
                 // Wahl". Im Blatt trägt ihn der heutige Tag, im Prüfschritt der
                 // unbestätigte Richtwert -- nie beide zugleich, dafür sorgt
-                // markToday.
+                // markToday. Kein font-extrabold hier: Quicksand laedt nur bis
+                // 700.
                 ((isValue && !confirmed) || (isToday && !isValue && markToday)) &&
-                  "font-extrabold ring-[1.5px] ring-primary ring-inset",
+                  "ring-[1.5px] ring-primary ring-inset",
               )}
             >
               {date.getDate()}

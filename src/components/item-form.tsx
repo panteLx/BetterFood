@@ -589,17 +589,21 @@ export function ItemForm({
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex flex-1 flex-col gap-5 px-5 pt-2 pb-5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
+          {/* Weisser Rundknopf statt des bisherigen Ghost-Buttons -- der
+              Entwurf traegt Tiefe ueber getoente Schatten statt ueber Raender,
+              und ein 44px-Kreis auf --card mit --shadow-row ist genau dieses
+              Material auch fuer Kopfzeilen-Knoepfe. */}
           <Button
             variant="ghost"
             size="icon-touch"
             aria-label="Zurück"
             onClick={() => leave()}
-            className="-ml-2 rounded-2xl"
+            className="-ml-1 rounded-full bg-card shadow-row"
           >
-            <ArrowLeft className="size-5.5" />
+            <ArrowLeft className="size-5" strokeWidth={2.4} />
           </Button>
-          <h1 className="text-xl leading-tight">{title}</h1>
+          <h1 className="text-[22px] leading-tight">{title}</h1>
         </div>
 
         <Field label="Was ist es?" htmlFor="name">
@@ -609,16 +613,19 @@ export function ItemForm({
             onChange={(event) => handleNameChange(event.target.value)}
             placeholder="z. B. Feldsalat"
             autoFocus={!itemId && !initialName}
-            className="h-14 rounded-[18px] border-border bg-card px-4 text-base font-semibold"
+            className="h-14 rounded-[22px] px-[18px] font-heading text-base font-bold"
           />
           {!itemId && suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-0.5">
+            <div className="flex flex-wrap gap-[7px] pt-0.5">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
                   onClick={() => handleNameChange(suggestion)}
-                  className="h-8.5 rounded-[10px] border border-dashed border-border bg-surface-2 px-3 text-[13px] font-semibold text-muted-foreground"
+                  // Die gestrichelte Umrandung faellt weg -- der Entwurf
+                  // traegt Vorschlaege als ruhige Flaeche (surface-2), nicht
+                  // als Platzhalter-Andeutung.
+                  className="h-8 rounded-full bg-surface-2 px-[13px] text-[12.5px] font-bold text-muted-foreground"
                 >
                   {suggestion}
                 </button>
@@ -649,7 +656,12 @@ export function ItemForm({
                 setNewCategoryShelfLife("14");
                 setNewCategoryOpen(true);
               }}
-              className="inline-flex h-[34px] items-center gap-1 rounded-[10px] border border-dashed border-border px-3 text-[12.5px] font-semibold text-primary"
+              // Wie die uebrigen, nicht ausgewaehlten Kategorie-Chips: weisse
+              // Pille mit shadow-row statt der bisherigen gestrichelten
+              // Umrandung. Nur die Textfarbe (primary-deep) und das
+              // Plus-Icon zeigen, dass dieser Chip eine Handlung ist statt
+              // einer Auswahl.
+              className="inline-flex h-[34px] items-center gap-1 rounded-full bg-card px-3.5 font-heading text-[12.5px] font-bold text-primary-deep shadow-row"
             >
               <Plus className="size-3.5" strokeWidth={2.4} />
               Neue Kategorie
@@ -679,7 +691,11 @@ export function ItemForm({
                   // Antippen fuehrte sonst in einen Zustand zurueck, den das
                   // Speichern gleich wieder anmahnt.
                   onClick={() => handlePlaceChange(place.id)}
-                  className="h-10 flex-1 px-2.5 text-xs"
+                  // Drei gleich breite 44px-Felder mit 16px statt vollem
+                  // Radius -- der Ort ist die einzige Chip-Reihe, die als
+                  // Feld statt als Pille auftritt, deshalb die Radius- und
+                  // Hoehen-Ueberschreibung hier statt in ui/chip.tsx.
+                  className="h-11 flex-1 rounded-[16px] px-2.5"
                 >
                   {place.name}
                 </Chip>
@@ -697,18 +713,21 @@ export function ItemForm({
         )}
 
         <Field label="Menge">
-          <div className="flex h-14 w-fit items-center gap-1 rounded-[18px] border border-border bg-card px-1.5">
+          {/* Die 44px-Trefferflaeche der beiden Rundknoepfe bleibt Pflicht --
+              icon-touch liefert genau das, nur Radius und Flaeche wechseln
+              auf die Pillenleiste des Entwurfs. */}
+          <div className="flex h-14 w-fit items-center gap-1 rounded-full bg-card px-1.5 shadow-row">
             <Button
               variant="ghost"
               size="icon-touch"
               aria-label="Menge verringern"
               disabled={quantity <= 1}
               onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-              className="rounded-2xl"
+              className="rounded-full bg-surface-2 text-faint hover:bg-surface-2"
             >
-              <Minus className="size-5" />
+              <Minus className="size-[18px]" strokeWidth={2.8} />
             </Button>
-            <span className="w-10 text-center text-lg font-bold tabular-nums">
+            <span className="w-11 text-center font-heading text-xl font-bold tabular-nums">
               {quantity}
             </span>
             <Button
@@ -716,9 +735,9 @@ export function ItemForm({
               size="icon-touch"
               aria-label="Menge erhöhen"
               onClick={() => setQuantity((value) => value + 1)}
-              className="rounded-2xl"
+              className="rounded-full bg-primary-tint text-primary-deep hover:bg-primary-tint"
             >
-              <Plus className="size-5" />
+              <Plus className="size-[18px]" strokeWidth={2.8} />
             </Button>
           </div>
         </Field>
@@ -744,8 +763,10 @@ export function ItemForm({
               // Der Platzhalter trägt ungefähr die Höhe des Kalenders,
               // damit Notiz und Speichern-Leiste beim Einblenden nicht
               // springen -- exakt geht nicht, ein Monat mit sechs Wochenzeilen
-              // ist 43px höher als einer mit fünf.
-              <div className="h-[430px] animate-pulse rounded-[16px] bg-muted" />
+              // ist 43px höher als einer mit fünf. Der Wert wuchs mit der
+              // 26px-Kachel und den 38px-Zellen des neuen Kalenders (vorher
+              // 430px zu einer 16px-Karte mit 40px-Zellen).
+              <div className="h-[460px] animate-pulse rounded-[26px] bg-muted" />
             )
           ) : (
             <button
@@ -778,7 +799,10 @@ export function ItemForm({
             </button>
           )}
           {shelfLifeDays !== undefined && categoryLabel && (
-            <p className="pl-1 text-[12.5px] leading-relaxed font-medium text-balance text-faint">
+            // muted-foreground statt faint: der Hinweis ist ein ganzer Satz,
+            // nicht nur eine kurze Beschriftung -- genau die Grenze, die
+            // globals.css fuer --faint zieht.
+            <p className="pl-1.5 text-[12.5px] leading-relaxed font-semibold text-pretty text-muted-foreground">
               {categoryLabel} hält typischerweise{" "}
               {shelfLifeDays > 60
                 ? `${Math.round(shelfLifeDays / 30)} Monate`
@@ -795,7 +819,7 @@ export function ItemForm({
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="z. B. Großer Topf, hinten links"
-            className="resize-none rounded-[18px] border border-border bg-card px-4 py-3 text-[15px] font-medium outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="min-h-[76px] resize-none rounded-[22px] bg-card px-[18px] py-3.5 text-[14.5px] font-semibold shadow-row outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50"
           />
         </Field>
 
@@ -822,12 +846,14 @@ export function ItemForm({
         )}
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-card px-5 pt-3.5 pb-[max(env(safe-area-inset-bottom),1rem)]">
+      {/* Die Trennlinie faellt weg -- shadow-sheet traegt die Kante der
+          Leiste, die von unten hochkommt, wie ueberall sonst im Entwurf. */}
+      <div className="sticky bottom-0 rounded-t-[32px] bg-card px-5 pt-4 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-sheet">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="h-14 w-full rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+          className="h-[58px] w-full rounded-[22px] bg-(image:--gradient-primary) font-heading text-[17px] font-bold text-primary-foreground shadow-cta disabled:opacity-60"
         >
           {saving ? "Speichern…" : "Speichern"}
         </button>
@@ -901,7 +927,7 @@ export function ItemForm({
  */
 function LearnedHint({ children }: { children: React.ReactNode }) {
   return (
-    <p className="pl-1 text-xs font-medium text-balance text-faint">
+    <p className="pl-1.5 text-xs font-medium text-balance text-faint">
       {children}
     </p>
   );
@@ -917,11 +943,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       <label
         htmlFor={htmlFor}
         className={cn(
-          "pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase",
+          // 11,5px-Versalien in --faint, 800 -- Manrope kennt das Gewicht,
+          // anders als Quicksand, das nur bis 700 laedt.
+          "pl-1.5 text-[11.5px] font-extrabold tracking-[.08em] text-faint uppercase",
           !htmlFor && "pointer-events-none",
         )}
       >
