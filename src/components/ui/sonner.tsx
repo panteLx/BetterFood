@@ -2,7 +2,8 @@
 
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { Avo } from "@/components/avo"
 
 /**
  * Der Toast des Designs ist bewusst umgedreht: helle Flaeche im Dunkelmodus,
@@ -11,6 +12,10 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
  * Kartenfarbe tut das nicht. Deshalb --foreground als Grund und --background
  * als Schrift; fuer den Akzent darauf gibt es --primary-inv, weil der
  * Primaerton auf dem umgedrehten Grund zu wenig Kontrast haette.
+ *
+ * Der Erfolgs-Icon ist Avo statt eines Haekchens: Abhaken bekommt keinen
+ * eigenen Bildschirm (siehe /saved), die Feier findet also hier statt --
+ * `onDark`, weil die Flaeche in beiden Themes dunkel bleibt.
  */
 const Toaster = ({ ...props }: ToasterProps) => {
   const { resolvedTheme } = useTheme()
@@ -22,9 +27,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // dieses Element, sonst faellt der einzige Text ausserhalb von Manrope an.
       className="toaster group font-sans!"
       icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
+        success: <Avo size="sm" mood="cheer" animation="squish" onDark />,
         info: (
           <InfoIcon className="size-4" />
         ),
@@ -48,19 +51,18 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
-          title: "text-[14px]! font-semibold!",
-          description: "text-[13px]! font-medium! text-(--normal-text)! opacity-70",
+          // Sonners eigenes Padding ist rundum 16px; der Entwurf will 13px
+          // oben/unten, damit die Flaeche bei der Avo-Hoehe (38px) nicht
+          // unnoetig hoch wirkt.
+          toast: "cn-toast p-[13px_16px]!",
+          title: "font-heading! text-[14.5px]! font-bold!",
+          description: "text-[12.5px]! font-semibold! text-(--normal-text)! opacity-70",
           // Sonners Aktionsknopf ist von Haus aus eine gefuellte Pille in der
           // Schriftfarbe -- auf dem umgedrehten Grund ein zweiter Block neben
           // der Meldung. Das Design zeigt stattdessen reinen Text im Akzent.
           actionButton:
-            "bg-transparent! h-auto! px-0! text-[14px]! font-bold! text-(--primary-inv)!",
+            "font-heading! bg-transparent! h-auto! px-0! text-[14px]! font-bold! text-(--primary-inv)!",
           cancelButton: "bg-transparent! h-auto! px-0! text-[14px]! font-bold! opacity-60",
-          // Erfolg ist der Normalfall (abgehakt, entsorgt, gespeichert) und
-          // steht schon im Text. Das Haekchen daneben ist Dekoration; bei
-          // Warnung und Fehler bleibt das Symbol, weil es dort etwas hinzufuegt.
-          success: "[&_[data-icon]]:hidden!",
         },
       }}
       {...props}

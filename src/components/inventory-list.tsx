@@ -111,10 +111,9 @@ export function InventoryList({
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
       toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
+        remaining > 0 ? `1× ${item.name} ${verb}` : `${item.name} ${verb}`,
         {
+          description: remaining > 0 ? `Noch ${remaining} übrig` : undefined,
           action: {
             label: "Rückgängig",
             onClick: async () => {

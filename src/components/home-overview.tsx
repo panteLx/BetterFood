@@ -350,11 +350,21 @@ export function HomeOverview({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
+      // Die Serie ist hier schon berechnet (stats.streakDays, siehe oben) --
+      // kein zusaetzlicher Durchlauf durchs Archiv nur fuer den Toast. Nur
+      // beim Aufbrauchen angehaengt: ein weggeworfener Artikel bricht die
+      // Serie eher, als sie zu feiern. In inventory-list.tsx und
+      // item-detail.tsx fehlt genau dieser lokale Wert -- dort muesste er
+      // erst aus der Seite herein gereicht werden, und das gehoert nicht zum
+      // Toast-Inhalt dieser Einheit.
+      const streakSuffix =
+        nextStatus === "used" && stats && stats.streakDays > 0
+          ? ` · Serie steht bei ${stats.streakDays} 🔥`
+          : "";
       toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
+        remaining > 0 ? `1× ${item.name} ${verb}` : `${item.name} ${verb}`,
         {
+          description: remaining > 0 ? `Noch ${remaining} übrig${streakSuffix}` : undefined,
           action: {
             label: "Rückgängig",
             onClick: async () => {
