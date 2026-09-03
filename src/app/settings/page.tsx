@@ -164,13 +164,13 @@ export default function SettingsPage() {
       {session && (
         <Link
           href="/settings/account"
-          className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5"
+          className="flex items-center gap-3.5 rounded-[24px] bg-card p-3.5 shadow-row"
         >
-          <span className="flex size-11.5 shrink-0 items-center justify-center rounded-[13px] bg-primary-tint text-[17px] font-extrabold text-primary">
+          <span className="flex size-11.5 shrink-0 items-center justify-center rounded-full bg-primary-tint font-heading text-[17px] font-bold text-primary-deep">
             {initials}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] leading-tight font-bold">
+            <p className="truncate font-heading text-[15px] leading-tight font-bold">
               {name}
             </p>
             <p className="mt-1 truncate text-[12.5px] leading-tight font-medium text-muted-foreground">
@@ -185,7 +185,7 @@ export default function SettingsPage() {
         <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
           App
         </h2>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[24px] bg-card shadow-row">
           {ROWS.map((row, index) => {
             const value = row.value?.(summary);
             return (
@@ -193,15 +193,14 @@ export default function SettingsPage() {
                 key={row.href}
                 href={row.href}
                 className={`flex items-center gap-3 px-4 py-3.5 ${
-                  index < ROWS.length - 1 ? "border-b border-border" : ""
+                  index < ROWS.length - 1 ? "border-b border-hairline" : ""
                 }`}
               >
-                <row.icon
-                  className="size-5 shrink-0 text-primary"
-                  strokeWidth={1.8}
-                />
+                <span className="flex size-8.5 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
+                  <row.icon className="size-4" strokeWidth={2.2} />
+                </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-semibold">
+                  <span className="block font-heading text-[15px] font-bold">
                     {row.label}
                   </span>
                   {row.hint && (
