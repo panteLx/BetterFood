@@ -113,7 +113,7 @@ export function UserCombobox({
         setResults([]);
       }}
     >
-      <ComboboxInputGroup className="h-11 rounded-[10px]">
+      <ComboboxInputGroup className="h-11 rounded-lg">
         <ComboboxInput
           placeholder="Name oder vollständige E-Mail…"
           disabled={disabled}
