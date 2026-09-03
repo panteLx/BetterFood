@@ -270,8 +270,8 @@ export function InventoryList({
         <EmptyState
           className="mt-8"
           icon={Package}
-          title="Dein Vorrat ist noch leer"
-          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
+          title="Hier ist noch nichts drin"
+          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
           action={<AddItemButton label="Ersten Artikel hinzufügen" />}
         />
       </div>
