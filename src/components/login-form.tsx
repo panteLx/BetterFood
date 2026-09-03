@@ -5,10 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { safeRedirect, withRedirect } from "@/lib/utils";
-
-const fieldClass =
-  "h-14 w-full rounded-[18px] border border-border bg-card px-4 text-[15px] font-semibold outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function LoginForm({
   ssoName,
@@ -55,7 +54,7 @@ export function LoginForm({
       <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
         {/* name + autoComplete: ohne beides bietet iOS weder das Ausfuellen
             aus dem Schluesselbund noch das Speichern eines Passworts an. */}
-        <input
+        <Input
           name="email"
           type="email"
           autoComplete="email"
@@ -65,9 +64,9 @@ export function LoginForm({
           aria-label="E-Mail"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className={fieldClass}
+          className="h-14 text-base font-semibold"
         />
-        <input
+        <Input
           name="password"
           type="password"
           autoComplete="current-password"
@@ -76,32 +75,29 @@ export function LoginForm({
           aria-label="Passwort"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className={fieldClass}
+          className="h-14 text-base font-semibold"
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-1.5 h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
-        >
+        <Button type="submit" disabled={loading} className="mt-1.5 h-14 w-full text-base">
           Anmelden
-        </button>
+        </Button>
       </form>
 
       {ssoName && (
         <>
           <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-hairline" />
             <span className="text-xs font-semibold text-faint">oder</span>
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-hairline" />
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
             disabled={ssoLoading}
             onClick={handleSso}
-            className="h-13.5 rounded-[18px] border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
+            className="h-13.5 w-full text-[15px]"
           >
             Mit {ssoName} anmelden
-          </button>
+          </Button>
         </>
       )}
 

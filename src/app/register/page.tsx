@@ -34,7 +34,7 @@ async function RegisterFormSlot() {
   if (!registrationOpen) {
     return (
       <div className="flex flex-1 flex-col gap-6">
-        <p className="rounded-[18px] border border-border bg-card p-4 text-sm leading-relaxed font-medium text-muted-foreground">
+        <p className="rounded-xl bg-card p-4 text-sm leading-relaxed font-medium text-muted-foreground shadow-row">
           Auf diesem Server können keine neuen Konten angelegt werden. Wenn du
           zu diesem Haushalt gehörst, lass dir von der Person, die ihn
           eingerichtet hat, einen Zugang geben.

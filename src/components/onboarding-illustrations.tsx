@@ -5,6 +5,18 @@
  * nicht als Bilddatei: sie folgen so dem hellen wie dem dunklen Modus, kosten
  * keinen zusaetzlichen Ladevorgang vor dem ersten Screen und zeigen exakt die
  * Formen, die der Nutzer gleich danach in echt sieht.
+ *
+ * Zwei Anpassungen aus der "Frischling"-Palette, die hier und nicht global
+ * gelten:
+ * 1. `stroke-border` heisst jetzt `stroke-hairline` -- derselbe Wert, aber
+ *    der Name, den die Formensprache fuer eine Trennlinie vorsieht.
+ * 2. Ein duenner Icon-Strich braucht mehr Kontrast als eine gefuellte
+ *    Flaeche: `--warning`/`--danger` sind seit der Palette pastellig und
+ *    tragen als Flaeche weiterhin genug Kontrast (dieselbe Rolle wie der
+ *    Tage-Block in der echten Zeile), aber als duenner Strich auf hellem
+ *    Grund verblassen sie. Der Wisch-Pfeil unten benutzt deshalb
+ *    `--danger-ink` statt `--danger` -- die Rolle, die das Handoff fuer
+ *    "Gefahrfarbe als Text" vorsieht.
  */
 
 const frame = "h-full w-full";
