@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Package, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
 import { ItemRow } from "@/components/item-row";
 import { SectionLabel, type SectionTone } from "@/components/section-label";
@@ -269,7 +269,12 @@ export function InventoryList({
         <Header total={0} shown={0} lists={lists} activeListId={activeListId} />
         <EmptyState
           className="mt-8"
-          icon={Package}
+          // Der leere Vorrat ist die eine Stelle, an der Avo das Icon-Quadrat
+          // ersetzt (siehe EmptyState.mascot): hier steht der Nutzer vor einem
+          // Bildschirm ohne einen einzigen Datenpunkt, und ein graues Paket-
+          // Symbol ist genau das falsche Willkommen. Die Startseite behaelt ihr
+          // Icon, weil dort die Frischling-Karte schon ein Avo traegt.
+          mascot
           title="Hier ist noch nichts drin"
           body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
           action={<AddItemButton label="Ersten Artikel hinzufügen" />}
