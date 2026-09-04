@@ -188,6 +188,48 @@ export const productKnowledge = sqliteTable(
   ],
 );
 
+/**
+ * Ein Stapel Rezeptvorschläge, den ein Mitglied per Knopfdruck aus dem
+ * gerade ablaufenden Vorrat hat erzeugen lassen.
+ *
+ * Die Vorschläge gehören der **Liste**, nicht dem einzelnen Nutzer -- genau
+ * wie der Vorrat, aus dem sie entstanden sind. Wer abends kocht, sieht damit,
+ * was mittags schon vorgeschlagen wurde, statt denselben Vorrat ein zweites
+ * Mal an Google zu schicken. createdById sagt nur, wer den Knopf gedrückt
+ * hat, und darf beim Löschen des Kontos wegfallen ("set null"), ohne den
+ * Vorschlag mitzunehmen.
+ *
+ * Dauerhaft gespeichert und nicht als Cache mit Ablaufzeit: ein Vorschlag ist
+ * das Ergebnis eines bezahlten Aufrufs, und er beantwortet die Frage "was
+ * habe ich neulich aus den Resten gemacht?" auch noch nach einer Woche.
+ */
+export const recipeSuggestions = sqliteTable(
+  "recipe_suggestions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    // Die Rezepte als JSON-Text (siehe Recipe in lib/recipes.ts). Der einzige
+    // JSON-Blob im Schema, und das mit Ansage: die Struktur kommt aus einer
+    // Modellantwort, hat ausserhalb dieser einen Karte keinen Leser und wird
+    // nie einzeln abgefragt, sortiert oder gejoint. Eine normalisierte
+    // Zutaten- und Schritt-Tabelle waere hier drei Tabellen fuer Daten, die
+    // immer nur am Stueck gelesen werden. Gelesen wird ausschliesslich ueber
+    // parseRecipes(), das jedes Feld einzeln prueft -- dieselbe Vorsicht wie
+    // in lib/review-batch.ts, wo derselbe Fall im sessionStorage steht.
+    recipes: text("recipes").notNull(),
+    // Snapshot der Artikel, die in den Prompt gingen -- in genau derselben
+    // Form (siehe RecipeBasis). Bewusst KEIN FK auf items: sonst reissen die
+    // Referenzen, sobald ein Artikel aufgebraucht oder geloescht wird, und
+    // die Historie erzaehlt nicht mehr, woraus der Vorschlag entstanden ist.
+    basedOn: text("based_on").notNull(),
+  },
+  (table) => [index("recipe_suggestions_list_id_created_at_idx").on(table.listId, table.createdAt)],
+);
+
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   endpoint: text("endpoint").notNull().unique(),
@@ -228,3 +270,5 @@ export type NewList = typeof lists.$inferInsert;
 export type ListMember = typeof listMembers.$inferSelect;
 export type ItemNotification = typeof itemNotifications.$inferSelect;
 export type ProductKnowledge = typeof productKnowledge.$inferSelect;
+export type RecipeSuggestion = typeof recipeSuggestions.$inferSelect;
+export type NewRecipeSuggestion = typeof recipeSuggestions.$inferInsert;

@@ -1,6 +1,7 @@
 "use client";
 
-import { Trash2, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { Check, Trash2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -33,7 +34,15 @@ import {
  * Rueckfrage, die nichts zerstoert, sondern etwas Unvollstaendiges bestaetigt
  * ("nur 28 von 34 Artikeln uebernehmen?"). Sie in Rot zu stellen waere
  * gelogen, ihr einen eigenen Dialog danebenzustellen schlimmer -- also
- * dieselbe Frageform in der Primaerfarbe.
+ * dieselbe Frageform in der Primaerfarbe. "warning" ist die dritte davon: kein
+ * Verlust und kein Formfehler, sondern eine Entscheidung mit Folgen fuer
+ * andere ("ueber die Grenze hinaus Rezepte erzeugen").
+ *
+ * `acknowledge` macht aus der Frage eine, die man nicht wegtippen kann: Der
+ * Bestaetigungsknopf bleibt gesperrt, bis der Haken gesetzt ist. Nur fuer die
+ * wenigen Faelle, in denen jemand ausdruecklich Verantwortung uebernimmt --
+ * an jeder gewoehnlichen Rueckfrage waere das eine Schikane, und wer drei
+ * Haken am Tag setzt, liest den vierten nicht mehr.
  */
 export function ConfirmDialog({
   open,
@@ -43,6 +52,7 @@ export function ConfirmDialog({
   tone = "danger",
   title,
   description,
+  acknowledge,
   confirmLabel,
   onConfirm,
 }: {
@@ -50,14 +60,25 @@ export function ConfirmDialog({
   onOpenChange?: (open: boolean) => void;
   trigger?: React.ReactElement;
   icon?: LucideIcon;
-  tone?: "danger" | "primary";
+  tone?: "danger" | "primary" | "warning";
   title: React.ReactNode;
   description: React.ReactNode;
+  acknowledge?: React.ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
 }) {
+  const [checked, setChecked] = useState(false);
+
+  function handleOpenChange(next: boolean) {
+    // Beim Schliessen zuruecksetzen. Ein Haken, der vom vorigen Mal noch
+    // steht, ist keine bewusste Entscheidung mehr -- und genau die ist hier
+    // der Zweck.
+    if (!next) setChecked(false);
+    onOpenChange?.(next);
+  }
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       {trigger && <AlertDialogTrigger render={trigger} />}
       <AlertDialogPortal>
         <AlertDialogBackdrop className="bg-(--scrim)" />
@@ -67,7 +88,9 @@ export function ConfirmDialog({
               "flex size-14 shrink-0 items-center justify-center rounded-[16px]",
               tone === "danger"
                 ? "bg-danger-tint text-danger"
-                : "bg-primary-tint text-primary",
+                : tone === "warning"
+                  ? "bg-warning-tint text-warning-ink"
+                  : "bg-primary-tint text-primary",
             )}
           >
             <Icon className="size-6" strokeWidth={1.9} />
@@ -78,16 +101,47 @@ export function ConfirmDialog({
           <AlertDialogDescription className="mt-2 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
             {description}
           </AlertDialogDescription>
+          {/* Der Haken sitzt zwischen Frage und Knopf, weil er in dieser
+              Reihenfolge gelesen wird: erst was passiert, dann die Zusage,
+              dann die Tat. Ein <button role="checkbox"> wie beim Switch in
+              ui/switch.tsx -- die ganze Zeile ist die Trefferflaeche, auf
+              einem Telefon ist ein 20px-Kaestchen keine. */}
+          {acknowledge && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              onClick={() => setChecked((value) => !value)}
+              className="mt-4 flex w-full items-start gap-2.5 rounded-[14px] bg-surface-2 p-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <span
+                className={cn(
+                  "mt-px flex size-5 shrink-0 items-center justify-center rounded-[7px] transition-colors",
+                  checked
+                    ? "bg-warning text-warning-on"
+                    : "bg-card shadow-row",
+                )}
+              >
+                {checked && <Check className="size-3.5" strokeWidth={3.2} />}
+              </span>
+              <span className="text-[12.5px] leading-snug font-semibold text-muted-foreground">
+                {acknowledge}
+              </span>
+            </button>
+          )}
           {/* text-background statt Weiss: im Dunkelmodus ist --danger ein
               heller Lachston, auf dem weisse Schrift kaum noch lesbar ist.
               Im Hellmodus ist der Unterschied zu Weiss nicht zu sehen. */}
           <AlertDialogClose
             onClick={onConfirm}
+            disabled={Boolean(acknowledge) && !checked}
             className={cn(
-              "mt-5 h-13 w-full rounded-[16px] text-[15px] font-bold outline-none focus-visible:ring-3",
+              "mt-5 h-13 w-full rounded-[16px] text-[15px] font-bold outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50",
               tone === "danger"
                 ? "bg-danger text-background focus-visible:ring-danger/40"
-                : "bg-primary text-primary-foreground focus-visible:ring-ring/50",
+                : tone === "warning"
+                  ? "bg-warning text-warning-on focus-visible:ring-warning/40"
+                  : "bg-primary text-primary-foreground focus-visible:ring-ring/50",
             )}
           >
             {confirmLabel}

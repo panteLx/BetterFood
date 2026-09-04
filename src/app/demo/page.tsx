@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Eye } from "lucide-react";
 import { HomeOverview } from "@/components/home-overview";
 import { InventoryList } from "@/components/inventory-list";
+import { RecipeSuggestions } from "@/components/recipe-suggestions";
 import { Tab, TabBar } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
 import { useIsClient } from "@/lib/use-is-client";
@@ -16,8 +17,10 @@ import {
   DEMO_LISTS,
   DEMO_MONTHLY_GOAL,
   DEMO_PLACES,
+  DEMO_RECIPE_BUDGET,
   DEMO_USER_NAME,
   buildDemoItems,
+  buildDemoRecipeSuggestions,
   buildDemoResolvedEntries,
 } from "@/lib/demo-data";
 
@@ -36,7 +39,7 @@ import {
  * nicht mehr gibt.
  */
 export default function DemoPage() {
-  const [tab, setTab] = useState<"start" | "vorrat">("start");
+  const [tab, setTab] = useState<"start" | "vorrat" | "rezepte">("start");
   const [hintOpen, setHintOpen] = useState(false);
 
   // Der Stichtag entsteht erst nach der Hydration: new Date() im Render
@@ -54,6 +57,10 @@ export default function DemoPage() {
   const items = useMemo(() => (today ? buildDemoItems(today) : null), [today]);
   const resolvedEntries = useMemo(
     () => (today ? buildDemoResolvedEntries(today) : null),
+    [today],
+  );
+  const recipeSuggestions = useMemo(
+    () => (today ? buildDemoRecipeSuggestions(today) : null),
     [today],
   );
 
@@ -81,12 +88,30 @@ export default function DemoPage() {
           <Tab active={tab === "vorrat"} onClick={() => setTab("vorrat")}>
             Vorrat
           </Tab>
+          <Tab active={tab === "rezepte"} onClick={() => setTab("rezepte")}>
+            Rezepte
+          </Tab>
         </TabBar>
       </div>
 
       <DemoSurface onBlocked={() => setHintOpen(true)}>
-        {items === null || resolvedEntries === null ? (
+        {items === null || resolvedEntries === null || recipeSuggestions === null ? (
           <DemoFallback />
+        ) : tab === "rezepte" ? (
+          // Dieselbe Komponente wie unter /recipes, nur mit erfundenen Daten:
+          // configured/hasItems stehen auf true, damit der Knopf so aussieht
+          // wie im Betrieb. Anfassen laesst er sich trotzdem nicht --
+          // DemoSurface faengt jeden Klick ab, der nicht bloss die Ansicht
+          // umstellt, und das Aufklappen eines Rezepts (aria-expanded) ist
+          // genau so einer.
+          <div className="pt-4">
+            <RecipeSuggestions
+              initialSuggestions={recipeSuggestions}
+              configured
+              hasItems
+              initialBudget={DEMO_RECIPE_BUDGET}
+            />
+          </div>
         ) : tab === "start" ? (
           <div className="pt-4">
             <HomeOverview

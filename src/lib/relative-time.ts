@@ -35,3 +35,31 @@ export function formatRelativePast(date: Date, now: Date): string {
 
   return formatShort(date);
 }
+
+/**
+ * "in 12 Minuten" -- fuer eine Sperre, die von selbst wieder aufgeht.
+ *
+ * Das Gegenstueck zu formatRelativePast, und bewusst gerundet statt auf die
+ * Sekunde genau: Wer liest, dass er in 12 Minuten wieder darf, wartet nicht
+ * mit der Stoppuhr daneben. Aufgerundet, damit die Zusage haelt -- "in einer
+ * Minute" und dann doch noch 50 Sekunden Sperre waere ein zweiter Fehlversuch.
+ *
+ * `now` ist wie oben ein Parameter: ein new Date() im Modul braeche den
+ * Prerender.
+ */
+export function formatRelativeFuture(date: Date, now: Date): string {
+  const seconds = Math.ceil((date.getTime() - now.getTime()) / 1000);
+  if (seconds <= 60) return "gleich";
+
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) {
+    return minutes === 1 ? "in einer Minute" : `in ${minutes} Minuten`;
+  }
+
+  const hours = Math.ceil(minutes / 60);
+  if (hours < 24) {
+    return hours === 1 ? "in einer Stunde" : `in ${hours} Stunden`;
+  }
+
+  return `in ${Math.ceil(hours / 24)} Tagen`;
+}
