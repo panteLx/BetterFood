@@ -7,9 +7,9 @@ import withPWAInit from "@ducanh2912/next-pwa";
 // im Code wäre der erste, den `npm version` beim Release vergisst -- die
 // Einstellungsseite behauptete davor "v1.0.0 (stable)", während package.json
 // bei 0.1.0 stand.
-const { version } = JSON.parse(
+const { version, repository } = JSON.parse(
   readFileSync(resolve(__dirname, "package.json"), "utf-8"),
-) as { version: string };
+) as { version: string; repository: { url: string } };
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -88,6 +88,8 @@ const nextConfig: NextConfig = {
   // was der Runner in der Umgebung hätte, käme zu spät.
   env: {
     APP_VERSION: version,
+    // Dieselbe Adresse, aus der auch scripts/release.mjs seine Links baut.
+    REPOSITORY_URL: repository.url,
     // Setzt nur der Container-Workflow, und nur für Pushes auf einen Branch.
     // Ein Tag-Build lässt ihn absichtlich leer, damit die App sich als
     // Release meldet und nicht als Zwischenstand.

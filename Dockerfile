@@ -22,17 +22,6 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
-# Der gebaute Commit, den die App unten auf der Einstellungsseite anzeigt
-# (src/lib/version.ts liest ihn über next.config.ts). Gesetzt wird er nur vom
-# Workflow und nur für Pushes auf einen Branch; ein Tag-Build lässt ihn leer,
-# damit das Image sich als Release meldet und nicht als Zwischenstand.
-#
-# Die beiden Zeilen stehen bewusst hinter `npm ci`: ein ARG entwertet jede
-# folgende Schicht, und der Abhängigkeits-Layer soll über Commits hinweg im
-# Cache bleiben.
-ARG COMMIT_SHA
-ENV COMMIT_SHA=$COMMIT_SHA
-
 COPY . .
 
 # Applies migrations once, sequentially, against a throwaway file in this
@@ -43,11 +32,24 @@ COPY . .
 # the same tables and intermittently hitting SQLITE_BUSY.
 RUN npm run db:migrate
 
+# Der gebaute Commit, den die App unten auf der Einstellungsseite anzeigt
+# (next.config.ts schreibt ihn über src/lib/version.ts ins Bundle). Gesetzt
+# wird er nur vom Workflow und nur, wenn kein Tag gebaut wird -- ein
+# Tag-Build lässt ihn leer, damit das Image sich als Release meldet.
+#
+# ARG statt ENV, und erst hier: ein ENV entwertet jede folgende Schicht, ein
+# ARG dagegen nur die Anweisungen, die ihn wirklich lesen. Weil `.git` nicht
+# im Build-Kontext liegt (.dockerignore), trifft `COPY . .` bei zwei Commits
+# mit gleichem Baum denselben Cache -- genau der Fall nach einem Merge, den
+# der PR-Build schon gebaut hat. Ein ENV weiter oben hätte das zunichte
+# gemacht und Kopie, Migration und Build bei jedem Commit neu angeworfen.
+ARG COMMIT_SHA
+
 # `.next/cache` ist der Webpack-Cache: für den nächsten Build Gold wert,
-# im Image dagegen nur Ballast (er allein war groesser als das fertige
+# im Image dagegen nur Ballast (er allein war größer als das fertige
 # Ergebnis). Als Cache-Mount ist er beim Build da und danach weg.
 RUN --mount=type=cache,target=/app/.next/cache \
-    npm run build
+    COMMIT_SHA=$COMMIT_SHA npm run build
 
 # ---- Runner ----
 FROM node:22-bookworm-slim AS runner

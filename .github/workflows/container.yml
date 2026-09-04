@@ -82,11 +82,18 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Der Commit landet als Literal im Bundle und trägt die Anzeige
-          # unten auf der Einstellungsseite. Nur für Branch-Pushes: aus einem
-          # Tag gebaute Images sollen ihre Release-Version zeigen, und "main"
-          # allein wäre als Angabe wertlos -- den Branch gibt es in beliebig
-          # vielen Ständen, den Commit genau einmal.
-          build-args: COMMIT_SHA=${{ github.ref_type == 'branch' && github.sha || '' }}
+          # unten auf der Einstellungsseite. Ein Tag-Build bekommt ihn nicht:
+          # dort ist die Release-Version die Identität. Alles andere braucht
+          # ihn -- ein Branchname allein wäre als Angabe wertlos, den gibt es
+          # in beliebig vielen Ständen, den Commit genau einmal.
+          #
+          # Die Bedingung fragt negativ nach dem Tag, wie schon `concurrency`
+          # oben: `ref_type == 'branch'` liest sich wie "nur Pushes", ist bei
+          # einem pull_request aber ebenfalls wahr (der Ref heißt dann
+          # refs/pull/N/merge). Deshalb auch head.sha zuerst -- github.sha
+          # zeigt im PR auf den flüchtigen Merge-Commit, den es auf keinem
+          # Branch gibt und dessen Link nach dem Merge ins Leere führt.
+          build-args: COMMIT_SHA=${{ github.ref_type != 'tag' && (github.event.pull_request.head.sha || github.sha) || '' }}
           # Der Cache liegt als eigenes Paket in derselben Registry, nicht im
           # GitHub-Actions-Cache. Zwei Gründe: das Hochladen dauerte dort
           # 55 s von 165 s Gesamtzeit, und der Actions-Cache ist nach Branch

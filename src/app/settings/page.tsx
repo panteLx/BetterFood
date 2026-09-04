@@ -16,7 +16,8 @@ import { LEAD_DAY_OPTIONS } from "@/lib/notification-settings";
 import { parseMonthlyGoal } from "@/lib/monthly-goal";
 import { useIsClient } from "@/lib/use-is-client";
 import { useSession } from "@/lib/auth-client";
-import { VERSION_HREF, VERSION_LABEL } from "@/lib/version";
+import { APP_NAME } from "@/lib/metadata";
+import { VERSION } from "@/lib/version";
 
 /**
  * "Mehr" ist eine Verteilerseite, keine Sammelseite.
@@ -234,14 +235,14 @@ export default function SettingsPage() {
           früher fest verdrahtet neben einer ebenso fest verdrahteten
           v1.0.0; beides sagt jetzt das Label selbst (src/lib/version.ts). */}
       <p className="pt-1 pb-1 text-center text-[11px] leading-relaxed font-medium text-faint">
-        BetterFood ·{" "}
+        {APP_NAME} ·{" "}
         <a
-          href={VERSION_HREF}
+          href={VERSION.href}
           target="_blank"
           rel="noopener noreferrer"
           className="underline decoration-faint/50 underline-offset-2 transition-colors hover:text-muted-foreground"
         >
-          {VERSION_LABEL}
+          {VERSION.label}
         </a>
       </p>
     </div>

@@ -163,14 +163,12 @@ Einen Typecheck gibt es bewusst ohne Skript: `npx tsc --noEmit`.
 Wer Schreibrechte hat, schneidet ein Release aus einem sauberen `main`:
 
 ```bash
-npm run release patch   # 1.0.0 -> 1.0.1
-npm run release minor   # 1.0.0 -> 1.1.0
-npm run release major   # 1.0.0 -> 2.0.0
+npm run release patch   # 0.1.0 -> 0.1.1
+npm run release minor   # 0.1.0 -> 0.2.0
+npm run release major   # 0.1.0 -> 1.0.0
 ```
 
 Das hebt die Version in `package.json`/`package-lock.json` an, committet, taggt, pusht — und legt anschließend ein GitHub-Release mit automatisch erzeugten Notizen an. Der gepushte Tag löst [`container.yml`](.github/workflows/container.yml) aus, was das versionierte Docker-Image baut und veröffentlicht. Braucht die [GitHub CLI](https://cli.github.com), angemeldet über `gh auth login`.
-
-Steht die gewünschte Version schon in `package.json` und fehlt nur der Tag, nimmt das Skript sie direkt: `npm run release 1.0.0`.
 
 ### Welche Version läuft hier?
 

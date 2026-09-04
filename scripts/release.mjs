@@ -19,9 +19,21 @@
  */
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Die Adresse des Repositorys steht in package.json, nicht hier: die App
+// verlinkt dieselbe (next.config.ts reicht sie an src/lib/version.ts durch),
+// und zwei Kopien laufen bei einer Umbenennung auseinander -- die in der App
+// still, weil eine tote Verlinkung niemandem auffällt.
+const { repository } = JSON.parse(
+  readFileSync(path.join(ROOT, "package.json"), "utf-8"),
+);
+const REPOSITORY = repository.url;
 
 const RELEASE_BRANCH = "main";
-const REPOSITORY = "https://github.com/panteLx/BetterFood";
 const VALID_BUMPS = [
   "patch",
   "minor",
@@ -49,7 +61,7 @@ const bump = process.argv[2];
 if (!bump) {
   fail(`missing version argument. Usage: npm run release <${VALID_BUMPS.join("|")}|X.Y.Z>`);
 }
-if (!VALID_BUMPS.includes(bump) && !/^\d+\.\d+\.\d+/.test(bump)) {
+if (!VALID_BUMPS.includes(bump) && !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(bump)) {
   fail(`invalid version argument "${bump}".`);
 }
 
@@ -78,25 +90,8 @@ if (capture("git rev-parse HEAD") !== capture(`git rev-parse origin/${RELEASE_BR
   fail(`local ${RELEASE_BRANCH} is out of sync with origin/${RELEASE_BRANCH}. Pull or push first.`);
 }
 
-const currentVersion = JSON.parse(readFileSync("package.json", "utf-8")).version;
-
-let tag;
-if (bump === currentVersion) {
-  // Der Bootstrap-Fall: package.json trägt die Version schon, es fehlt nur
-  // der Tag. `npm version` kann das nicht -- es weigert sich, eine Version
-  // auf ihren eigenen Wert zu setzen, und selbst mit --allow-same-version
-  // scheitert danach der Commit, weil es nichts zu committen gibt. Also wird
-  // hier nur getaggt, ohne Bump und ohne Commit.
-  tag = `v${currentVersion}`;
-  if (capture(`git tag --list ${tag}`)) {
-    fail(`${tag} already exists. Pick a higher version.`);
-  }
-  console.log(`release: tagging current version (${tag})...`);
-  run(`git tag -a ${tag} -m "chore(release): ${tag}"`);
-} else {
-  console.log(`release: bumping version (${bump})...`);
-  tag = capture(`npm version ${bump} -m "chore(release): v%s"`);
-}
+console.log(`release: bumping version (${bump})...`);
+const tag = capture(`npm version ${bump} -m "chore(release): v%s"`);
 
 console.log(`release: pushing ${RELEASE_BRANCH} and ${tag} to origin...`);
 run(`git push origin ${RELEASE_BRANCH}`);
