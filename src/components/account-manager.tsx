@@ -56,8 +56,6 @@ const MIN_PASSWORD_LENGTH = 8;
 // Rand mehr: die Tiefe kommt aus shadow-row, wie beim Input-Baustein.
 const fieldClass =
   "h-12 w-full rounded-lg bg-surface-2 px-3.5 text-[15px] font-semibold shadow-row outline-none placeholder:text-faint focus-visible:ring-3 focus-visible:ring-ring/50";
-const sheetButtonClass =
-  "h-13 w-full rounded-lg bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta disabled:opacity-60";
 const rowClass = "flex items-center gap-3 px-4 py-3.5";
 const cardClass = "overflow-hidden rounded-[30px] bg-card shadow-card";
 const sectionTitleClass = "pl-1 text-xs font-semibold tracking-wider text-faint uppercase";
@@ -578,9 +576,9 @@ export function AccountManager() {
             className={fieldClass}
           />
           <SheetError message={sheetError} />
-          <button type="submit" disabled={busy} className={sheetButtonClass}>
+          <Button type="submit" disabled={busy} className="h-13 w-full text-[15px] disabled:opacity-60">
             {busy ? "Speichern…" : "Speichern"}
-          </button>
+          </Button>
         </form>
       </Sheet>
 
@@ -621,9 +619,9 @@ export function AccountManager() {
             Ab sofort meldest du dich mit der neuen Adresse an.
           </p>
           <SheetError message={sheetError} />
-          <button type="submit" disabled={busy} className={sheetButtonClass}>
+          <Button type="submit" disabled={busy} className="h-13 w-full text-[15px] disabled:opacity-60">
             {busy ? "Ändern…" : "E-Mail ändern"}
-          </button>
+          </Button>
         </form>
       </Sheet>
 
@@ -686,9 +684,9 @@ export function AccountManager() {
             />
           </div>
           <SheetError message={sheetError} />
-          <button type="submit" disabled={busy} className={sheetButtonClass}>
+          <Button type="submit" disabled={busy} className="h-13 w-full text-[15px] disabled:opacity-60">
             {busy ? "Ändern…" : "Passwort ändern"}
-          </button>
+          </Button>
         </form>
       </Sheet>
     </div>

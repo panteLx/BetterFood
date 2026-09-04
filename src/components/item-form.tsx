@@ -595,11 +595,11 @@ export function ItemForm({
               und ein 44px-Kreis auf --card mit --shadow-row ist genau dieses
               Material auch fuer Kopfzeilen-Knoepfe. */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon-touch"
             aria-label="Zurück"
             onClick={() => leave()}
-            className="-ml-1 rounded-full bg-card shadow-row"
+            className="-ml-1 rounded-full"
           >
             <ArrowLeft className="size-5" strokeWidth={2.4} />
           </Button>
@@ -849,14 +849,14 @@ export function ItemForm({
       {/* Die Trennlinie faellt weg -- shadow-sheet traegt die Kante der
           Leiste, die von unten hochkommt, wie ueberall sonst im Entwurf. */}
       <div className="sticky bottom-0 rounded-t-[32px] bg-card px-5 pt-4 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-sheet">
-        <button
+        <Button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="h-[58px] w-full rounded-[22px] bg-(image:--gradient-primary) font-heading text-[17px] font-bold text-primary-foreground shadow-cta disabled:opacity-60"
+          className="h-[58px] w-full rounded-[22px] text-[17px] disabled:opacity-60"
         >
           {saving ? "Speichern…" : "Speichern"}
-        </button>
+        </Button>
       </div>
 
       {/* Kein Blatt, wo der Kalender schon offen im Feld steht: es gäbe dann

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { List } from "@/db/schema";
@@ -124,14 +125,14 @@ export function ListSwitcher({
             placeholder="Neue Liste"
             className="h-12.5 min-w-0 flex-1 rounded-lg bg-surface-2 px-3.5 text-sm font-semibold outline-none placeholder:text-faint"
           />
-          <button
+          <Button
             type="button"
             disabled={busy}
             onClick={createList}
-            className="h-12.5 shrink-0 rounded-lg bg-(image:--gradient-primary) px-4.5 font-heading text-sm font-bold text-primary-foreground shadow-cta disabled:opacity-60"
+            className="h-12.5 px-4.5 disabled:opacity-60"
           >
             Erstellen
-          </button>
+          </Button>
         </div>
       </Sheet>
     </>

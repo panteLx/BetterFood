@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Dialog, DialogPortal, DialogBackdrop, DialogPopup } from "@/components/ui/dialog";
+import { SheetHandle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 // Wird von abgefangenen (intercepted) Routen wie /add oder /edit/[id] genutzt,
@@ -59,12 +60,7 @@ export function RouteModal({
               nebeneinander sind einer zu viel. Im Vollbild gibt es nichts zu
               ziehen -- dort bleibt nur der Pfeil. Masse wie die
               Sheet-Primitive, aus demselben Grund wie der Radius oben. */}
-          {!fullscreen && (
-            <span
-              aria-hidden="true"
-              className="mx-auto mb-4 h-[5px] w-11 shrink-0 rounded-full bg-hairline"
-            />
-          )}
+          {!fullscreen && <SheetHandle />}
           {children}
         </DialogPopup>
       </DialogPortal>

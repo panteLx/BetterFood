@@ -56,7 +56,7 @@ export function InstallHintSettings() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+      <h2 className="label-caps">
         Auf dem Gerät
       </h2>
       <div className="flex items-start gap-3 rounded-[24px] bg-card px-4 py-3.5 shadow-row">

@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { ExpiryPicker } from "@/components/expiry-picker";
 import { SectionLabel } from "@/components/section-label";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -267,7 +267,7 @@ function ReviewFlow({
           action={
             <Link
               href="/scan"
-              className="flex h-11 items-center justify-center rounded-[20px] bg-(image:--gradient-primary) px-5 font-heading text-[14px] font-bold text-primary-foreground shadow-cta"
+              className={cn(buttonVariants(), "h-11 rounded-[20px] px-5 text-[14px]")}
             >
               Zum Scanner
             </Link>
@@ -726,13 +726,13 @@ function StepCard({
               fromPurchase={Boolean(entry.purchasedAt)}
             />
 
-            <button
+            <Button
               type="button"
               onClick={() => onCommit({ ...patch, expiryDate: date })}
-              className="mt-3.5 h-[50px] w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="mt-3.5 h-[50px] w-full rounded-[20px] text-[15px]"
             >
               Übernehmen &amp; weiter
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => onSkip(patch)}
@@ -819,14 +819,14 @@ function StepCard({
           </>
         )}
 
-        <button
+        <Button
           type="button"
           disabled={category === null}
           onClick={() => setSheetOpen(false)}
-          className="mt-5 h-14 w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-base font-bold text-primary-foreground shadow-cta disabled:opacity-40"
+          className="mt-5 h-14 w-full rounded-[20px] text-base disabled:opacity-40"
         >
           Übernehmen
-        </button>
+        </Button>
       </Sheet>
     </>
   );
@@ -859,18 +859,18 @@ function FinishCard({
           : `${doneCount} ${doneCount === 1 ? "Artikel wandert" : "Artikel wandern"} in den Vorrat`}
         {skippedCount > 0 && ` · ${skippedCount} übersprungen`}
       </p>
-      <button
+      <Button
         type="button"
         disabled={busy}
         onClick={onCommit}
-        className="mt-4 h-[50px] w-full rounded-[20px] bg-(image:--gradient-primary) font-heading text-[15px] font-bold text-primary-foreground shadow-cta disabled:opacity-60"
+        className="mt-4 h-[50px] w-full rounded-[20px] text-[15px] disabled:opacity-60"
       >
         {busy
           ? "Wird gespeichert…"
           : doneCount === 0
             ? "Ohne Artikel beenden"
             : `${doneCount} Artikel übernehmen`}
-      </button>
+      </Button>
     </div>
   );
 }

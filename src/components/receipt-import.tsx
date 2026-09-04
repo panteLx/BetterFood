@@ -232,8 +232,7 @@ export function ReceiptImport() {
               ist an dieser Stelle kein Schmuck, sondern die einzige Auskunft
               darueber, dass die PDF gerade verarbeitet wird. */}
           <EmptyState
-            mascot={!reading}
-            icon={Loader2}
+            icon={reading ? Loader2 : "mascot"}
             tone="primary"
             className={reading ? "[&_svg]:animate-spin" : undefined}
             title={reading ? "Rechnung wird gelesen …" : "Rechnung einlesen"}

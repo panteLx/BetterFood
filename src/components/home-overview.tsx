@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Avo, moodForBuckets, type AvoMood } from "@/components/avo";
 import { ItemRow } from "@/components/item-row";
-import { SectionLabel } from "@/components/section-label";
+import { SectionLabel, toneForFilter } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
@@ -46,8 +46,9 @@ import { CO2_FACTOR, PRICE_FACTOR } from "@/lib/estimates";
 import { cn } from "@/lib/utils";
 import {
   resolveItem,
+  resolveToast,
   resolveVerb,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import type { Category, Item, List, Place } from "@/db/schema";
@@ -116,7 +117,7 @@ type PreviewSection = {
   /**
    * Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. Trägt
    * seit dem Frischling-Umbau auch die Farbrolle der Überschrift
-   * (SectionLabel leitet "abgelaufen" -> danger, "bald" -> warning, `null`
+   * (`toneForFilter` leitet "abgelaufen" -> danger, "bald" -> warning, `null`
    * -> primary daraus ab), ein eigenes `danger`-Feld ist damit überflüssig.
    */
   filter: StatusFilter | null;
@@ -132,9 +133,9 @@ type PreviewSection = {
  * muss mindestens so lang sein wie der Rest des Kreises, sonst fängt das
  * Muster von vorne an und der Ring ist bei 10 % voll.
  *
- * Bleibt exakt 314.16: dieselbe Zahl steckt fest in der bf-ring-Keyframe in
- * globals.css (stroke-dashoffset läuft von 314.16 auf 0), beide müssen sich
- * gemeinsam bewegen.
+ * Die bf-ring-Keyframe in globals.css läuft von genau diesem Wert auf 0 --
+ * sie liest ihn als --ring-circumference vom Element, damit ein anderer
+ * Radius die Animation nicht lautlos halbiert.
  */
 const RING_CIRCUMFERENCE = 314.16;
 
@@ -219,7 +220,6 @@ function greetingFor(hour: number): string {
  * dringenden Artikeln ist ohnehin der seltene Fall.
  */
 const COUNT_WORDS = [
-  "null",
   "Eine",
   "Zwei",
   "Drei",
@@ -232,7 +232,9 @@ const COUNT_WORDS = [
   "Zehn",
 ];
 function countWord(n: number): string {
-  return n <= 10 ? COUNT_WORDS[n] : String(n);
+  // Index ab 1: die Tabelle beginnt bei "Eine", eine Null-Zeile waere
+  // unerreichbar (beide Aufrufer stehen hinter einem `> 0`-Zweig).
+  return n >= 1 && n <= 10 ? COUNT_WORDS[n - 1] : String(n);
 }
 
 /**
@@ -251,7 +253,9 @@ function speechBubble(
   if (mood === "overdue") {
     const n = buckets.expired;
     return {
-      line1: n === 1 ? "Eine Sache ist drüber." : `${countWord(n)} Sachen sind drüber.`,
+      // Nur das Verb verzweigt -- das Zahlwort fuer 1 steht in COUNT_WORDS
+      // und nicht ein zweites Mal hier.
+      line1: `${countWord(n)} ${n === 1 ? "Sache ist" : "Sachen sind"} drüber.`,
       line2: "Kriegen wir noch hin!",
     };
   }
@@ -259,10 +263,7 @@ function speechBubble(
     const n = buckets.soon;
     return {
       line1: "Heute ist was dran.",
-      line2:
-        n === 1
-          ? "Eine Sache will aufgebraucht werden."
-          : `${countWord(n)} Sachen wollen aufgebraucht werden.`,
+      line2: `${countWord(n)} ${n === 1 ? "Sache will" : "Sachen wollen"} aufgebraucht werden.`,
     };
   }
   return { line1: "Alles frisch.", line2: "Nichts läuft in den nächsten Tagen ab." };
@@ -464,25 +465,17 @@ export function HomeOverview({
         nextStatus === "used" && stats && stats.streakDays > 0
           ? ` · Serie steht bei ${stats.streakDays} 🔥`
           : "";
-      toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb}` : `${item.name} ${verb}`,
-        {
-          description: remaining > 0 ? `Noch ${remaining} übrig${streakSuffix}` : undefined,
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              setItems(previousItems);
-              try {
-                await undoResolve(undo, item.quantity);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        extra: streakSuffix,
+        onUndo: async () => {
+          setItems(previousItems);
+          await undoResolveWithToast(undo, item.quantity);
+          router.refresh();
         },
-      );
+      });
       router.refresh();
     } catch {
       toast.error("Konnte nicht aktualisiert werden.");
@@ -563,13 +556,7 @@ export function HomeOverview({
                 Vorrat. */}
             <SectionLabel
               title={section.label}
-              tone={
-                section.filter === "abgelaufen"
-                  ? "danger"
-                  : section.filter === "bald"
-                    ? "warning"
-                    : "primary"
-              }
+              tone={toneForFilter(section.filter)}
               count={section.entries.length}
               href={href}
             />
@@ -596,20 +583,18 @@ export function HomeOverview({
       })}
 
       {items.length === 0 && (
-        <div className="rounded-[30px] bg-card shadow-card">
-          {/* Avo statt des grauen Paket-Quadrats -- dieselbe Begruendung wie im
-              leeren Vorrat (siehe EmptyState.mascot): der erste Bildschirm
-              ohne einen einzigen Datenpunkt ist die falsche Stelle fuer ein
-              graues Symbol. Die Beschriftung nennt seitdem auch hier den
-              ersten Artikel, weil es auf einem leeren Vorrat genau darum
-              geht. */}
-          <EmptyState
-            mascot
-            title="Hier ist noch nichts drin"
-            body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
-            action={<AddItemButton label="Ersten Artikel hinzufügen" />}
-          />
-        </div>
+        /* Avo statt des grauen Paket-Quadrats -- dieselbe Begruendung wie im
+           leeren Vorrat (siehe EmptyState): der erste Bildschirm ohne einen
+           einzigen Datenpunkt ist die falsche Stelle fuer ein graues Symbol.
+           Die Beschriftung nennt seitdem auch hier den ersten Artikel, weil
+           es auf einem leeren Vorrat genau darum geht. */
+        <EmptyState
+          icon="mascot"
+          variant="card"
+          title="Hier ist noch nichts drin"
+          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
+          action={<AddItemButton label="Ersten Artikel hinzufügen" />}
+        />
       )}
     </div>
   );
@@ -729,6 +714,7 @@ function FrischlingCard({
                   strokeLinecap={quota >= 100 ? "butt" : "round"}
                   strokeDasharray={`${(quota / 100) * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
                   className="animate-ring"
+                  style={{ "--ring-circumference": RING_CIRCUMFERENCE } as CSSProperties}
                 />
               )}
             </g>
@@ -814,7 +800,7 @@ function FrischlingCard({
               key={badge.id}
               badge={badge}
               earned={recent.length > 0}
-              tone={index}
+              tone={BADGE_FOOTER_TINTS[index]}
             />
           ))}
         </div>
@@ -885,30 +871,32 @@ function BadgeCircle({
    */
   labelled = true,
   /**
-   * Index in BADGE_FOOTER_TINTS -- nur im Fuß der Karte gesetzt, wo bis zu
-   * drei erreichte Abzeichen nebeneinander stehen und Abwechslung brauchen.
-   * Nicht erreichte Abzeichen ignorieren das und bleiben neutral.
+   * Die Fläche aus BADGE_FOOTER_TINTS -- nur im Fuß der Karte gesetzt, wo bis
+   * zu drei erreichte Abzeichen nebeneinander stehen und Abwechslung
+   * brauchen. Nicht erreichte Abzeichen ignorieren das und bleiben neutral.
+   * Der Eintrag selbst statt eines Index: die Tabelle bleibt damit die
+   * Sache des Aufrufers, und hier steht keine Modulo-Rechnung, die nur
+   * einen Fall abdeckt, den es nicht gibt.
    */
   tone,
 }: {
   badge: Badge;
   earned: boolean;
   labelled?: boolean;
-  tone?: number;
+  tone?: (typeof BADGE_FOOTER_TINTS)[number];
 }) {
   const Icon = BADGE_ICONS[badge.id];
-  const palette = earned && tone !== undefined ? BADGE_FOOTER_TINTS[tone % 3] : null;
   return (
     <span
       title={labelled ? badge.label : undefined}
       aria-hidden={labelled ? undefined : "true"}
       className={cn(
         "flex size-8.5 shrink-0 items-center justify-center rounded-full",
-        palette
-          ? cn(palette.bg, palette.text)
-          : earned
-            ? "bg-primary-tint text-primary-deep"
-            : "bg-track text-faint",
+        earned
+          ? tone
+            ? cn(tone.bg, tone.text)
+            : "bg-primary-tint text-primary-deep"
+          : "bg-track text-faint",
       )}
     >
       <Icon className="size-4" strokeWidth={2.2} aria-hidden="true" />

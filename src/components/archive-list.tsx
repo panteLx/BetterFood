@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hideItem, restoreItem } from "@/lib/item-actions";
-import { formatShort } from "@/lib/expiry";
+import { formatShort, STATUS_CLASSES } from "@/lib/expiry";
 import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/db/schema";
@@ -67,13 +67,12 @@ export function ArchiveList({
       // Bildschirm ohne einen einzigen Datenpunkt, und die Statistik darueber
       // faellt dann ohnehin weg (siehe ArchiveView). Ohne die Karte stand hier
       // nur Text auf dem nackten Seitengrund.
-      <div className="rounded-[30px] bg-card shadow-card">
-        <EmptyState
-          mascot
-          title="Das Archiv ist leer"
-          body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
-        />
-      </div>
+      <EmptyState
+        icon="mascot"
+        variant="card"
+        title="Das Archiv ist leer"
+        body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
+      />
     );
   }
 
@@ -231,9 +230,10 @@ function ArchiveCard({
               <span
                 className={cn(
                   "inline-flex h-6 items-center rounded-full px-[11px] text-[11.5px] font-bold whitespace-nowrap",
-                  used
-                    ? "bg-primary-tint text-primary-deep"
-                    : "bg-danger-tint text-danger-ink",
+                  // Dieselben zwei Toenungen wie im Vorrat, aus derselben
+                  // Tabelle: "aufgebraucht" liest sich wie "frisch",
+                  // "weggeworfen" wie "abgelaufen".
+                  used ? STATUS_CLASSES.fresh.chip : STATUS_CLASSES.expired.chip,
                 )}
               >
                 {used ? "Aufgebraucht" : "Weggeworfen"}

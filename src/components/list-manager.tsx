@@ -432,15 +432,16 @@ export function ListManager() {
           placeholder="Neue Liste"
           className="h-12 min-w-0 flex-1 rounded-lg bg-card px-3.5 text-sm font-semibold shadow-row outline-none placeholder:text-faint"
         />
-        <button
+        <Button
           type="button"
+          size="icon"
           disabled={busy}
           onClick={createList}
           aria-label="Liste erstellen"
-          className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-(image:--gradient-primary) text-primary-foreground shadow-cta disabled:opacity-60"
+          className="size-12 disabled:opacity-60"
         >
           <Plus className="size-5" strokeWidth={2.3} />
-        </button>
+        </Button>
       </div>
     </div>
   );

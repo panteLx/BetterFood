@@ -13,35 +13,42 @@ import { cn } from "@/lib/utils";
  * Element herein (heute immer AddItemButton), weil er ein Blatt oeffnet statt
  * zu navigieren -- ein Link kann das nicht.
  *
- * `mascot` ersetzt das Icon-Quadrat durch Avo (leerer Vorrat) -- als eigener
- * Schalter statt einer Vereinigung mit `icon`, weil jeder bestehende Aufrufer
- * weiterhin nur `icon` uebergibt und keiner beides braucht.
+ * `icon="mascot"` ersetzt das Icon-Quadrat durch Avo (leerer Vorrat). Als
+ * Sonderwert desselben Feldes und nicht als zweiter Schalter: es ist genau
+ * eine Entscheidung, und zwei Felder dafuer liessen den Aufrufer
+ * `mascot={!reading} icon={Loader2}` schreiben, wo `reading ? Loader2 :
+ * "mascot"` die Absicht direkt hinschreibt.
+ *
+ * `variant="card"` legt den Zustand auf die Karte, die leerer Vorrat und
+ * leeres Archiv beide brauchen -- vorher stand derselbe Wrapper an beiden
+ * Aufrufstellen.
  */
 export function EmptyState({
   icon: Icon,
-  mascot = false,
   title,
   body,
   action,
   tone = "muted",
+  variant = "bare",
   className,
 }: {
-  icon?: LucideIcon;
-  mascot?: boolean;
+  icon?: LucideIcon | "mascot";
   title: string;
   body: string;
   action?: React.ReactNode;
   tone?: "muted" | "primary";
+  variant?: "bare" | "card";
   className?: string;
 }) {
   return (
     <div
       className={cn(
         "flex flex-col items-center gap-4.5 rounded-3xl px-5 py-10 text-center",
+        variant === "card" && "rounded-[30px] bg-card shadow-card",
         className,
       )}
     >
-      {mascot ? (
+      {Icon === "mascot" ? (
         // bf-bob laeuft hier bewusst 4.2s statt der globalen 4s -- der Entwurf
         // taktet den leeren Vorrat eine Idee langsamer als das Kopfbereich-Avo.
         <Avo size="lg" mood="soon" className="[animation-duration:4.2s]" />

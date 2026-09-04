@@ -523,12 +523,14 @@
   }
 }
 
-/* 314,16 ist der Umfang des Quote-Rings (2·π·50) und steht als
-   RING_CIRCUMFERENCE auch in home-overview.tsx. Beide Werte meinen dasselbe
-   und müssen zusammen wandern. */
+/* Der Startwert ist der Ringumfang. Er steht nicht hier, sondern kommt als
+   --ring-circumference vom Element (home-overview.tsx setzt dort
+   RING_CIRCUMFERENCE) -- sonst müssten Radius und Keyframe von Hand
+   zusammengehalten werden und ein neuer Radius bräche die Animation lautlos.
+   Der Rückfallwert 314.16 = 2·π·50 gilt für den heutigen Radius. */
 @keyframes bf-ring {
   from {
-    stroke-dashoffset: 314.16;
+    stroke-dashoffset: var(--ring-circumference, 314.16);
   }
 }
 
@@ -598,6 +600,27 @@
 /* Waagerecht scrollende Chip-Reihen (Schnell-Datumswahl, Kategorien): auf
    dem Telefon gibt es dort ohnehin keine sichtbare Leiste, auf dem Desktop
    zerschnitt sie die Reihe. */
+/* Das Glanzband, das ueber eine gefuellte Spur laeuft. Der Verlauf steht
+   hier und nicht als Inline-Style an der Komponente: eine Farbe gehoert in
+   dieses Blatt, auch eine halbtransparente weisse. */
+@utility sheen-band {
+  background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+}
+
+/* Die gesperrte Versalzeile ueber den Einstellungs-Karten. Als Utility und
+   nicht als Klassenkette an sechs Stellen: der Wortlaut der Zeile wechselt,
+   ihre Form nie, und die sechs Abschriften waren schon dabei auseinander-
+   zulaufen (text-faint statt text-muted-foreground im Konto-Bereich). */
+@utility label-caps {
+  padding-left: calc(var(--spacing) * 1);
+  font-size: var(--text-xs);
+  line-height: var(--tw-leading, var(--text-xs--line-height));
+  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;

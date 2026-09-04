@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { RenameInput } from "@/components/rename-input";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
@@ -307,7 +308,7 @@ export function SortingManager({
                     Eingabetaste der Bildschirmtastatur sonst schlicht nichts,
                     und man müsste die Tastatur erst wegschieben, um den Haken
                     zu treffen. */}
-                <input
+                <RenameInput
                   value={editPlaceName}
                   onChange={(event) => setEditPlaceName(event.target.value)}
                   onKeyDown={(event) => {
@@ -317,7 +318,6 @@ export function SortingManager({
                   disabled={saving}
                   autoFocus
                   aria-label="Name des Fachs"
-                  className="h-10.5 min-w-0 flex-1 rounded-lg bg-surface-2 px-3 font-heading text-[14.5px] font-bold ring-[1.5px] ring-primary ring-inset outline-none"
                 />
                 <Button
                   size="icon"

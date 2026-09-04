@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, Pencil, Refrigerator, Search, Tags, Trash2, X } from "lucide-react";
+import { RenameInput } from "@/components/rename-input";
 import { Button } from "@/components/ui/button";
 import { Tab, TabBar } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
@@ -240,14 +241,13 @@ export function KnowledgeManager({
                     <div className="flex items-center gap-2.5">
                       {editingId === entry.id ? (
                         <>
-                          <input
+                          <RenameInput
                             value={editName}
                             onChange={(event) =>
                               setEditName(event.target.value)
                             }
                             autoFocus
                             aria-label="Name des Produkts"
-                            className="h-10.5 min-w-0 flex-1 rounded-lg bg-surface-2 px-3 font-heading text-[14.5px] font-bold ring-[1.5px] ring-primary ring-inset outline-none"
                           />
                           <Button
                             size="icon"

@@ -6,14 +6,15 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
 import { ItemRow } from "@/components/item-row";
-import { SectionLabel, type SectionTone } from "@/components/section-label";
+import { SectionLabel, toneForFilter, type SectionTone } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
 import {
   resolveItem,
+  resolveToast,
   resolveVerb,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import {
@@ -112,25 +113,16 @@ export function InventoryList({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
-      toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb}` : `${item.name} ${verb}`,
-        {
-          description: remaining > 0 ? `Noch ${remaining} übrig` : undefined,
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              setItems(previousItems);
-              try {
-                await undoResolve(undo, item.quantity);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        onUndo: async () => {
+          setItems(previousItems);
+          await undoResolveWithToast(undo, item.quantity);
+          router.refresh();
         },
-      );
+      });
       router.refresh();
     } catch {
       toast.error("Konnte nicht aktualisiert werden.");
@@ -211,25 +203,25 @@ export function InventoryList({
     // Farbrolle der Überschrift: nur die Ablauf-Gliederung kennt sie
     // (abgeleitet aus dem Vorrat-Filter des Eimers, siehe SectionLabel);
     // Ort und Kategorie haben keinen Ablauf-Bezug und bleiben bei "primary".
-    const order: { key: string | number; title: string; label: string; tone: SectionTone }[] =
+    // `label` und `tone` sind optional: nur die Ablauf-Gliederung setzt sie,
+    // bei Ort und Kategorie ist der Anzeigetext der Titel und die Farbrolle
+    // "primary". Beides erst beim Zusammenbau unten aufzuloesen spart drei
+    // Abschriften derselben Vorgabe.
+    const order: { key: string | number; title: string; label?: string; tone?: SectionTone }[] =
       grouping === "ort"
         ? [
             ...places.map((place) => ({
               key: place.id as string | number,
               title: place.name,
-              label: place.name,
-              tone: "primary" as const,
             })),
             // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
             // statt stillschweigend aus der Ansicht zu fallen.
-            { key: "__unplaced", title: "Ohne Ort", label: "Ohne Ort", tone: "primary" as const },
+            { key: "__unplaced", title: "Ohne Ort" },
           ]
         : grouping === "kategorie"
           ? categories.map((category) => ({
               key: category.key as string | number,
               title: category.label,
-              label: category.label,
-              tone: "primary" as const,
             }))
           : EXPIRY_BUCKETS.map((bucket) => ({
               key: bucket.title as string | number,
@@ -237,12 +229,7 @@ export function InventoryList({
               // Anzeigetext -- ungleich `title`, siehe die Warnung an
               // SectionLabel: "Schon drüber" statt "Abgelaufen" usw.
               label: bucket.label,
-              tone:
-                bucket.filter === "abgelaufen"
-                  ? ("danger" as const)
-                  : bucket.filter === "bald"
-                    ? ("warning" as const)
-                    : ("primary" as const),
+              tone: toneForFilter(bucket.filter),
             }));
 
     const grouped = new Map<string | number, { item: Item; days: number }[]>();
@@ -256,8 +243,8 @@ export function InventoryList({
     return order
       .map(({ key, title, label, tone }) => ({
         title,
-        label,
-        tone,
+        label: label ?? title,
+        tone: tone ?? ("primary" as SectionTone),
         entries: grouped.get(key) ?? [],
       }))
       .filter((section) => section.entries.length > 0);
@@ -270,11 +257,11 @@ export function InventoryList({
         <EmptyState
           className="mt-8"
           // Der leere Vorrat ist die eine Stelle, an der Avo das Icon-Quadrat
-          // ersetzt (siehe EmptyState.mascot): hier steht der Nutzer vor einem
+          // ersetzt (siehe EmptyState): hier steht der Nutzer vor einem
           // Bildschirm ohne einen einzigen Datenpunkt, und ein graues Paket-
           // Symbol ist genau das falsche Willkommen. Die Startseite behaelt ihr
           // Icon, weil dort die Frischling-Karte schon ein Avo traegt.
-          mascot
+          icon="mascot"
           title="Hier ist noch nichts drin"
           body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
           action={<AddItemButton label="Ersten Artikel hinzufügen" />}

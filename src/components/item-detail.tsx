@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Check, Pencil, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
+import { DetailRow, QuantityPill } from "@/components/detail-row";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DateSheet } from "@/components/date-sheet";
@@ -24,9 +25,10 @@ import {
 import {
   hideItem,
   resolveItem,
+  resolveToast,
   resolveVerb,
   restockItem,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import { cn } from "@/lib/utils";
@@ -99,25 +101,15 @@ export function ItemDetail({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
-      toast.success(
-        remaining > 0 ? `1× ${item.name} ${verb}` : `${item.name} ${verb}`,
-        {
-          description: remaining > 0 ? `Noch ${remaining} übrig` : undefined,
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              try {
-                await undoResolve(undo, before);
-                setLocalQuantity(before);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        onUndo: async () => {
+          await undoResolveWithToast(undo, before, () => setLocalQuantity(before));
+          router.refresh();
         },
-      );
+      });
       // Bei der letzten Einheit gibt es hier nichts mehr zu sehen -- der
       // Artikel liegt jetzt im Archiv.
       if (remaining > 0) {
@@ -270,11 +262,7 @@ export function ItemDetail({
           <DetailRow label="Ort" value={placeName ?? "Nicht zugeordnet"} />
           <DetailRow
             label="Menge"
-            value={
-              <span className="inline-flex h-[26px] items-center rounded-full bg-primary-tint px-[11px] font-heading text-sm font-bold text-primary-deep">
-                {quantity}×
-              </span>
-            }
+            value={<QuantityPill>{quantity}×</QuantityPill>}
           />
           <DetailRow label="Hinzugefügt" value={formatMedium(item.addedAt)} />
           <DetailRow
@@ -292,15 +280,15 @@ export function ItemDetail({
       </div>
 
       <div className="sticky bottom-0 flex flex-col gap-2.5 rounded-t-[32px] bg-card px-[18px] pt-4 pb-[max(env(safe-area-inset-bottom),20px)] shadow-sheet">
-        <button
+        <Button
           type="button"
           disabled={busy}
           onClick={() => resolve("used")}
-          className="flex h-[58px] items-center justify-center gap-2.5 rounded-[22px] bg-(image:--gradient-primary) font-heading text-[17px] font-bold text-primary-foreground shadow-cta disabled:opacity-60"
+          className="h-[58px] w-full gap-2.5 rounded-[22px] text-[17px] disabled:opacity-60"
         >
           <Check className="size-5" strokeWidth={2.8} />
           Aufgebraucht
-        </button>
+        </Button>
         <div className="flex gap-2.5">
           <button
             type="button"
@@ -340,26 +328,3 @@ export function ItemDetail({
   );
 }
 
-function DetailRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value: ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2.5 py-3.5",
-        !last && "border-b border-hairline",
-      )}
-    >
-      <dt className="flex-1 text-[13.5px] font-semibold text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="text-right font-heading text-[14.5px] font-bold">{value}</dd>
-    </div>
-  );
-}

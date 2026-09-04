@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Avo } from "@/components/avo";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -185,13 +186,13 @@ export function AddItemButton({ label }: { label: string }) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-1 flex h-[54px] items-center rounded-[20px] bg-(image:--gradient-primary) px-[26px] font-heading text-[16px] font-bold text-primary-foreground shadow-cta outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="mt-1 h-[54px] rounded-[20px] px-[26px] text-[16px]"
       >
         {label}
-      </button>
+      </Button>
 
       <AddOptionsSheet open={open} onOpenChange={setOpen} />
     </>

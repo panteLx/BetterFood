@@ -80,11 +80,7 @@ export function ArchiveStats({ items }: { items: Item[] }) {
                 die ganze Spur laeuft. */}
             <span
               aria-hidden
-              className="absolute inset-0 w-[40%] animate-sheen [animation-delay:1.4s]"
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent)",
-              }}
+              className="sheen-band absolute inset-0 w-[40%] animate-sheen [animation-delay:1.4s]"
             />
             <span className="sr-only">{`${quota} Prozent gerettet`}</span>
           </div>

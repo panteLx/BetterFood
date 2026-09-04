@@ -34,8 +34,10 @@ const ROW_SURFACE: Record<ExpiryStatus, string> = {
  * weil er neben --card sonst gar keine eigene Kante hätte.
  */
 const CHECK_SURFACE: Record<ExpiryStatus, string> = {
-  expired: "bg-card shadow-check-danger dark:bg-primary-tint dark:shadow-none",
-  soon: "bg-card shadow-check-warning dark:bg-primary-tint dark:shadow-none",
+  // Kein dark:shadow-none: --shadow-check-tint-danger/-warning stehen unter
+  // .dark schon auf none, der Schatten faellt dort also ohne Variante weg.
+  expired: "bg-card shadow-check-danger dark:bg-primary-tint",
+  soon: "bg-card shadow-check-warning dark:bg-primary-tint",
   fresh: "bg-surface-2",
 };
 

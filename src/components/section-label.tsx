@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { STATUS_CLASSES, type StatusFilter } from "@/lib/expiry";
 import { cn } from "@/lib/utils";
 
 /**
@@ -6,16 +7,32 @@ import { cn } from "@/lib/utils";
  * neutral" wie bisher: "Schon drüber" trägt die Gefahrfarbe, "Heute
  * dran"/"Morgen" die Warnfarbe, "Diese Woche"/"Später" (und Abschnitte ohne
  * Ablauf-Bezug, etwa Gruppierung nach Ort oder Kategorie) die Primärfarbe.
- * Der Aufrufer aus `EXPIRY_BUCKETS` leitet das am saubersten aus dem
+ * Aufrufer aus `EXPIRY_BUCKETS` leiten das mit `toneForFilter` aus dem
  * vorhandenen `filter`-Feld ab: "abgelaufen" -> danger, "bald" -> warning,
  * `null` -> primary -- exakt die drei Gruppen der Tabelle im Handoff.
  */
 export type SectionTone = "danger" | "warning" | "primary";
 
+/**
+ * Die Ableitung aus dem `filter`-Feld eines Eimers -- an einer Stelle, weil
+ * Startseite und Vorrat sie beide brauchen und eine zweite Abschrift lautlos
+ * auseinanderlaufen würde.
+ */
+export function toneForFilter(filter: StatusFilter | null): SectionTone {
+  return filter === "abgelaufen" ? "danger" : filter === "bald" ? "warning" : "primary";
+}
+
+/*
+ * Der Zaehler ist die Statuspille aus STATUS_CLASSES (expiry.ts) und keine
+ * zweite Tabelle derselben Toenungen -- eine Palettenaenderung landet damit
+ * an einer Stelle. Nur die Ueberschrift hat keine Entsprechung dort: sie
+ * faerbt sich einzig bei "danger", weil "Schon drueber" der einzige
+ * Abschnitt ist, der von sich aus laut sein darf.
+ */
 const TONE_CLASSES: Record<SectionTone, { heading: string; counter: string }> = {
-  danger: { heading: "text-danger-ink", counter: "bg-danger-tint text-danger-ink" },
-  warning: { heading: "text-foreground", counter: "bg-warning-tint text-warning-ink" },
-  primary: { heading: "text-foreground", counter: "bg-primary-tint text-primary-deep" },
+  danger: { heading: "text-danger-ink", counter: STATUS_CLASSES.expired.chip },
+  warning: { heading: "text-foreground", counter: STATUS_CLASSES.soon.chip },
+  primary: { heading: "text-foreground", counter: STATUS_CLASSES.fresh.chip },
 };
 
 /**

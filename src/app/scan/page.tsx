@@ -19,6 +19,7 @@ import {
 } from "@zxing/library";
 import { Flashlight, FlashlightOff, X } from "lucide-react";
 import { Avo } from "@/components/avo";
+import { buttonVariants } from "@/components/ui/button";
 import {
   createEntry,
   mergeEntry,
@@ -27,6 +28,7 @@ import {
   useBatch,
   type BatchEntry,
 } from "@/lib/review-batch";
+import { cn } from "@/lib/utils";
 
 // @zxing/browser meldet fuer sein Canvas-Bild "Drehen wird unterstuetzt",
 // kann es aber nicht: HTMLCanvasElementLuminanceSource initialisiert
@@ -204,6 +206,26 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
  * bereits gestoppten Spur lehnt ab -- und das landete als unbehandelte
  * Ablehnung in der Konsole, ausgerechnet beim Verlassen des Screens.
  */
+/**
+ * Der Zustand einer Zeile im Ablagefach, als eine Entscheidung statt zweier.
+ *
+ * Farbe und Wort standen bis zum Frischling-Umbau als zwei gleichlaufende
+ * Ternaerketten nebeneinander -- ein neuer Zustand haette an beiden Stellen
+ * in derselben Reihenfolge nachgetragen werden muessen.
+ *
+ * #7ce8a8 ist die helle --primary-inv-Variante aus dem Hellmodus: der
+ * erzwungene dark-Wrapper zieht sonst den dunklen .dark-Wert (#1a7039), der
+ * fuer den invertierten Toast gedacht ist, nicht fuer dieses immer-dunkle
+ * Kamerabild.
+ */
+type TrayStatus = "recognized" | "pending" | "known" | "new";
+const TRAY_STATUS: Record<TrayStatus, { className: string; label: string }> = {
+  recognized: { className: "text-[#7ce8a8]", label: "gerade erkannt" },
+  pending: { className: "text-white/35", label: "…" },
+  known: { className: "text-white/60", label: "bekannt" },
+  new: { className: "text-warning", label: "neu" },
+};
+
 function stopReader(controls: IScannerControls | null | undefined): void {
   if (!controls) return;
   void Promise.resolve(controls.stop() as unknown).catch(() => {});
@@ -725,6 +747,16 @@ export default function ScanPage() {
                     // faellt "gerade erkannt" mit "resolving" zusammen: sobald
                     // ein Name da ist, ist der Eintrag nicht mehr der neueste.
                     const justRecognized = entry.id === lastTouchedId;
+                    // Farbe und Wort haengen an genau einem Zustand -- als
+                    // zwei parallele Ternaerketten liefen sie beim naechsten
+                    // Zustand auseinander.
+                    const status: TrayStatus = justRecognized
+                      ? "recognized"
+                      : resolving.includes(entry.id)
+                        ? "pending"
+                        : entry.known
+                          ? "known"
+                          : "new";
                     return (
                       <li
                         key={entry.id}
@@ -759,29 +791,9 @@ export default function ScanPage() {
                             entscheidet, ob der Pruef-Flow gleich nach der
                             Kategorie fragen muss. */}
                         <span
-                          className={`font-heading shrink-0 text-[12.5px] font-bold ${
-                            justRecognized
-                              ? // #7ce8a8 ist die helle --primary-inv-Variante
-                                // aus dem Hellmodus -- der erzwungene
-                                // dark-Wrapper zieht sonst den dunklen
-                                // .dark-Wert (#1a7039), der fuer den
-                                // invertierten Toast gedacht ist, nicht fuer
-                                // dieses immer-dunkle Kamerabild.
-                                "text-[#7ce8a8]"
-                              : resolving.includes(entry.id)
-                                ? "text-white/35"
-                                : entry.known
-                                  ? "text-white/60"
-                                  : "text-warning"
-                          }`}
+                          className={`font-heading shrink-0 text-[12.5px] font-bold ${TRAY_STATUS[status].className}`}
                         >
-                          {justRecognized
-                            ? "gerade erkannt"
-                            : resolving.includes(entry.id)
-                              ? "…"
-                              : entry.known
-                                ? "bekannt"
-                                : "neu"}
+                          {TRAY_STATUS[status].label}
                         </span>
                       </li>
                     );
@@ -807,7 +819,13 @@ export default function ScanPage() {
                 andere Primaerknopf im Repo. */}
             <Link
               href="/review/0"
-              className="bg-(image:--gradient-primary) font-heading flex h-14 items-center justify-center rounded-[22px] text-[16.5px] font-bold text-[#0b1f14]"
+              className={cn(
+                buttonVariants(),
+                // shadow-none: der Verlauf ist hier die hellste Flaeche
+                // ueberhaupt, ein Schein darunter waere auf dem
+                // Kamerabild nicht zu sehen und nur Rechenarbeit.
+                "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none",
+              )}
             >
               {batch.length} Artikel prüfen
             </Link>

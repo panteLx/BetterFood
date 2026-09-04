@@ -182,7 +182,7 @@ export default function SettingsPage() {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           App
         </h2>
         <div className="overflow-hidden rounded-[24px] bg-card shadow-row">

@@ -51,10 +51,7 @@ export function Sheet({
             className,
           )}
         >
-          <span
-            aria-hidden="true"
-            className="mx-auto mb-4 h-[5px] w-11 shrink-0 rounded-full bg-hairline"
-          />
+          <SheetHandle />
           <DialogTitle className={cn("px-1.5 pb-3 font-heading text-[20px] font-bold tracking-tight", hideTitle && "sr-only")}>
             {title}
           </DialogTitle>
@@ -63,4 +60,20 @@ export function Sheet({
       </DialogPortal>
     </Dialog>
   );
+}
+
+/**
+ * Die Griffleiste am oberen Rand eines Blattes.
+ *
+ * Als eigener Baustein exportiert, weil die abgefangenen Routen
+ * (route-modal.tsx) dasselbe Blattgefuehl brauchen und die Masse dort bis
+ * zum Frischling-Umbau ein zweites Mal wortgleich standen.
+ */
+export function SheetHandle() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mx-auto mb-4 h-[5px] w-11 shrink-0 rounded-full bg-hairline"
+    />
+  )
 }

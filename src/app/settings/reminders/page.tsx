@@ -284,7 +284,7 @@ export default function RemindersPage() {
           App?") und stand vorher nur deshalb beim Geräte-Schalter, weil es die
           Stufen noch nicht gab. */}
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           Wann melden?
         </h2>
         <div className="overflow-hidden rounded-[24px] bg-card shadow-row">
@@ -341,7 +341,7 @@ export default function RemindersPage() {
       {/* Ohne Vorwarnung gibt es keinen Vorlauf mehr zu wählen. */}
       {settings.stages.lead && (
         <section className="flex flex-col gap-2.5">
-          <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          <h2 className="label-caps">
             Vorlauf der Vorwarnung
           </h2>
           <div className="flex gap-2">
@@ -361,7 +361,7 @@ export default function RemindersPage() {
       )}
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           Uhrzeit
         </h2>
         <div className="flex items-center justify-between rounded-[24px] bg-card p-2 shadow-row">
@@ -392,7 +392,7 @@ export default function RemindersPage() {
       </section>
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           So sieht das aus
         </h2>
         {/* Eine Vorschau statt einer Beschreibung: wer eine Erinnerung
