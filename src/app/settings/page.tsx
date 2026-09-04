@@ -16,6 +16,7 @@ import { LEAD_DAY_OPTIONS } from "@/lib/notification-settings";
 import { parseMonthlyGoal } from "@/lib/monthly-goal";
 import { useIsClient } from "@/lib/use-is-client";
 import { useSession } from "@/lib/auth-client";
+import { VERSION_HREF, VERSION_LABEL } from "@/lib/version";
 
 /**
  * "Mehr" ist eine Verteilerseite, keine Sammelseite.
@@ -26,10 +27,10 @@ import { useSession } from "@/lib/auth-client";
  * Seite, und hier steht nur noch, welche es gibt und wie sie gerade
  * eingestellt sind.
  *
- * "Wie sie eingestellt sind" heisst woertlich der aktuelle Wert am rechten
+ * "Wie sie eingestellt sind" heißt wörtlich der aktuelle Wert am rechten
  * Rand: "2 Tage vorher", "Dunkel", "Zuhause". Eine feste Beschreibung
  * ("Wann und wie früh wir uns melden") wiederholte nur, was die Zeile schon
- * heisst -- den Grund, die Seite zu oeffnen, liefert erst der Wert. Wo es
+ * heißt -- den Grund, die Seite zu öffnen, liefert erst der Wert. Wo es
  * keinen einzelnen Wert gibt, steht weiterhin ein Hinweis darunter.
  */
 const ROWS: {
@@ -85,7 +86,7 @@ export default function SettingsPage() {
   const [activeListName, setActiveListName] = useState<string>();
 
   // Erst im Client: theme steht vor der Hydration nicht fest, und ein
-  // vorschnelles "Hell" waere schlimmer als ein Wert, der einen Tick spaeter
+  // vorschnelles "Hell" wäre schlimmer als ein Wert, der einen Tick später
   // erscheint.
   const isClient = useIsClient();
   const { theme, resolvedTheme } = useTheme();
@@ -112,7 +113,7 @@ export default function SettingsPage() {
       })
       .catch(() => {
         // Ohne Wert steht die Zeile eben nur mit ihrem Namen da -- ein
-        // Fehlertext waere hier lauter als die Information wert ist.
+        // Fehlertext wäre hier lauter als die Information wert ist.
       });
 
     fetch("/api/lists")
@@ -158,8 +159,8 @@ export default function SettingsPage() {
       <h1 className="text-[26px] leading-tight">Einstellungen</h1>
 
       {/* Die Karte ist selbst der Weg ins Konto -- dieselbe Bewegung wie
-          jede Zeile darunter. Vorher sass hier "Abmelden" als zweites Ziel
-          in derselben Flaeche; es steht jetzt am Ende von /settings/account,
+          jede Zeile darunter. Vorher saß hier "Abmelden" als zweites Ziel
+          in derselben Fläche; es steht jetzt am Ende von /settings/account,
           bei allem anderen, was das Konto betrifft. */}
       {session && (
         <Link
@@ -224,8 +225,24 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Die letzte Zeile der Seite und die einzige Stelle, an der die App
+          sagt, welcher Stand hier eigentlich läuft. Sie ist verlinkt, weil
+          die Angabe sonst am falschen Ende endet: wer einen Fehler meldet,
+          braucht die zugehörigen Notizen bzw. den Commit, und auf dem Handy
+          gibt es kein Hover, das einen Link nachträglich verrät -- deshalb
+          die Unterstreichung statt bloßer Farbe. "(stable)" stand hier
+          früher fest verdrahtet neben einer ebenso fest verdrahteten
+          v1.0.0; beides sagt jetzt das Label selbst (src/lib/version.ts). */}
       <p className="pt-1 pb-1 text-center text-[11px] leading-relaxed font-medium text-faint">
-        BetterFood · v1.0.0 (stable)
+        BetterFood ·{" "}
+        <a
+          href={VERSION_HREF}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-faint/50 underline-offset-2 transition-colors hover:text-muted-foreground"
+        >
+          {VERSION_LABEL}
+        </a>
       </p>
     </div>
   );
