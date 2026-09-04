@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { Upload, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const DISMISS_KEY = "vorrat:install-hint-dismissed";
 
@@ -55,16 +56,16 @@ export function InstallHintSettings() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+      <h2 className="label-caps">
         Auf dem Gerät
       </h2>
-      <div className="bg-warning-tint flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3.5">
+      <div className="flex items-start gap-3 rounded-[24px] bg-card px-4 py-3.5 shadow-row">
         <Upload
           className="mt-0.5 size-5 shrink-0 text-primary"
           strokeWidth={1.8}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold">
+          <p className="font-heading text-[15px] font-bold">
             Zum Home-Bildschirm hinzufügen
           </p>
           <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-muted-foreground">
@@ -113,11 +114,11 @@ export function InstallHintBanner() {
 
   return (
     <div className="flex items-start gap-3 rounded-[20px] bg-primary-tint p-3.5">
-      <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[11px] bg-primary text-primary-foreground">
+      <span className="flex size-8.5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Upload className="size-4.5" strokeWidth={2} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] leading-snug font-bold text-accent-foreground">
+        <p className="font-heading text-[13.5px] leading-snug font-bold text-accent-foreground">
           Zum Home-Bildschirm hinzufügen
         </p>
         <p className="mt-1 text-[12.5px] leading-relaxed font-medium text-balance text-accent-foreground/80">
@@ -125,14 +126,15 @@ export function InstallHintBanner() {
           Nur so kommen Erinnerungen an.
         </p>
       </div>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={dismiss}
         aria-label="Hinweis ausblenden"
-        className="flex size-7 shrink-0 items-center justify-center rounded-[9px] text-accent-foreground opacity-65 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="shrink-0 text-accent-foreground opacity-65 hover:bg-primary/15 hover:text-accent-foreground"
       >
         <X className="size-3.5" strokeWidth={2.4} />
-      </button>
+      </Button>
     </div>
   );
 }

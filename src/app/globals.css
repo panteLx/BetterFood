@@ -124,6 +124,15 @@
   /* Die Leiste, die von unten hochkommt (Aktionsleiste im Detail,
      Speichern-Leiste im Formular): ihr Schatten fällt nach oben. */
   --shadow-sheet: var(--shadow-bottom-bar);
+  /* Der Abhaken-Knopf einer Vorratszeile sitzt im Hellen auf weißer Fläche
+     über einer bereits getönten Zeile (--danger-tint/--warning-tint) -- ein
+     neutraler Kartenschatten geht dort unter, ein zum Zustand getönter
+     Schatten löst die Fläche sichtbar vom Untergrund. Im Dunkelmodus
+     entfällt er ersatzlos (siehe .dark unten): dort trägt der Knopf selbst
+     --primary-tint als Fläche, ein zusätzlicher Schatten würde auf
+     dunklem Grund ohnehin kaum ankommen. */
+  --shadow-check-danger: var(--shadow-check-tint-danger);
+  --shadow-check-warning: var(--shadow-check-tint-warning);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -196,9 +205,19 @@
   --primary-light: #4fd48c;
   --primary-deep: #1c8f52;
   --primary-tint: #d5f4e2;
-  /* Akzent auf dunklem Grund (Toast, Scanner-Linie): der Primärton hat dort
-     zu wenig Kontrast, deshalb ein eigener, aufgehellter Wert. */
+  /* Akzent auf dunklem Grund (Scanner-Linie, Blasen auf der Frischling-Karte):
+     der Primärton hat dort zu wenig Kontrast, deshalb ein eigener,
+     aufgehellter Wert. */
   --primary-inv: #7ce8a8;
+  /* Der Toast ist die eine Fläche, die in beiden Themes dunkel bleibt --
+     deshalb eigene Tokens statt --foreground/--background und kein
+     Gegenstück im .dark-Block weiter unten. Vorher war er invertiert, im
+     Dunkelmodus also cremeweiß: eine kurz aufblitzende helle Fläche über
+     einer dunklen Liste, die genau so hell war wie die Meldung wichtig war.
+     Dunkel in beiden Themes ist ruhiger und trifft den Entwurf. */
+  --toast: #16302a;
+  --toast-foreground: #eef8ef;
+  --toast-accent: #7ce8a8;
   --warning: #ffc94d;
   --warning-ink: #a9701a;
   --warning-on: #4a3608;
@@ -241,6 +260,11 @@
   --shadow-add-fab: 0 10px 22px rgb(35 168 98 / 0.4);
   --shadow-call-to-action: 0 10px 22px rgb(35 168 98 / 0.32);
   --shadow-bottom-bar: 0 -10px 30px rgb(22 48 42 / 0.08);
+  /* Dieselben Töne wie --danger-ink/--warning-ink, nur als Schatten statt
+     als Fläche -- der Abhaken-Knopf hebt sich damit farblich zur Zeile ab,
+     in der er steht. */
+  --shadow-check-tint-danger: 0 4px 10px rgb(226 96 58 / 0.18);
+  --shadow-check-tint-warning: 0 4px 10px rgb(169 112 26 / 0.16);
 
   --chart-1: #23a862;
   --chart-2: #ffc94d;
@@ -297,8 +321,9 @@
   --primary-light: #6fe09d;
   --primary-deep: #4fd48c;
   --primary-tint: #1e3b2b;
-  /* Der Toast ist invertiert, seine Fläche also hell — der Akzent darauf ist
-     hier dunkel, genau andersherum als im Hellmodus. */
+  /* Auf der hellen Frischling-Karte des Dunkelmodus ist der aufgehellte
+     Akzent unsichtbar, hier steht deshalb der dunkle Gegenwert. Der Toast
+     benutzt ihn nicht mehr (siehe --toast-accent). */
   --primary-inv: #1a7039;
   --warning: #ffd166;
   --warning-ink: #ffd166;
@@ -339,6 +364,10 @@
     0 10px 24px rgb(79 212 140 / 0.32), 0 2px 8px rgb(0 0 0 / 0.38);
   --shadow-call-to-action: 0 10px 24px rgb(79 212 140 / 0.26);
   --shadow-bottom-bar: 0 -10px 30px rgb(0 0 0 / 0.34);
+  /* Entfällt im Dunkeln -- der Abhaken-Knopf trägt dort --primary-tint als
+     Fläche statt eines Schattens (siehe item-row.tsx). */
+  --shadow-check-tint-danger: none;
+  --shadow-check-tint-warning: none;
 
   --chart-1: #4fd48c;
   --chart-2: #ffd166;
@@ -494,12 +523,14 @@
   }
 }
 
-/* 314,16 ist der Umfang des Quote-Rings (2·π·50) und steht als
-   RING_CIRCUMFERENCE auch in home-overview.tsx. Beide Werte meinen dasselbe
-   und müssen zusammen wandern. */
+/* Der Startwert ist der Ringumfang. Er steht nicht hier, sondern kommt als
+   --ring-circumference vom Element (home-overview.tsx setzt dort
+   RING_CIRCUMFERENCE) -- sonst müssten Radius und Keyframe von Hand
+   zusammengehalten werden und ein neuer Radius bräche die Animation lautlos.
+   Der Rückfallwert 314.16 = 2·π·50 gilt für den heutigen Radius. */
 @keyframes bf-ring {
   from {
-    stroke-dashoffset: 314.16;
+    stroke-dashoffset: var(--ring-circumference, 314.16);
   }
 }
 
@@ -569,6 +600,27 @@
 /* Waagerecht scrollende Chip-Reihen (Schnell-Datumswahl, Kategorien): auf
    dem Telefon gibt es dort ohnehin keine sichtbare Leiste, auf dem Desktop
    zerschnitt sie die Reihe. */
+/* Das Glanzband, das ueber eine gefuellte Spur laeuft. Der Verlauf steht
+   hier und nicht als Inline-Style an der Komponente: eine Farbe gehoert in
+   dieses Blatt, auch eine halbtransparente weisse. */
+@utility sheen-band {
+  background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+}
+
+/* Die gesperrte Versalzeile ueber den Einstellungs-Karten. Als Utility und
+   nicht als Klassenkette an sechs Stellen: der Wortlaut der Zeile wechselt,
+   ihre Form nie, und die sechs Abschriften waren schon dabei auseinander-
+   zulaufen (text-faint statt text-muted-foreground im Konto-Bereich). */
+@utility label-caps {
+  padding-left: calc(var(--spacing) * 1);
+  font-size: var(--text-xs);
+  line-height: var(--tw-leading, var(--text-xs--line-height));
+  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;

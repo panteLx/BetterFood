@@ -32,7 +32,7 @@ export default async function KnowledgePage() {
         {/* Die Datenbank gehoert der Liste, nicht dem Nutzer -- in einer
             anderen Liste kann dasselbe Produkt anders einsortiert sein. */}
         {list && (
-          <span className="ml-auto max-w-[40%] truncate rounded-[9px] bg-primary-tint px-2.5 py-1 text-[11.5px] font-bold text-primary">
+          <span className="ml-auto max-w-[40%] truncate rounded-full bg-primary-tint px-3 py-1 font-heading text-[11.5px] font-bold text-primary-deep">
             {list.name}
           </span>
         )}

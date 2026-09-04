@@ -47,11 +47,11 @@ const HIDDEN_PREFIXES = [
 const SETTINGS_PREFIXES = ["/settings", "/knowledge"];
 
 // Ein Wert fuer beide: die fixierte Leiste und der Platzhalter, der ihr im
-// Fluss den Platz freihaelt. 88px sind der Rahmen oben (pt-2) plus die Insel
-// (2*py-2.5 + size-11 = 64px) plus der Rahmen unten (pb-4). Laufen die
+// Fluss den Platz freihaelt. 96px sind der Rahmen oben (pt-2) plus die Insel
+// (2*py-3 + size-[46px] = 70px) plus der Rahmen unten (pb-[18px]). Laufen die
 // auseinander, endet der Inhalt entweder unter der Insel oder ueber einer
 // Luecke.
-const NAV_BOX = "h-22";
+const NAV_BOX = "h-24";
 
 // Ohne Beschriftung traegt das Icon die Bedeutung allein -- fuer alles, was
 // nicht sehend bedient wird, muss sie deshalb im aria-label stehen. title
@@ -79,11 +79,11 @@ function NavLink({
       title={label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex size-11 items-center justify-center rounded-[13px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        active ? "bg-primary-tint text-primary" : "text-faint",
+        "flex size-[46px] items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        active ? "bg-primary-tint text-primary-deep" : "text-muted-foreground",
       )}
     >
-      <Icon className="size-5.5" strokeWidth={active ? 2.1 : 1.8} />
+      <Icon className="size-5.5" strokeWidth={active ? 2.2 : 2} />
     </Link>
   );
 }
@@ -131,7 +131,7 @@ export function BottomNav() {
   // Home-Indikator, damit Inhalt nicht unter ihm klebt -- eine Insel, die
   // ohnehin frei steht, braucht diese Reservierung nicht, sie haette ihren
   // eigenen Abstand nur auf 34px aufgeblasen. Stattdessen rahmen px-4 und
-  // pb-4 sie gleichmaessig ein.
+  // pb-[18px] sie gleichmaessig ein.
   //
   // inert statt nur unsichtbar: eine weggefahrene Leiste darf die
   // Tabulator-Reihenfolge nicht mehr belegen und von einem Screenreader nicht
@@ -144,19 +144,33 @@ export function BottomNav() {
         inert={hidden}
         className={cn(
           NAV_BOX,
-          "pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-4 pt-2 pb-4 transition-[transform,opacity] duration-300 ease-out",
+          "pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-4 pt-2 pb-[18px] transition-[transform,opacity] duration-300 ease-out",
           hidden && "translate-y-full opacity-0",
         )}
       >
-        {/* 22px Radius statt der vollen Pille: das ist dieselbe weiche
-            Rechteckform, die der Hinzufuegen-Knopf und die Auswahl in seinem
-            Sheet schon haben -- rund genug fuer eine Insel, eckig genug, um
-            neben den Karten der App nicht wie ein Fremdkoerper zu wirken. */}
-        <div className="pointer-events-auto flex items-center justify-between rounded-[22px] border border-border bg-card/85 px-3 py-2.5 shadow-nav backdrop-blur-[20px]">
+        {/* 28px Radius, keine Kante mehr: die Tiefe traegt jetzt allein
+            shadow-nav (in .dark ein eigener Wert desselben Tokens, siehe
+            globals.css), wie ueberall sonst im Redesign auch. bg-card/90 mit
+            dark:bg-card/88 statt eines eigenen rgba-Werts, weil --card in
+            beiden Themes exakt die Grundfarbe des Entwurfs ist (#fff bzw.
+            #1c2620) -- nur die Deckkraft weicht zwischen den Themes leicht ab. */}
+        <div className="pointer-events-auto flex items-center justify-between rounded-[28px] bg-card/90 px-3 py-3 shadow-nav backdrop-blur-[20px] dark:bg-card/88">
           {LEFT_ITEMS.map((item) => (
             <NavLink key={item.href} {...item} active={isActive(item.href)} />
           ))}
-          <AddActionSheet />
+          {/* -mt-3.5 (-14px): der Knopf ueberragt die Insel wieder, wie vor
+              der ersten Fassung dieser Leiste -- jetzt aber mit einem
+              Boden unter sich, auf dem er sichtbar aufliegt.
+
+              animate-squish nur hier, nicht in der Komponente selbst: die
+              Keyframes setzen `transform` direkt statt ueber die
+              Tailwind-eigenen --tw-translate/--tw-scale-Variablen, und
+              wuerden sonst mit dem Ein-/Ausblenden des freistehenden FAB
+              weiter unten kollidieren (der animiert translate-y und scale
+              fuer denselben Knopf). 3,4s statt der Standarddauer, weil der
+              Entwurf den Knopf hier ruhiger pulsen laesst als z. B. die
+              Zeile "Abgelaufen". */}
+          <AddActionSheet className="-mt-3.5 animate-squish [animation-duration:3.4s]" />
           {RIGHT_ITEMS.map((item) => (
             <NavLink key={item.href} {...item} active={isActive(item.href)} />
           ))}
@@ -175,7 +189,7 @@ export function BottomNav() {
       >
         <AddActionSheet
           className={cn(
-            "pointer-events-auto size-14 rounded-[18px] shadow-fab transition-[transform,opacity] duration-300 ease-out",
+            "pointer-events-auto transition-[transform,opacity] duration-300 ease-out",
             !hidden && "pointer-events-none translate-y-4 scale-90 opacity-0",
           )}
         />

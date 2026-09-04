@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Avo } from "@/components/avo";
 import { BrandMark } from "@/components/brand-mark";
 import {
   ReminderIllustration,
@@ -10,6 +11,7 @@ import {
   StockIllustration,
   SwipeIllustration,
 } from "@/components/onboarding-illustrations";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { DEMO_FOOTNOTE } from "@/lib/demo-data";
 import { cn, withRedirect } from "@/lib/utils";
 
@@ -67,11 +69,11 @@ function Welcome() {
       <button
         type="button"
         onClick={() => setStep(0)}
-        className="relative flex flex-1 flex-col items-center justify-center gap-5.5 bg-primary text-primary-foreground"
+        className="relative flex flex-1 flex-col items-center justify-center gap-5.5 bg-(image:--gradient-primary) text-primary-foreground"
       >
         <BrandMark className="size-24 animate-pop rounded-[30px] bg-primary-foreground text-primary" iconClassName="size-13" />
         <span className="text-center">
-          <span className="block text-3xl leading-tight font-extrabold tracking-tight">
+          <span className="block font-heading text-3xl leading-tight font-bold tracking-tight">
             BetterFood
           </span>
           <span className="mt-2 block text-sm leading-snug font-medium opacity-75">
@@ -102,8 +104,13 @@ function Welcome() {
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-8.5">
-        <div className="h-58 rounded-3xl border border-border bg-surface-2 p-4">
+        <div className="relative h-58 rounded-2xl bg-surface-2 p-4">
           <Illustration />
+          {/* Der erste Auftritt des Maskottchens, noch vor jedem Konto --
+              dieselbe Stelle "Titel mit Avo daneben" wie im Hinzufügen-Blatt,
+              hier auf die Illustration gelegt, weil ein Slide-Titel im
+              Wechsel mit dem Fließtext ohnehin schon zwei Zeilen beansprucht. */}
+          <Avo size="sm" mood="happy" className="absolute right-4 bottom-4" />
         </div>
         <div className="flex flex-col gap-3">
           <h1 className="text-[27px] leading-tight text-balance">{slide.title}</h1>
@@ -127,7 +134,7 @@ function Welcome() {
             key={entry.title}
             className={cn(
               "h-1.5 rounded-full transition-all",
-              index === step ? "w-5.5 bg-primary" : "w-1.5 bg-border",
+              index === step ? "w-5.5 bg-primary" : "w-1.5 bg-track",
             )}
           />
         ))}
@@ -136,13 +143,13 @@ function Welcome() {
       {/* Knopfgruppe aus 8h: 36px unter der Punkt-Navigation, 10px zwischen
           den Zeilen. */}
       <div className="mt-9 flex flex-col gap-2.5">
-        <button
+        <Button
           type="button"
           onClick={() => (isLast ? finish() : setStep(step + 1))}
-          className="h-14 rounded-[18px] bg-primary text-base font-bold text-primary-foreground"
+          className="h-14 w-full text-[16.5px]"
         >
           {isLast ? "Konto erstellen" : "Weiter"}
-        </button>
+        </Button>
 
         {/* Der zweite Weg, und nur auf dem letzten Schritt: bis hierher
             erklärt die Einführung, wofür die App gut ist, danach steht die
@@ -158,11 +165,11 @@ function Welcome() {
           <>
             <Link
               href="/demo"
-              className="flex h-14 items-center justify-center rounded-[18px] border border-border bg-card text-base font-bold"
+              className={cn(buttonVariants({ variant: "outline" }), "h-14 w-full text-[16.5px]")}
             >
               Mit Demo-Vorrat ausprobieren
             </Link>
-            <p className="text-center text-[12px] leading-snug font-semibold text-balance text-faint">
+            <p className="text-center text-[12px] leading-snug font-semibold text-balance text-muted-foreground">
               {DEMO_FOOTNOTE}
             </p>
           </>
@@ -184,7 +191,7 @@ function Welcome() {
 
 export default function WelcomePage() {
   return (
-    <Suspense fallback={<div className="flex-1 bg-primary" />}>
+    <Suspense fallback={<div className="flex-1 bg-(image:--gradient-primary)" />}>
       <Welcome />
     </Suspense>
   );

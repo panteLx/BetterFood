@@ -122,63 +122,69 @@ export function ExpiryPicker({
           Richtwert drauf", gemeint sind aber drei Tage ab heute -- beim
           Rechnungsimport ab dem Kaufdatum, weil die Ware da schon im
           Regal lag. */}
-      <p className="mt-2.5 text-[11px] font-semibold text-faint">
+      <p className="mt-2.5 pl-1.5 text-[11px] font-bold text-faint">
         {fromPurchase ? "Sprünge ab Kaufdatum" : "Sprünge ab heute"}
       </p>
 
-      <div className="mt-1.5 overflow-hidden rounded-[16px] border border-border">
-        <div className="flex border-b border-border">
-          {JUMPS.map((jump, position) => {
-            const target = jumpTarget(jump.days, reference, today);
-            // Ob ein Sprung überhaupt noch etwas ausdrückt. Bei einer Rechnung
-            // vom 24. August landen "+3 Tg" und "+1 Wo" beide vor heute, werden
-            // beide auf heute geklemmt -- und standen dann beide hervorgehoben
-            // da, als hätte der Nutzer zwei Werte gleichzeitig gewählt. Genau
-            // die Doppeldeutigkeit, die der Test der Runde 8 schon am
-            // Kalender-Ring gefunden hat. Ein Sprung, der nichts anderes sagen
-            // kann als "heute", ist keine Wahl, und ein toter Knopf soll auch
-            // tot aussehen.
-            const past = toDateInputValue(addDays(jump.days, reference)) < todayKey;
-            return (
-              <button
-                key={jump.days}
-                type="button"
-                disabled={past}
-                aria-pressed={!past && target === effective}
-                onClick={() => onChange(target)}
-                className={cn(
-                  "min-w-0 flex-1 py-[9px] font-mono text-[11.5px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  position > 0 && "border-l border-border",
-                  past
-                    ? "font-semibold text-faint opacity-50"
-                    : target === effective
-                      ? "bg-primary-tint font-bold text-primary"
-                      : "font-semibold text-muted-foreground",
-                )}
-              >
-                {jump.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="p-2.5">
-          <DateCalendar
-            value={effective}
-            onChange={onChange}
-            today={today}
-            confirmed={confirmed}
-            markToday={false}
-          />
-        </div>
+      {/* Fünf eigenständige Pillen statt einer Segmentleiste -- der Entwurf
+          trennt sie mit 5px statt sie durch Trennlinien zusammenzuhalten,
+          und jede trägt ihren eigenen Zustand (aktiv/vergangen) als eigene
+          Fläche statt als Position in einer Leiste. */}
+      <div className="mt-1.5 flex gap-[5px]">
+        {JUMPS.map((jump) => {
+          const target = jumpTarget(jump.days, reference, today);
+          // Ob ein Sprung überhaupt noch etwas ausdrückt. Bei einer Rechnung
+          // vom 24. August landen "+3 Tg" und "+1 Wo" beide vor heute, werden
+          // beide auf heute geklemmt -- und standen dann beide hervorgehoben
+          // da, als hätte der Nutzer zwei Werte gleichzeitig gewählt. Genau
+          // die Doppeldeutigkeit, die der Test der Runde 8 schon am
+          // Kalender-Ring gefunden hat. Ein Sprung, der nichts anderes sagen
+          // kann als "heute", ist keine Wahl, und ein toter Knopf soll auch
+          // tot aussehen.
+          const past = toDateInputValue(addDays(jump.days, reference)) < todayKey;
+          const active = !past && target === effective;
+          return (
+            <button
+              key={jump.days}
+              type="button"
+              disabled={past}
+              aria-pressed={active}
+              onClick={() => onChange(target)}
+              className={cn(
+                "h-[34px] flex-1 rounded-full font-mono text-[11.5px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                past
+                  ? "text-faint opacity-50"
+                  : active
+                    ? "bg-primary-tint text-primary-deep"
+                    : "bg-card text-muted-foreground shadow-row",
+              )}
+            >
+              {jump.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-2.5 rounded-[26px] bg-card px-3.5 py-4 shadow-card">
+        <DateCalendar
+          value={effective}
+          onChange={onChange}
+          today={today}
+          confirmed={confirmed}
+          markToday={false}
+        />
       </div>
 
       {/* Was gespeichert wird, steht hier -- in beiden Fällen, ob der
           Nutzer getippt hat oder den Richtwert stehen lässt. Genau das
           war der Einwand aus Runde 5 gegen geschätzte Daten: nicht das
           Schätzen selbst, sondern dass es unsichtbar geschah. */}
-      <p className="mt-3 text-[13px] font-bold">
+      <p className="mt-2.5 pl-1.5 font-heading text-[14px] font-bold">
         {formatLong(selected)}
-        <span className="font-semibold text-faint"> · {relativeSuffix(days)}</span>
+        <span className="font-sans font-semibold text-muted-foreground">
+          {" "}
+          · {relativeSuffix(days)}
+        </span>
       </p>
     </>
   );

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, Pencil, Refrigerator, Search, Tags, Trash2, X } from "lucide-react";
+import { RenameInput } from "@/components/rename-input";
 import { Button } from "@/components/ui/button";
 import { Tab, TabBar } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
@@ -210,13 +211,13 @@ export function KnowledgeManager({
           </p>
 
           {entries.length === 0 ? (
-            <p className="rounded-[18px] border border-dashed border-border p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
+            <p className="rounded-[24px] bg-surface-2 p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
               Noch nichts gelernt. Sobald du den ersten Artikel einer Kategorie
               zuordnest, merkt sich die App das hier.
             </p>
           ) : (
             <>
-              <label className="flex h-11.5 items-center gap-2.5 rounded-[15px] border border-border bg-card px-3.5">
+              <label className="flex h-11.5 items-center gap-2.5 rounded-full bg-card px-4 shadow-row">
                 <Search className="size-4 shrink-0 text-faint" />
                 <input
                   type="search"
@@ -228,30 +229,29 @@ export function KnowledgeManager({
               </label>
 
               {visible.length === 0 ? (
-                <p className="rounded-[18px] border border-dashed border-border p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
+                <p className="rounded-[24px] bg-surface-2 p-5 text-[13.5px] leading-relaxed font-medium text-balance text-muted-foreground">
                   Kein Treffer für „{query.trim()}“.
                 </p>
               ) : (
                 visible.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-card p-3.5"
+                    className="flex flex-col gap-2.5 rounded-[24px] bg-card p-3.5 shadow-row"
                   >
                     <div className="flex items-center gap-2.5">
                       {editingId === entry.id ? (
                         <>
-                          <input
+                          <RenameInput
                             value={editName}
                             onChange={(event) =>
                               setEditName(event.target.value)
                             }
                             autoFocus
                             aria-label="Name des Produkts"
-                            className="h-10.5 min-w-0 flex-1 rounded-[13px] border border-primary bg-surface-2 px-3 text-[14.5px] font-bold outline-none"
                           />
                           <Button
                             size="icon"
-                            className="size-10 shrink-0 rounded-[13px]"
+                            className="size-10 shrink-0"
                             disabled={busyId === entry.id}
                             onClick={() => saveName(entry)}
                             aria-label="Speichern"
@@ -261,7 +261,7 @@ export function KnowledgeManager({
                           <Button
                             size="icon"
                             variant="outline"
-                            className="size-10 shrink-0 rounded-[13px]"
+                            className="size-10 shrink-0"
                             onClick={() => setEditingId(null)}
                             aria-label="Abbrechen"
                           >
@@ -271,7 +271,7 @@ export function KnowledgeManager({
                       ) : (
                         <>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14.5px] leading-tight font-bold">
+                            <p className="truncate font-heading text-[14.5px] leading-tight font-bold">
                               {entry.name}
                             </p>
                             <p className="mt-1.5 font-mono text-[11.5px] leading-none text-faint">
@@ -281,7 +281,7 @@ export function KnowledgeManager({
                           <Button
                             size="icon"
                             variant="outline"
-                            className="size-10 shrink-0 rounded-[13px]"
+                            className="size-10 shrink-0"
                             onClick={() => {
                               setEditingId(entry.id);
                               setEditName(entry.name);
@@ -293,7 +293,7 @@ export function KnowledgeManager({
                           <Button
                             size="icon"
                             variant="outline"
-                            className="size-10 shrink-0 rounded-[13px] text-danger"
+                            className="size-10 shrink-0 text-danger"
                             disabled={busyId === entry.id}
                             onClick={() => setPendingForget(entry)}
                             aria-label={`${entry.name} vergessen`}

@@ -41,7 +41,3 @@ Domain logic and all DB access live in `src/lib/**` (`data.ts` cached queries, `
 - Double quotes, semicolons, 2-space indent, trailing commas, ~100-column width. No Prettier or Biome in the repo — `npm run lint` (ESLint flat config) is the only formatter.
 - Files under `src/components/ui/` are shadcn-generated with very long class strings. Do not reformat them.
 - Use the design tokens in `src/app/globals.css` (`--radius` 0.875rem and its derived scale, `surface-2`, `faint`, `primary-tint`, `warning`, `danger` plus tints, and the five named shadows `shadow-card/raise/nav/action/fab`). Never inline a hex color or `shadow-[...]`.
-
-## Repo etiquette
-
-PRs squash-merged to `main`. Commit titles: English sentence-style with the PR number, no Conventional Commits prefixes. **Name the object and the action** — `Rework the dark palette to anthracite (#18)`, not `Trade the near-black night for something you can actually see (#18)`. A title is an index entry, not a headline; metaphor belongs nowhere in it. PR bodies: long-form English prose on the why, with headings and before/after numbers. Branch names are free-form.

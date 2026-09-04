@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Leaf, Minus, Plus } from "lucide-react";
 import { SubPageHeader } from "@/components/sub-page-header";
 import { InstallHintSettings } from "@/components/install-hint";
+import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Switch } from "@/components/ui/switch";
 import { addDays, daysUntil, formatMedium, startOfDay } from "@/lib/expiry";
@@ -252,10 +253,10 @@ export default function RemindersPage() {
     <div className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-4">
       <SubPageHeader title="Erinnerungen" />
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="overflow-hidden rounded-[24px] bg-card shadow-row">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">Erinnerungen an</p>
+            <p className="font-heading text-[15px] font-bold">Erinnerungen an</p>
             <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
               Push auf dieses Gerät
             </p>
@@ -270,7 +271,7 @@ export default function RemindersPage() {
       </div>
 
       {permission === "denied" && (
-        <p className="rounded-lg bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-medium text-danger">
+        <p className="rounded-lg bg-danger-tint px-4 py-3 text-[13px] leading-relaxed font-medium text-danger-ink">
           Die Berechtigung wurde verweigert – bitte in den Browser- oder
           Systemeinstellungen erlauben, dann hier erneut einschalten.
         </p>
@@ -283,17 +284,19 @@ export default function RemindersPage() {
           App?") und stand vorher nur deshalb beim Geräte-Schalter, weil es die
           Stufen noch nicht gab. */}
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           Wann melden?
         </h2>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[24px] bg-card shadow-row">
           {STAGES.map((stage) => (
             <div
               key={stage}
-              className="flex items-center gap-3 border-b border-border px-4 py-3.5"
+              className="flex items-center gap-3 border-b border-hairline px-4 py-3.5"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold">{NOTIFICATION_STAGES[stage].label}</p>
+                <p className="font-heading text-[15px] font-bold">
+                  {NOTIFICATION_STAGES[stage].label}
+                </p>
                 <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
                   {NOTIFICATION_STAGES[stage].description}
                 </p>
@@ -310,7 +313,7 @@ export default function RemindersPage() {
           ))}
           <div className="flex items-center gap-3 px-4 py-3.5">
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-semibold">Wochenübersicht</p>
+              <p className="font-heading text-[15px] font-bold">Wochenübersicht</p>
               <p className="mt-0.5 text-[12.5px] leading-snug font-medium text-muted-foreground">
                 Sonntags, was diese Woche fällig ist
               </p>
@@ -338,7 +341,7 @@ export default function RemindersPage() {
       {/* Ohne Vorwarnung gibt es keinen Vorlauf mehr zu wählen. */}
       {settings.stages.lead && (
         <section className="flex flex-col gap-2.5">
-          <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          <h2 className="label-caps">
             Vorlauf der Vorwarnung
           </h2>
           <div className="flex gap-2">
@@ -358,36 +361,38 @@ export default function RemindersPage() {
       )}
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           Uhrzeit
         </h2>
-        <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-2">
-          <button
-            type="button"
+        <div className="flex items-center justify-between rounded-[24px] bg-card p-2 shadow-row">
+          <Button
+            variant="ghost"
+            size="icon-touch"
             onClick={() => stepHour(-1)}
             disabled={loading || hour <= NOTIFICATION_HOUR_MIN}
             aria-label="Eine Stunde früher"
-            className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+            className="text-muted-foreground"
           >
             <Minus className="size-5" strokeWidth={2.2} />
-          </button>
-          <span aria-live="polite" className="text-[17px] font-bold tabular-nums">
+          </Button>
+          <span aria-live="polite" className="font-heading text-[17px] font-bold tabular-nums">
             {settings.time}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-touch"
             onClick={() => stepHour(1)}
             disabled={loading || hour >= NOTIFICATION_HOUR_MAX}
             aria-label="Eine Stunde später"
-            className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+            className="text-muted-foreground"
           >
             <Plus className="size-5" strokeWidth={2.2} />
-          </button>
+          </Button>
         </div>
       </section>
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="pl-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <h2 className="label-caps">
           So sieht das aus
         </h2>
         {/* Eine Vorschau statt einer Beschreibung: wer eine Erinnerung
@@ -396,16 +401,16 @@ export default function RemindersPage() {
             hier ein fester Satz, der nach dem Abschalten einer Stufe eine
             Meldung versprach, die nie kommen würde. */}
         {preview.length > 0 && (
-          <div className="flex gap-3 rounded-[20px] border border-border bg-surface-2 p-3.5">
-            <span className="flex size-8.5 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+          <div className="flex gap-3 rounded-[20px] bg-surface-2 p-3.5">
+            <span className="flex size-8.5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Leaf className="size-4.5" strokeWidth={1.7} />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex justify-between text-[12.5px] leading-none font-bold">
+              <div className="flex justify-between font-heading text-[12.5px] leading-none font-bold">
                 <span>BetterFood</span>
-                <span className="font-medium text-muted-foreground">jetzt</span>
+                <span className="font-sans font-medium text-muted-foreground">jetzt</span>
               </div>
-              <p className="mt-1.5 text-sm leading-snug font-bold">
+              <p className="mt-1.5 font-heading text-sm leading-snug font-bold">
                 {notificationTitle(preview)}
               </p>
               <p className="mt-0.5 text-[13px] leading-snug font-medium text-balance text-muted-foreground">
@@ -414,14 +419,14 @@ export default function RemindersPage() {
             </div>
           </div>
         )}
-        <button
-          type="button"
+        <Button
+          variant="outline"
           onClick={sendTest}
           disabled={busy || !subscribed}
-          className="h-12 rounded-lg border border-border bg-card text-sm font-semibold disabled:opacity-50"
+          className="h-12 w-full"
         >
           Testbenachrichtigung senden
-        </button>
+        </Button>
         {/* Beantwortet "geht überhaupt etwas raus?", ohne dass jemand den Knopf
             darüber drücken muss. Der Wert ist der Merker, den der stündliche
             Lauf bei jeder zugestellten Erinnerung schreibt. */}

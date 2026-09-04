@@ -5,7 +5,6 @@ import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import {
-  Archive as ArchiveIcon,
   EyeOff,
   RotateCcw,
   type LucideIcon,
@@ -14,7 +13,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hideItem, restoreItem } from "@/lib/item-actions";
-import { formatShort } from "@/lib/expiry";
+import { formatShort, STATUS_CLASSES } from "@/lib/expiry";
 import { REVEAL_DISTANCE, useSwipeActions } from "@/lib/use-swipe-actions";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/db/schema";
@@ -64,8 +63,13 @@ export function ArchiveList({
 
   if (items.length === 0) {
     return (
+      // Dieselbe Karte wie der leere Vorrat: ein leeres Archiv ist genauso ein
+      // Bildschirm ohne einen einzigen Datenpunkt, und die Statistik darueber
+      // faellt dann ohnehin weg (siehe ArchiveView). Ohne die Karte stand hier
+      // nur Text auf dem nackten Seitengrund.
       <EmptyState
-        icon={ArchiveIcon}
+        icon="mascot"
+        variant="card"
         title="Das Archiv ist leer"
         body="Aufgebrauchte oder entsorgte Artikel erscheinen hier."
       />
@@ -74,7 +78,7 @@ export function ArchiveList({
 
   return (
     <>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-[9px]">
         {items.map((item) => (
           <ArchiveCard
             key={item.id}
@@ -161,7 +165,7 @@ function ArchiveCard({
     <div
       // overflow-x-clip statt overflow-hidden: siehe item-row.tsx.
       className={cn(
-        "relative overflow-x-clip rounded-[20px] bg-surface-2 transition-colors",
+        "relative overflow-x-clip rounded-[24px] bg-surface-2 transition-colors",
         offset > 0 && "bg-primary-tint",
       )}
     >
@@ -201,7 +205,7 @@ function ArchiveCard({
           offset === 0 ? undefined : { transform: `translateX(${offset}px)` }
         }
         className={cn(
-          "relative flex touch-pan-y items-center rounded-[20px] border border-border bg-card select-none",
+          "relative flex touch-pan-y items-center rounded-[24px] bg-card shadow-row select-none",
           dragging ? "transition-none" : "transition-transform duration-200",
         )}
       >
@@ -213,29 +217,28 @@ function ArchiveCard({
             if (wasSwipe()) return;
             onOpenActions();
           }}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[24px] px-4 py-[13px] text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] leading-tight font-bold">
+            <span className="block truncate font-heading text-base leading-tight font-bold">
               {item.name}
               {item.quantity > 1 && (
-                <span className="ml-2 font-semibold text-muted-foreground">
-                  ×{item.quantity}
-                </span>
+                <span className="ml-2 font-mono text-[12.5px] text-faint">×{item.quantity}</span>
               )}
             </span>
-            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="mt-[7px] flex flex-wrap items-center gap-[7px]">
               <span
                 className={cn(
-                  "inline-flex h-5.5 items-center rounded-[7px] px-2.5 text-[11.5px] font-bold whitespace-nowrap",
-                  used
-                    ? "bg-primary-tint text-primary"
-                    : "bg-danger-tint text-danger",
+                  "inline-flex h-6 items-center rounded-full px-[11px] text-[11.5px] font-bold whitespace-nowrap",
+                  // Dieselben zwei Toenungen wie im Vorrat, aus derselben
+                  // Tabelle: "aufgebraucht" liest sich wie "frisch",
+                  // "weggeworfen" wie "abgelaufen".
+                  used ? STATUS_CLASSES.fresh.chip : STATUS_CLASSES.expired.chip,
                 )}
               >
                 {used ? "Aufgebraucht" : "Weggeworfen"}
               </span>
-              <span className="text-xs leading-snug font-semibold text-muted-foreground">
+              <span className="text-[12px] leading-snug font-semibold text-faint">
                 {categoryLabel}
                 {item.resolvedAt && ` · ${formatShort(item.resolvedAt)}`}
               </span>
@@ -262,11 +265,11 @@ function SheetAction({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-3.5 rounded-[20px] border border-border bg-surface-2 p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex items-center gap-3.5 rounded-[20px] bg-surface-2 p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <Icon className="size-6 shrink-0 text-primary" strokeWidth={1.8} />
       <span>
-        <span className="block text-base font-bold">{label}</span>
+        <span className="block font-heading text-base font-bold">{label}</span>
         <span className="mt-0.5 block text-[13px] font-medium text-muted-foreground">
           {hint}
         </span>

@@ -68,7 +68,7 @@ export default function GoalPage() {
     <div className="flex flex-1 flex-col gap-4.5 px-5 pt-2 pb-4">
       <SubPageHeader title="Monatsziel" />
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-3 rounded-[24px] bg-card p-4 shadow-row">
         <p className="text-[15px] leading-snug font-bold">
           Wie viel willst du diesen Monat aufbrauchen statt wegwerfen?
         </p>

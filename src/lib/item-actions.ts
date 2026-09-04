@@ -10,6 +10,8 @@
  * hätte sie nachgebaut.
  */
 
+import { toast } from "sonner";
+
 export type ResolveStatus = "used" | "thrown_away";
 
 /** Alles, was zum Zurücknehmen eines Abhakens nötig ist (siehe /resolve). */
@@ -56,6 +58,60 @@ export async function undoResolve(undo: UndoInfo, quantityBefore: number) {
 
   await expectOk(await fetch(`/api/items/${undo.archiveId}`, { method: "DELETE" }));
   await setQuantity(undo.itemId, quantityBefore);
+}
+
+/**
+ * Nimmt ein Abhaken zurück und meldet das Ergebnis.
+ *
+ * `onRestored` läuft nach dem erfolgreichen Zurücknehmen und vor der Meldung:
+ * die Detailseite setzt dort ihre lokale Menge zurück, damit der Nutzer die
+ * alte Zahl zusammen mit dem "Wiederhergestellt" sieht und nicht danach.
+ */
+export async function undoResolveWithToast(
+  undo: UndoInfo,
+  quantityBefore: number,
+  onRestored?: () => void,
+) {
+  try {
+    await undoResolve(undo, quantityBefore);
+    onRestored?.();
+    toast.success("Wiederhergestellt");
+  } catch {
+    toast.error("Rückgängig machen hat nicht geklappt.");
+  }
+}
+
+/**
+ * Die Meldung nach dem Abhaken -- Startseite, Vorrat und Detailseite zeigen
+ * dieselbe.
+ *
+ * Steht hier und nicht dreimal in den Screens: der Wortlaut ("1× Milch
+ * aufgebraucht", "Noch 2 übrig") ist eine Eigenschaft der Aktion, nicht der
+ * Seite, von der sie ausgelöst wurde. Was die Screens wirklich unterscheidet,
+ * ist allein ihr optimistischer Zustand -- der steckt deshalb in `onUndo`.
+ *
+ * `extra` hängt an der Beschreibung: die Startseite kennt die Serie schon aus
+ * ihren Statistiken und hängt sie an, Vorrat und Detailseite müssten sie erst
+ * durchreichen.
+ */
+export function resolveToast({
+  itemName,
+  verb,
+  remaining,
+  extra = "",
+  onUndo,
+}: {
+  itemName: string;
+  verb: string;
+  /** Menge, die nach dem Abhaken noch im Vorrat liegt. */
+  remaining: number;
+  extra?: string;
+  onUndo: () => void | Promise<void>;
+}) {
+  toast.success(remaining > 0 ? `1× ${itemName} ${verb}` : `${itemName} ${verb}`, {
+    description: remaining > 0 ? `Noch ${remaining} übrig${extra}` : undefined,
+    action: { label: "Rückgängig", onClick: onUndo },
+  });
 }
 
 export async function setQuantity(itemId: number, quantity: number) {

@@ -3,17 +3,18 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Package, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Chip, Segment } from "@/components/ui/chip";
 import { ItemRow } from "@/components/item-row";
-import { SectionLabel } from "@/components/section-label";
+import { SectionLabel, toneForFilter, type SectionTone } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
 import {
   resolveItem,
+  resolveToast,
   resolveVerb,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import {
@@ -30,7 +31,9 @@ type Grouping = "ablauf" | "ort" | "kategorie";
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "alle", label: "Alle" },
   { value: "bald", label: "Bald fällig" },
-  { value: "abgelaufen", label: "Abgelaufen" },
+  // "Drüber" statt "Abgelaufen" -- reine Beschriftung, der Filterwert
+  // "abgelaufen" bleibt unverändert (siehe StatusFilter in expiry.ts).
+  { value: "abgelaufen", label: "Drüber" },
 ];
 
 const GROUPINGS: { value: Grouping; label: string }[] = [
@@ -110,26 +113,16 @@ export function InventoryList({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
-      toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
-        {
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              setItems(previousItems);
-              try {
-                await undoResolve(undo, item.quantity);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        onUndo: async () => {
+          setItems(previousItems);
+          await undoResolveWithToast(undo, item.quantity);
+          router.refresh();
         },
-      );
+      });
       router.refresh();
     } catch {
       toast.error("Konnte nicht aktualisiert werden.");
@@ -207,28 +200,36 @@ export function InventoryList({
       return EXPIRY_BUCKETS.find((bucket) => bucket.test(entry.days))!.title;
     };
 
-    const order: { key: string | number; title: string; danger: boolean }[] =
+    // Farbrolle der Überschrift: nur die Ablauf-Gliederung kennt sie
+    // (abgeleitet aus dem Vorrat-Filter des Eimers, siehe SectionLabel);
+    // Ort und Kategorie haben keinen Ablauf-Bezug und bleiben bei "primary".
+    // `label` und `tone` sind optional: nur die Ablauf-Gliederung setzt sie,
+    // bei Ort und Kategorie ist der Anzeigetext der Titel und die Farbrolle
+    // "primary". Beides erst beim Zusammenbau unten aufzuloesen spart drei
+    // Abschriften derselben Vorgabe.
+    const order: { key: string | number; title: string; label?: string; tone?: SectionTone }[] =
       grouping === "ort"
         ? [
             ...places.map((place) => ({
               key: place.id as string | number,
               title: place.name,
-              danger: false,
             })),
             // Artikel ohne Ort bekommen einen eigenen Abschnitt am Ende,
             // statt stillschweigend aus der Ansicht zu fallen.
-            { key: "__unplaced", title: "Ohne Ort", danger: false },
+            { key: "__unplaced", title: "Ohne Ort" },
           ]
         : grouping === "kategorie"
           ? categories.map((category) => ({
               key: category.key as string | number,
               title: category.label,
-              danger: false,
             }))
           : EXPIRY_BUCKETS.map((bucket) => ({
               key: bucket.title as string | number,
               title: bucket.title,
-              danger: bucket.danger,
+              // Anzeigetext -- ungleich `title`, siehe die Warnung an
+              // SectionLabel: "Schon drüber" statt "Abgelaufen" usw.
+              label: bucket.label,
+              tone: toneForFilter(bucket.filter),
             }));
 
     const grouped = new Map<string | number, { item: Item; days: number }[]>();
@@ -240,9 +241,10 @@ export function InventoryList({
     }
 
     return order
-      .map(({ key, title, danger }) => ({
+      .map(({ key, title, label, tone }) => ({
         title,
-        danger,
+        label: label ?? title,
+        tone: tone ?? ("primary" as SectionTone),
         entries: grouped.get(key) ?? [],
       }))
       .filter((section) => section.entries.length > 0);
@@ -254,9 +256,14 @@ export function InventoryList({
         <Header total={0} shown={0} lists={lists} activeListId={activeListId} />
         <EmptyState
           className="mt-8"
-          icon={Package}
-          title="Dein Vorrat ist noch leer"
-          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
+          // Der leere Vorrat ist die eine Stelle, an der Avo das Icon-Quadrat
+          // ersetzt (siehe EmptyState): hier steht der Nutzer vor einem
+          // Bildschirm ohne einen einzigen Datenpunkt, und ein graues Paket-
+          // Symbol ist genau das falsche Willkommen. Die Startseite behaelt ihr
+          // Icon, weil dort die Frischling-Karte schon ein Avo traegt.
+          icon="mascot"
+          title="Hier ist noch nichts drin"
+          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
           action={<AddItemButton label="Ersten Artikel hinzufügen" />}
         />
       </div>
@@ -275,15 +282,15 @@ export function InventoryList({
       </div>
 
       <div className="px-5">
-        <label className="flex h-12 items-center gap-2.5 rounded-lg border border-border bg-card px-3.5">
-          <Search className="size-4.5 shrink-0 text-faint" />
+        <label className="flex h-[50px] items-center gap-2.5 rounded-full bg-card px-[18px] shadow-row">
+          <Search className="size-4.5 shrink-0 text-muted-foreground" strokeWidth={2.4} />
           <input
             type="search"
             inputMode="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Artikel, Ort oder Kategorie suchen"
-            className="min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold outline-none placeholder:text-faint"
+            className="min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold outline-none placeholder:text-muted-foreground"
           />
         </label>
       </div>
@@ -309,7 +316,7 @@ export function InventoryList({
             key={group.value}
             active={grouping === group.value}
             onClick={() => setGrouping(group.value)}
-            className="h-7.5 px-2.5 text-xs"
+            className="h-7.5 px-3 text-[12.5px]"
           >
             {group.label}
           </Chip>
@@ -329,7 +336,7 @@ export function InventoryList({
               (_, index) => (
                 <div
                   key={index}
-                  className="h-15 animate-pulse rounded-[15px] bg-muted"
+                  className="h-[72px] animate-pulse rounded-[24px] bg-surface-2"
                 />
               ),
             )}
@@ -338,12 +345,8 @@ export function InventoryList({
 
         {sections?.map((section) => (
           <section key={section.title} className="flex flex-col gap-2.5">
-            <SectionLabel
-              title={section.title}
-              tone={section.danger ? "danger" : "muted"}
-              count={section.entries.length}
-            />
-            {section.entries.map(({ item, days }) => (
+            <SectionLabel title={section.label} tone={section.tone} count={section.entries.length} />
+            {section.entries.map(({ item, days }, index) => (
               <ItemRow
                 key={item.id}
                 item={item}
@@ -355,6 +358,9 @@ export function InventoryList({
                 meta={grouping === "ort" ? labelOf(item) : placeOf(item)}
                 onConsume={() => resolve(item, "used")}
                 onDiscard={() => resolve(item, "thrown_away")}
+                // Nur die oberste Zeile des Abgelaufen-Abschnitts wackelt --
+                // siehe die Doku an ItemRows `restless`-Prop.
+                restless={section.title === "Abgelaufen" && index === 0}
               />
             ))}
           </section>
@@ -402,8 +408,12 @@ function Header({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-[26px] leading-tight">Dein Vorrat</h1>
-        <p className="mt-1.5 text-[13px] font-medium text-muted-foreground">
+        {/* 28px Quicksand -- breiter als die vorherige Manrope-Überschrift,
+            deshalb min-w-0 auf dem Wrapper und shrink-0 auf dem Listenwechsel
+            daneben: sonst würde "Dein Vorrat" bei 390px umbrechen, statt dem
+            Listenwechsel Platz abzugeben. */}
+        <h1 className="text-[28px] leading-tight">Dein Vorrat</h1>
+        <p className="mt-[5px] text-[13px] font-semibold text-muted-foreground">
           {/* Ohne gerechneten Filter nur die Gesamtzahl: "12 von 12" wäre in
               genau dem Moment gelogen, in dem über die Zähler der Startseite
               mit "abgelaufen" vorgefiltert hereinkommt. */}

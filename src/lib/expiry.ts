@@ -193,42 +193,36 @@ export const EXPIRY_BUCKETS = [
   {
     title: "Abgelaufen",
     label: "Schon drüber",
-    danger: true,
     filter: "abgelaufen",
     test: (days: number) => days < 0,
   },
   {
     title: "Heute",
     label: "Heute dran",
-    danger: false,
     filter: "bald",
     test: (days: number) => days === 0,
   },
   {
     title: "Morgen",
     label: "Morgen",
-    danger: false,
     filter: "bald",
     test: (days: number) => days === 1,
   },
   {
     title: "Diese Woche",
     label: "Diese Woche",
-    danger: false,
     filter: null,
     test: (days: number) => days >= 2 && days <= 7,
   },
   {
     title: "Später",
     label: "Später",
-    danger: false,
     filter: null,
     test: (days: number) => days > 7,
   },
 ] as const satisfies readonly {
   title: string;
   label: string;
-  danger: boolean;
   filter: StatusFilter | null;
   test: (days: number) => boolean;
 }[];

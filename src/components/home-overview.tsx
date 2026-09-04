@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,16 +9,15 @@ import {
   CalendarCheck,
   ChevronRight,
   Flame,
-  Leaf,
-  Package,
   Sprout,
   Target,
   Trophy,
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { Avo, moodForBuckets, type AvoMood } from "@/components/avo";
 import { ItemRow } from "@/components/item-row";
-import { SectionLabel } from "@/components/section-label";
+import { SectionLabel, toneForFilter } from "@/components/section-label";
 import { EmptyState } from "@/components/empty-state";
 import { AddItemButton } from "@/components/add-action-sheet";
 import { ListSwitcher } from "@/components/list-switcher";
@@ -47,8 +46,9 @@ import { CO2_FACTOR, PRICE_FACTOR } from "@/lib/estimates";
 import { cn } from "@/lib/utils";
 import {
   resolveItem,
+  resolveToast,
   resolveVerb,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import type { Category, Item, List, Place } from "@/db/schema";
@@ -61,8 +61,8 @@ import type { Category, Item, List, Place } from "@/db/schema";
  * "Später" steht bewusst daneben und nicht dazwischen (LATER_BUCKET): der
  * Eimer füllt nur auf, was die dringenden übrig lassen. Vorher fiel er ganz
  * weg -- wer nichts hatte, das in den nächsten sieben Tagen abläuft, sah
- * unter der Hero-Karte gar nichts mehr. Eine Startseite, die leer ist, weil
- * alles in Ordnung ist, sieht nicht ruhig aus, sondern kaputt.
+ * unter der Frischling-Karte gar nichts mehr. Eine Startseite, die leer ist,
+ * weil alles in Ordnung ist, sieht nicht ruhig aus, sondern kaputt.
  */
 const PREVIEW_BUCKETS = EXPIRY_BUCKETS.filter((bucket) => bucket.title !== "Später");
 
@@ -96,6 +96,12 @@ const PREVIEW_ROWS_PER_BUCKET = 3;
  * Ein fertiger Abschnitt der Vorschau: der Eimer plus die Zeilenzahl, die er
  * vom Budget bekommen hat.
  *
+ * `title` bleibt der Gruppierungs- und Verlinkungsschlüssel aus
+ * EXPIRY_BUCKETS -- er wird nicht angezeigt und darf nicht umbenannt werden
+ * (siehe der Kommentar an `filter` in expiry.ts). `label` ist die getrennte
+ * Anzeigebezeichnung ("Schon drüber" statt "Abgelaufen"), die eine
+ * Textänderung nicht mehr stillschweigend an den Links vorbeischleust.
+ *
  * Der Titel wird ausdrücklich über alle Eimer typisiert. TypeScript leitet
  * aus dem filter() oben seit 5.5 ein Typprädikat ab, PREVIEW_BUCKETS kennt
  * "Später" also gar nicht mehr -- ohne diese Annotation ließe sich der
@@ -103,8 +109,17 @@ const PREVIEW_ROWS_PER_BUCKET = 3;
  */
 type PreviewSection = {
   title: (typeof EXPIRY_BUCKETS)[number]["title"];
-  danger: boolean;
-  /** Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. */
+  /**
+   * Anzeigetext -- ungleich `title`, siehe die Warnung an `SectionLabel`.
+   * "Schon drüber" statt "Abgelaufen", "Heute dran" statt "Heute".
+   */
+  label: (typeof EXPIRY_BUCKETS)[number]["label"];
+  /**
+   * Der Vorrat-Filter des Eimers -- siehe EXPIRY_BUCKETS in expiry.ts. Trägt
+   * seit dem Frischling-Umbau auch die Farbrolle der Überschrift
+   * (`toneForFilter` leitet "abgelaufen" -> danger, "bald" -> warning, `null`
+   * -> primary daraus ab), ein eigenes `danger`-Feld ist damit überflüssig.
+   */
   filter: StatusFilter | null;
   entries: { item: Item; days: number }[];
   shown: number;
@@ -117,8 +132,25 @@ type PreviewSection = {
  * gefüllten Bogens und einmal als Länge der Lücke gebraucht wird -- die Lücke
  * muss mindestens so lang sein wie der Rest des Kreises, sonst fängt das
  * Muster von vorne an und der Ring ist bei 10 % voll.
+ *
+ * Die bf-ring-Keyframe in globals.css läuft von genau diesem Wert auf 0 --
+ * sie liest ihn als --ring-circumference vom Element, damit ein anderer
+ * Radius die Animation nicht lautlos halbiert.
  */
 const RING_CIRCUMFERENCE = 314.16;
+
+/**
+ * Die Staerke des Rings, in Einheiten der 116er viewBox -- auf den 78px, in
+ * denen er steht, also knapp 6,7px.
+ *
+ * Vorher 13 (8,7px): der Ring war damit so breit, dass innen kaum Platz fuer
+ * die Zahl blieb, und "100 %" stiess fast an seine Innenkante. Duenner liest
+ * sich das Verhaeltnis genauso deutlich und die Karte wirkt ruhiger.
+ */
+const RING_STROKE = 10;
+
+/** Feste ID, weil die Karte genau einmal auf der Seite steht. */
+const RING_GRADIENT_ID = "frischling-ring-gradient";
 
 /** Ein Icon je Abzeichen. Die Zuordnung ist Darstellung und gehört nicht in stats.ts. */
 const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
@@ -130,6 +162,21 @@ const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
   saved_100: Trophy,
   one_year: CalendarCheck,
 };
+
+/**
+ * Die drei Tönungen des Abzeichen-Fußes, der Reihe nach vergeben.
+ *
+ * Der Entwurf zeigt dort genau drei bunte Kreise (primary-tint / warning-tint
+ * / badge-tint) statt einer einzelnen Akzentfarbe -- die Fläche kodiert dort
+ * keinen Abzeichen-Typ, sondern sorgt nur für Abwechslung in der Reihe. Nicht
+ * erreichte Abzeichen bleiben unabhängig davon in der neutralen Fläche, sonst
+ * behauptete Farbe einen Fortschritt, den es nicht gibt.
+ */
+const BADGE_FOOTER_TINTS = [
+  { bg: "bg-primary-tint", text: "text-primary-deep" },
+  { bg: "bg-warning-tint", text: "text-warning-ink" },
+  { bg: "bg-badge-tint", text: "text-badge-ink" },
+] as const;
 
 const euroFormat = new Intl.NumberFormat("de-DE", {
   style: "currency",
@@ -165,6 +212,63 @@ function greetingFor(hour: number): string {
   return "Guten Abend";
 }
 
+/**
+ * Deutsche Zahlwörter für die Sprechblase ("Zwei Sachen sind drüber.").
+ *
+ * Nur bis zehn ausgeschrieben -- darüber liest sich "Dreizehn Sachen" nicht
+ * flüssiger als "13 Sachen", und ein Vorrat mit mehr als zehn gleichzeitig
+ * dringenden Artikeln ist ohnehin der seltene Fall.
+ */
+const COUNT_WORDS = [
+  "Eine",
+  "Zwei",
+  "Drei",
+  "Vier",
+  "Fünf",
+  "Sechs",
+  "Sieben",
+  "Acht",
+  "Neun",
+  "Zehn",
+];
+function countWord(n: number): string {
+  // Index ab 1: die Tabelle beginnt bei "Eine", eine Null-Zeile waere
+  // unerreichbar (beide Aufrufer stehen hinter einem `> 0`-Zweig).
+  return n >= 1 && n <= 10 ? COUNT_WORDS[n - 1] : String(n);
+}
+
+/**
+ * Die Sprechblase der Frischling-Karte, nach Stimmung.
+ *
+ * Die Stimmung entscheidet den Satz, nicht der Text die Stimmung -- deshalb
+ * hier und nicht als weiterer Zustand. `mood` kommt aus `moodForBuckets` und
+ * kann laut Typ auch "cheer" sein, das tritt auf dieser Seite aber nie ein:
+ * cheer ist eine Eigenschaft von Toast, /saved und Archiv, nicht der
+ * Startseite -- der letzte Zweig deckt diesen Fall trotzdem sauber ab.
+ */
+function speechBubble(
+  mood: AvoMood,
+  buckets: { expired: number; soon: number },
+): { line1: string; line2: string } {
+  if (mood === "overdue") {
+    const n = buckets.expired;
+    return {
+      // Nur das Verb verzweigt -- das Zahlwort fuer 1 steht in COUNT_WORDS
+      // und nicht ein zweites Mal hier.
+      line1: `${countWord(n)} ${n === 1 ? "Sache ist" : "Sachen sind"} drüber.`,
+      line2: "Kriegen wir noch hin!",
+    };
+  }
+  if (mood === "soon") {
+    const n = buckets.soon;
+    return {
+      line1: "Heute ist was dran.",
+      line2: `${countWord(n)} ${n === 1 ? "Sache will" : "Sachen wollen"} aufgebraucht werden.`,
+    };
+  }
+  return { line1: "Alles frisch.", line2: "Nichts läuft in den nächsten Tagen ab." };
+}
+
 export function HomeOverview({
   initialItems,
   categories,
@@ -178,7 +282,7 @@ export function HomeOverview({
   initialItems: Item[];
   /**
    * Neben Schlüssel und Beschriftung die beiden Schätzwerte: aus ihnen
-   * entstehen die Ersparnis-Zahlen der Hero-Karte.
+   * entstehen die Ersparnis-Zahlen der Frischling-Karte.
    */
   categories: Pick<Category, "key" | "label" | "avgPriceCents" | "avgCo2Grams">[];
   places: Pick<Place, "id" | "name">[];
@@ -257,15 +361,15 @@ export function HomeOverview({
       expired,
       soon,
       fresh: withDays.length - expired - soon,
-      // Die Segmentleiste teilte bisher durch items.length, der Zähler
+      // Die Segmentkacheln teilten bisher durch items.length, der Zähler
       // daneben zeigte die Summe der Mengen -- bei "3× Milch" behauptete die
-      // Leiste damit ein anderes Verhältnis, als die Zahlen daneben sagten.
+      // Kachel damit ein anderes Verhältnis, als die Zahl daneben sagte.
       // Beide zählen jetzt Zeilen, genau wie der Vorrat-Filter und die Zahl
       // im Listenwechsel (getListsWithCounts zählt ebenfalls Zeilen).
       total: withDays.length,
       urgentSections: PREVIEW_BUCKETS.map((bucket) => ({
         title: bucket.title,
-        danger: bucket.danger,
+        label: bucket.label,
         filter: bucket.filter,
         entries: byBucket.get(bucket.title)!,
       })).filter((section) => section.entries.length > 0),
@@ -307,7 +411,7 @@ export function HomeOverview({
     if (budget > 0 && later.length > 0) {
       result.push({
         title: LATER_BUCKET.title,
-        danger: LATER_BUCKET.danger,
+        label: LATER_BUCKET.label,
         filter: LATER_BUCKET.filter,
         entries: later,
         shown: Math.min(budget, later.length),
@@ -350,26 +454,28 @@ export function HomeOverview({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
-      toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
-        {
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              setItems(previousItems);
-              try {
-                await undoResolve(undo, item.quantity);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      // Die Serie ist hier schon berechnet (stats.streakDays, siehe oben) --
+      // kein zusaetzlicher Durchlauf durchs Archiv nur fuer den Toast. Nur
+      // beim Aufbrauchen angehaengt: ein weggeworfener Artikel bricht die
+      // Serie eher, als sie zu feiern. In inventory-list.tsx und
+      // item-detail.tsx fehlt genau dieser lokale Wert -- dort muesste er
+      // erst aus der Seite herein gereicht werden, und das gehoert nicht zum
+      // Toast-Inhalt dieser Einheit.
+      const streakSuffix =
+        nextStatus === "used" && stats && stats.streakDays > 0
+          ? ` · Serie steht bei ${stats.streakDays} 🔥`
+          : "";
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        extra: streakSuffix,
+        onUndo: async () => {
+          setItems(previousItems);
+          await undoResolveWithToast(undo, item.quantity);
+          router.refresh();
         },
-      );
+      });
       router.refresh();
     } catch {
       toast.error("Konnte nicht aktualisiert werden.");
@@ -379,7 +485,7 @@ export function HomeOverview({
 
   const dateLine = today ? dayFormat.format(today) : "";
 
-  function row({ item, days }: { item: Item; days: number }) {
+  function row({ item, days }: { item: Item; days: number }, restless = false) {
     return (
       <ItemRow
         key={item.id}
@@ -392,18 +498,24 @@ export function HomeOverview({
         }
         onConsume={() => resolve(item, "used")}
         onDiscard={() => resolve(item, "thrown_away")}
+        restless={restless}
       />
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-5 pt-2">
+    // pt-1.5 und nicht die 34px des Entwurfs: das Layout setzt die Safe Area
+    // oben bereits als pt-[max(env(safe-area-inset-top),1.75rem)] (im Browser
+    // also 28px), und beides zusammen ergab 62px Luft ueber der Begruessung --
+    // sichtbar mehr als jede andere Seite. 6px darauf treffen die 34px, ohne
+    // den Abstand ein zweites Mal zu setzen.
+    <div className="flex flex-1 flex-col gap-5 px-[18px] pt-1.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[26px] leading-tight">
+          <h1 className="text-[28px] leading-[1.15] tracking-[-0.01em]">
             {today ? `${greetingFor(today.getHours())}, ${userName}` : userName}
           </h1>
-          <p className="mt-1.5 h-4.5 text-[13px] font-medium text-muted-foreground">
+          <p className="mt-[5px] h-4.5 text-[13px] font-semibold text-muted-foreground">
             {dateLine}
           </p>
         </div>
@@ -418,7 +530,9 @@ export function HomeOverview({
 
       {buckets && stats && savings && badges && (
         <div>
-          <HeroCard
+          <FrischlingCard
+            mood={moodForBuckets(buckets)}
+            bucketCounts={buckets}
             quota={stats.quota}
             streakDays={stats.streakDays}
             savedThisMonth={stats.savedThisMonth}
@@ -428,7 +542,7 @@ export function HomeOverview({
             open={badgesOpen}
             onToggle={() => setBadgesOpen((prev) => !prev)}
           />
-          {buckets.total > 0 && <SegmentBar buckets={buckets} />}
+          {buckets.total > 0 && <SegmentTiles buckets={buckets} />}
         </div>
       )}
 
@@ -436,26 +550,32 @@ export function HomeOverview({
         const hidden = section.entries.length - section.shown;
         const href = inventoryHref(section.filter);
         return (
-          <section key={section.title} className="flex flex-col gap-2.5">
+          <section key={section.title} className="flex flex-col">
             {/* Zähler und "Alle ansehen" bleiben, anders als im Entwurf: sie
                 sind der einzige Weg von der Startseite in den gefilterten
                 Vorrat. */}
             <SectionLabel
-              title={section.title}
-              tone={section.danger ? "danger" : "muted"}
+              title={section.label}
+              tone={toneForFilter(section.filter)}
               count={section.entries.length}
               href={href}
             />
-            {section.entries.slice(0, section.shown).map(row)}
+            <div className="mt-[11px] flex flex-col gap-[9px]">
+              {section.entries
+                .slice(0, section.shown)
+                // Nur die oberste Zeile des Abgelaufen-Abschnitts wackelt --
+                // siehe die Doku an ItemRows `restless`-Prop.
+                .map((entry, index) => row(entry, section.title === "Abgelaufen" && index === 0))}
+            </div>
             {/* Ohne diese Zeile sieht ein Ausschnitt aus wie der ganze
                 Rückstand. */}
             {hidden > 0 && (
               <Link
                 href={href}
-                className="flex items-center justify-center gap-1 py-1 text-[12.5px] font-semibold text-muted-foreground"
+                className="mt-[9px] flex items-center justify-center gap-1 py-1 font-heading text-[13px] font-bold text-muted-foreground"
               >
                 Noch {hidden} {hidden === 1 ? "weiteren" : "weitere"} ansehen
-                <ChevronRight className="size-3.5" strokeWidth={2.2} />
+                <ChevronRight className="size-3.5" strokeWidth={2.6} />
               </Link>
             )}
           </section>
@@ -463,31 +583,37 @@ export function HomeOverview({
       })}
 
       {items.length === 0 && (
-        <div className="rounded-3xl border border-border bg-card">
-          <EmptyState
-            icon={Package}
-            tone="muted"
-            title="Dein Vorrat ist noch leer"
-            body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernimmt BetterFood."
-            action={<AddItemButton label="Artikel hinzufügen" />}
-          />
-        </div>
+        /* Avo statt des grauen Paket-Quadrats -- dieselbe Begruendung wie im
+           leeren Vorrat (siehe EmptyState): der erste Bildschirm ohne einen
+           einzigen Datenpunkt ist die falsche Stelle fuer ein graues Symbol.
+           Die Beschriftung nennt seitdem auch hier den ersten Artikel, weil
+           es auf einem leeren Vorrat genau darum geht. */
+        <EmptyState
+          icon="mascot"
+          variant="card"
+          title="Hier ist noch nichts drin"
+          body="Scanne den ersten Barcode oder trag etwas von Hand ein – danach übernehme ich."
+          action={<AddItemButton label="Ersten Artikel hinzufügen" />}
+        />
       )}
     </div>
   );
 }
 
 /**
- * Die Hero-Karte: was der Vorrat bisher gebracht hat, in einem Bild.
+ * Die Frischling-Karte: was der Vorrat bisher gebracht hat, in einem Bild --
+ * mit Avo als Begleiter statt einer reinen Zahlenkarte.
  *
- * Sie ersetzt die drei nebeneinander stehenden Zähler. Deren Zahlen sind
- * damit nicht verschwunden, sondern in die Segmentleiste darunter gewandert
- * -- sie beschreiben den Ist-Zustand des Vorrats und sind damit eine andere
- * Aussage als die Bilanz hier oben. Getrennt kann jede von beiden das zeigen,
- * was sie am besten kann: der Ring ein Verhältnis, die Leiste eine
- * Aufteilung.
+ * Sie ersetzt die bisherige Hero-Karte. Deren Zahlen sind damit nicht
+ * verschwunden, sondern die Aufteilung frisch/bald/drüber wandert in die drei
+ * Segmentkacheln darunter -- sie beschreiben den Ist-Zustand des Vorrats und
+ * sind damit eine andere Aussage als die Bilanz hier oben. Getrennt kann
+ * jede von beiden das zeigen, was sie am besten kann: der Ring ein
+ * Verhältnis, die Kacheln eine Aufteilung.
  */
-function HeroCard({
+function FrischlingCard({
+  mood,
+  bucketCounts,
   quota,
   streakDays,
   savedThisMonth,
@@ -497,6 +623,8 @@ function HeroCard({
   open,
   onToggle,
 }: {
+  mood: AvoMood;
+  bucketCounts: { expired: number; soon: number };
   quota: number | null;
   streakDays: number;
   savedThisMonth: number;
@@ -509,118 +637,171 @@ function HeroCard({
   const earned = badges
     .filter((badge) => badge.earnedAt !== null)
     .sort((a, b) => b.earnedAt!.getTime() - a.earnedAt!.getTime());
-  // Die drei zuletzt erreichten, in der Fußzeile von links nach rechts
-  // aufsteigend nach Datum -- so steht das jüngste Abzeichen am nächsten am
-  // Text daneben.
+  // Die drei zuletzt erreichten, im Fuß von links nach rechts aufsteigend
+  // nach Datum -- so steht das jüngste Abzeichen am nächsten am Text daneben.
   const recent = earned.slice(0, 3).reverse();
   const hasSavings = savings.moneySavedCents > 0 || savings.co2SavedGrams > 0;
   const goalReached = quota !== null && quota >= monthlyGoal;
+  const bubble = speechBubble(mood, bucketCounts);
 
   return (
-    <div className="rounded-[28px] border border-border bg-card p-5 shadow-card">
-      <div className="flex items-center gap-[18px]">
-        <div className="relative size-29 shrink-0">
+    <div className="relative overflow-hidden rounded-[30px] bg-card px-4 py-3.5 shadow-card">
+      {/* Dekoration: ein blasser Kreis in der oberen Ecke und zwei
+          aufsteigende Bläschen -- beide aria-hidden, weil sie nichts
+          aussagen, was nicht ohnehin im Text steht. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-[52px] -right-[38px] size-[150px] rounded-full bg-primary-tint opacity-[.45]"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[22px] bottom-[26px] size-[9px] animate-bubble rounded-full bg-primary-inv"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[46px] bottom-[18px] size-[7px] animate-bubble rounded-full bg-primary-inv [animation-delay:1.4s]"
+      />
+
+      <div className="relative flex items-center gap-[11px]">
+        <Avo size="md" mood={mood} animation="bob" className="[animation-duration:3.8s]" />
+        <p className="min-w-0 flex-1 text-pretty font-heading text-[15px] leading-[1.3] font-bold">
+          {bubble.line1}
+          <span className="mt-0.5 block font-sans text-[12px] font-semibold text-muted-foreground">
+            {bubble.line2}
+          </span>
+        </p>
+        <div className="relative size-[78px] shrink-0">
           {/* Farben als var() am SVG-Attribut statt als Tailwind-Klasse:
               stroke ist hier kein Rand, sondern die Linie selbst, und der
-              Wert stammt aus derselben Token-Tabelle wie jede Klasse. */}
-          <svg viewBox="0 0 116 116" className="size-full -rotate-90" aria-hidden="true">
-            <circle
-              cx="58"
-              cy="58"
-              r="50"
-              fill="none"
-              stroke="var(--track-ring)"
-              strokeWidth="11"
-            />
-            {quota !== null && quota > 0 && (
+              Wert stammt aus derselben Token-Tabelle wie jede Klasse.
+
+              Gedreht wird die Gruppe und nicht das <svg>: der Bogen muss oben
+              anfangen, der Verlauf darin aber weiter von links oben nach
+              rechts unten laufen wie ueberall sonst in der App. Eine Drehung
+              am <svg> haette ihn mitgedreht. */}
+          <svg viewBox="0 0 116 116" className="size-full" aria-hidden="true">
+            <defs>
+              {/* Dieselben zwei Anteile wie --gradient-primary; als Token und
+                  nicht als Hexwert, damit der Dunkelmodus mitkommt. Ein
+                  Verlauf laesst sich einer SVG-Linie nur ueber eine solche
+                  Definition zuweisen, `stroke` nimmt keine CSS-Verlaeufe. */}
+              <linearGradient id={RING_GRADIENT_ID} x1="0.15" y1="0" x2="0.85" y2="1">
+                <stop offset="0%" stopColor="var(--primary-light)" />
+                <stop offset="100%" stopColor="var(--primary)" />
+              </linearGradient>
+            </defs>
+            <g transform="rotate(-90 58 58)">
               <circle
                 cx="58"
                 cy="58"
                 r="50"
                 fill="none"
-                stroke="var(--primary)"
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeDasharray={`${(quota / 100) * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                stroke="var(--track-ring)"
+                strokeWidth={RING_STROKE}
               />
-            )}
+              {quota !== null && quota > 0 && (
+                <circle
+                  cx="58"
+                  cy="58"
+                  r="50"
+                  fill="none"
+                  stroke={`url(#${RING_GRADIENT_ID})`}
+                  strokeWidth={RING_STROKE}
+                  // Bei einem vollen Ring stossen die beiden runden Enden
+                  // aufeinander und stehen als sichtbare Kerbe an der
+                  // Zwoelf-Uhr-Stelle -- genau bei 100 %, wo der Ring am
+                  // besten aussehen sollte. Stumpf endet er dort nahtlos.
+                  strokeLinecap={quota >= 100 ? "butt" : "round"}
+                  strokeDasharray={`${(quota / 100) * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                  className="animate-ring"
+                  style={{ "--ring-circumference": RING_CIRCUMFERENCE } as CSSProperties}
+                />
+              )}
+            </g>
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[24px] leading-none font-extrabold tabular-nums">
-              {quota === null ? "–" : `${quota} %`}
+            {/* Das Prozentzeichen eine Stufe kleiner und zurueckgenommen: bei
+                dreistelligen Quoten stand "100 %" sonst fast an der Innenkante
+                des Rings, und die Zahl ist ohnehin die Aussage. */}
+            <span className="flex items-baseline gap-[2px] font-heading leading-none font-bold tabular-nums">
+              <span className="text-[22px]">{quota === null ? "–" : quota}</span>
+              {quota !== null && (
+                <span className="text-[12px] text-muted-foreground">%</span>
+              )}
             </span>
-            <span className="mt-1 text-[10.5px] leading-none font-bold tracking-[0.06em] text-faint uppercase">
+            <span className="mt-[3px] text-[10px] leading-none font-bold text-faint">
               gerettet
             </span>
           </div>
         </div>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="flex h-[30px] items-center gap-1 rounded-[10px] bg-primary-tint px-2.5 text-[14px] font-extrabold tabular-nums text-primary">
-              <Leaf className="size-3.5" strokeWidth={2.4} />
-              {streakDays}
-            </span>
-            {/* Umbrechend statt abgeschnitten: neben dem 116px-Ring bleiben
-                in der 390px-Spalte rund 118px für dieses Label, und "Tage
-                ohne Verschwendung" misst bei 12px/700 etwa 150px. Der
-                Entwurf schreibt hier "Tage-Streak"; das ist kürzer, aber ein
-                Anglizismus in einer sonst durchgehend deutschen Oberfläche --
-                und das Archiv sagt an derselben Stelle schon seit #14 "N
-                Wochen ohne Verschwendung". */}
-            <span className="min-w-0 text-[12px] leading-tight font-bold text-muted-foreground">
-              {streakDays === 1 ? "Tag ohne Verschwendung" : "Tage ohne Verschwendung"}
-            </span>
-          </div>
-
-          {hasSavings ? (
-            <div>
-              <p className="text-[16px] leading-none font-extrabold tabular-nums">
-                {euroFormat.format(savings.moneySavedCents / PRICE_FACTOR)} gespart
-              </p>
-              <p className="mt-0.5 text-[12px] font-semibold text-muted-foreground">
-                {formatCo2(savings.co2SavedGrams)} CO₂ vermieden
-              </p>
-            </div>
-          ) : savedThisMonth > 0 ? (
-            // Gerettet wurde etwas, gerechnet werden kann es nur nicht: den
-            // Kategorien fehlen die Schätzwerte. "0,00 € gespart" wäre hier
-            // eine Behauptung über den Monat statt über die Datenlage.
-            <Link href="/knowledge" className="text-[12px] font-semibold text-muted-foreground">
-              <span className="font-bold text-primary">Schätzwerte ergänzen</span>, dann
-              rechnet BetterFood Geld und CO₂ mit.
-            </Link>
-          ) : (
-            <p className="text-[12px] font-semibold text-muted-foreground">
-              Noch nichts abgehakt – deine Bilanz entsteht hier.
-            </p>
-          )}
-
-          <div>
-            <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
-              <span className="text-muted-foreground">Monatsziel {monthlyGoal} %</span>
-              <span className={goalReached ? "text-primary" : "text-faint"}>
-                {quota === null ? "–" : `${quota} %`}
-              </span>
-            </div>
-            <div
-              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-track"
-              role="img"
-              aria-label={`Monatsziel ${monthlyGoal} Prozent, erreicht ${quota ?? 0} Prozent`}
-            >
-              <span
-                className="block h-full rounded-full bg-primary"
-                style={{ width: `${Math.min(100, ((quota ?? 0) / monthlyGoal) * 100)}%` }}
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-border pt-3.5">
+      <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
+        <span className="flex h-[30px] shrink-0 items-center gap-1 rounded-full bg-warning-tint px-2.5 font-heading text-[14.5px] font-bold tabular-nums text-warning-ink">
+          <span
+            aria-hidden="true"
+            className="inline-block animate-wobble text-[13px] [animation-duration:1.9s]"
+          >
+            🔥
+          </span>
+          {streakDays}
+        </span>
+        {hasSavings && (
+          <>
+            <span className="flex h-[30px] items-center rounded-full bg-surface-2 px-2.75 font-heading text-[14px] font-bold whitespace-nowrap">
+              {euroFormat.format(savings.moneySavedCents / PRICE_FACTOR)}
+            </span>
+            <span className="flex h-[30px] items-center rounded-full bg-surface-2 px-2.75 font-heading text-[14px] font-bold whitespace-nowrap">
+              {formatCo2(savings.co2SavedGrams)} CO₂
+            </span>
+          </>
+        )}
+      </div>
+      {!hasSavings &&
+        (savedThisMonth > 0 ? (
+          // Gerettet wurde etwas, gerechnet werden kann es nur nicht: den
+          // Kategorien fehlen die Schätzwerte. "0,00 € gespart" wäre hier
+          // eine Behauptung über den Monat statt über die Datenlage.
+          <Link
+            href="/knowledge"
+            className="relative mt-1.5 block text-[12px] font-semibold text-muted-foreground"
+          >
+            <span className="font-bold text-primary-deep">Schätzwerte ergänzen</span>, dann
+            rechnet BetterFood Geld und CO₂ mit.
+          </Link>
+        ) : (
+          <p className="relative mt-1.5 text-[12px] font-semibold text-muted-foreground">
+            Noch nichts abgehakt – deine Bilanz entsteht hier.
+          </p>
+        ))}
+
+      <div className="relative mt-3 flex items-center gap-[9px]">
+        <div
+          className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-track"
+          role="img"
+          aria-label={`Monatsziel ${monthlyGoal} Prozent, erreicht ${quota ?? 0} Prozent`}
+        >
+          <span
+            className="block h-full rounded-full bg-(image:--gradient-primary) animate-grow-h [animation-delay:.2s]"
+            style={{ width: `${Math.min(100, ((quota ?? 0) / monthlyGoal) * 100)}%` }}
+          />
+        </div>
+        {goalReached && (
+          <span className="shrink-0 text-[11px] font-bold text-primary-deep">
+            Monatsziel {monthlyGoal} % ✓
+          </span>
+        )}
+      </div>
+
+      <div className="relative mt-3 flex items-center gap-2 border-t border-hairline pt-[11px]">
         <div className="flex items-center gap-1.5">
-          {(recent.length > 0 ? recent : badges.slice(0, 3)).map((badge) => (
-            <BadgeCircle key={badge.id} badge={badge} earned={recent.length > 0} />
+          {(recent.length > 0 ? recent : badges.slice(0, 3)).map((badge, index) => (
+            <BadgeCircle
+              key={badge.id}
+              badge={badge}
+              earned={recent.length > 0}
+              tone={BADGE_FOOTER_TINTS[index]}
+            />
           ))}
         </div>
         <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-faint">
@@ -634,14 +815,14 @@ function HeroCard({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="shrink-0 text-[12.5px] font-bold text-primary"
+          className="shrink-0 font-heading text-[13px] font-bold text-primary-deep"
         >
-          {open ? "Zuklappen" : "Alle ansehen"}
+          {open ? "zuklappen" : "alle"}
         </button>
       </div>
 
       {open && (
-        <ul className="mt-3.5 flex flex-col gap-2.5">
+        <ul className="relative mt-3.5 flex flex-col gap-2.5">
           {badges.map((badge) => (
             <li key={badge.id} className="flex items-center gap-2.5">
               <BadgeCircle
@@ -676,11 +857,9 @@ function HeroCard({
  * Ein Abzeichen als Kreis.
  *
  * rounded-full ist hier eine bewusste Ausnahme von der Hausregel, die Radien
- * im Band um --radius (14px) hält und die volle Rundung sonst nur Punkten,
+ * im Band um --radius (20px) hält und die volle Rundung sonst nur Punkten,
  * Griffen und Schalter-Knöpfen zugesteht: ein Abzeichen ist eine Medaille,
  * und rund ist bei einer Medaille die Form der Sache und keine Dekoration.
- * Der Entwurf gibt border-radius: 99px vor; das ist die eine Stelle, an der
- * ihm gefolgt wird.
  */
 function BadgeCircle({
   badge,
@@ -688,13 +867,23 @@ function BadgeCircle({
   /**
    * In der aufgeklappten Übersicht steht der Name sichtbar daneben -- dort ist
    * der Kreis reine Dekoration und darf nicht ein zweites Mal vorgelesen
-   * werden. In der Fußzeile steht er allein und trägt den Namen selbst.
+   * werden. Im Fuß der Karte steht er allein und trägt den Namen selbst.
    */
   labelled = true,
+  /**
+   * Die Fläche aus BADGE_FOOTER_TINTS -- nur im Fuß der Karte gesetzt, wo bis
+   * zu drei erreichte Abzeichen nebeneinander stehen und Abwechslung
+   * brauchen. Nicht erreichte Abzeichen ignorieren das und bleiben neutral.
+   * Der Eintrag selbst statt eines Index: die Tabelle bleibt damit die
+   * Sache des Aufrufers, und hier steht keine Modulo-Rechnung, die nur
+   * einen Fall abdeckt, den es nicht gibt.
+   */
+  tone,
 }: {
   badge: Badge;
   earned: boolean;
   labelled?: boolean;
+  tone?: (typeof BADGE_FOOTER_TINTS)[number];
 }) {
   const Icon = BADGE_ICONS[badge.id];
   return (
@@ -703,7 +892,11 @@ function BadgeCircle({
       aria-hidden={labelled ? undefined : "true"}
       className={cn(
         "flex size-8.5 shrink-0 items-center justify-center rounded-full",
-        earned ? "bg-primary-tint text-primary" : "bg-track text-faint",
+        earned
+          ? tone
+            ? cn(tone.bg, tone.text)
+            : "bg-primary-tint text-primary-deep"
+          : "bg-track text-faint",
       )}
     >
       <Icon className="size-4" strokeWidth={2.2} aria-hidden="true" />
@@ -713,81 +906,59 @@ function BadgeCircle({
 }
 
 /**
- * Die Aufteilung des Vorrats als 4px-Leiste mit Legende.
+ * Die Aufteilung des Vorrats als drei Segmentkacheln.
  *
- * Statt der bisherigen 8px-Leiste unter drei großen Zahlen: die Zahlen stehen
- * jetzt in der Legende selbst und bleiben Links in den gefilterten Vorrat.
- * Ein Balken, der ein Verhältnis zeigt, braucht keine Höhe -- er braucht nur
- * Länge.
+ * Statt der bisherigen 4px-Leiste mit Legende: die Zahlen stehen jetzt in
+ * den Kacheln selbst und bleiben Links in den gefilterten Vorrat. "frisch"
+ * hat keinen eigenen StatusFilter -- die Kachel führt deshalb in den
+ * ungefilterten Vorrat, dieselbe Zielseite, die auch der Gesamtzähler zuvor
+ * ansteuerte.
  */
-function SegmentBar({
+function SegmentTiles({
   buckets,
 }: {
-  buckets: { fresh: number; soon: number; expired: number; total: number };
+  buckets: { fresh: number; soon: number; expired: number };
 }) {
   return (
-    <div className="mt-3.5">
-      <div className="flex items-center justify-between gap-2 text-[12px] font-bold">
-        <div className="flex items-center gap-3.5">
-          <LegendEntry
-            href="/inventory?filter=bald"
-            dot="bg-warning"
-            value={buckets.soon}
-            label="bald"
-          />
-          <LegendEntry
-            href="/inventory?filter=abgelaufen"
-            dot="bg-danger"
-            value={buckets.expired}
-            label="abgelaufen"
-          />
-        </div>
-        <Link href="/inventory" className="text-muted-foreground tabular-nums">
-          {buckets.total} gesamt
-        </Link>
-      </div>
-      <div
-        className="mt-[7px] flex h-1 overflow-hidden rounded-full bg-track-2"
-        role="img"
-        aria-label={`${buckets.fresh} frisch, ${buckets.soon} bald fällig, ${buckets.expired} abgelaufen`}
-      >
-        <span
-          className="bg-primary"
-          style={{ width: `${share(buckets.fresh, buckets.total)}%` }}
-        />
-        <span
-          className="bg-warning"
-          style={{ width: `${share(buckets.soon, buckets.total)}%` }}
-        />
-        <span
-          className="bg-danger"
-          style={{ width: `${share(buckets.expired, buckets.total)}%` }}
-        />
-      </div>
+    <div className="mt-4 flex gap-[7px]">
+      <SegmentTile href="/inventory" dot="bg-primary" value={buckets.fresh} label="frisch" />
+      <SegmentTile
+        href="/inventory?filter=bald"
+        dot="bg-warning"
+        value={buckets.soon}
+        label="bald"
+      />
+      <SegmentTile
+        href="/inventory?filter=abgelaufen"
+        dot="bg-danger"
+        value={buckets.expired}
+        label="drüber"
+      />
     </div>
   );
 }
 
-function LegendEntry({
+function SegmentTile({
   href,
   dot,
   value,
   label,
 }: {
   href: string;
-  /** Tailwind-Klasse des Punktes -- als Tabelle, damit der Scanner sie findet. */
+  /** Tailwind-Klasse des Punktes -- als Prop, damit der Tailwind-Scanner sie findet. */
   dot: string;
   value: number;
   label: string;
 }) {
   return (
-    <Link href={href} className="flex items-center gap-1.5 text-muted-foreground">
-      <span className={cn("size-[7px] rounded-full", dot)} />
-      <span className="tabular-nums">{value}</span> {label}
+    <Link href={href} className="flex-1 rounded-lg bg-card px-3 py-[11px] shadow-row">
+      <span className="flex items-center gap-1.5">
+        <span className={cn("size-[9px] rounded-full", dot)} />
+        <span className="font-heading text-[19px] leading-none font-bold tabular-nums">
+          {value}
+        </span>
+      </span>
+      <p className="mt-1 text-[11px] font-bold text-faint">{label}</p>
     </Link>
   );
-}
-
-function share(part: number, total: number) {
-  return total === 0 ? 0 : (part / total) * 100;
 }

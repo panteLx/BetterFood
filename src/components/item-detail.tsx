@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Check, Pencil, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
+import { DetailRow, QuantityPill } from "@/components/detail-row";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DateSheet } from "@/components/date-sheet";
@@ -24,9 +25,10 @@ import {
 import {
   hideItem,
   resolveItem,
+  resolveToast,
   resolveVerb,
   restockItem,
-  undoResolve,
+  undoResolveWithToast,
   type ResolveStatus,
 } from "@/lib/item-actions";
 import { cn } from "@/lib/utils";
@@ -99,26 +101,15 @@ export function ItemDetail({
     try {
       const undo = await resolveItem(item.id, nextStatus);
       const verb = resolveVerb(nextStatus);
-      toast.success(
-        remaining > 0
-          ? `1× ${item.name} ${verb} – noch ${remaining} übrig`
-          : `${item.name} ${verb}`,
-        {
-          action: {
-            label: "Rückgängig",
-            onClick: async () => {
-              try {
-                await undoResolve(undo, before);
-                setLocalQuantity(before);
-                toast.success("Wiederhergestellt");
-              } catch {
-                toast.error("Rückgängig machen hat nicht geklappt.");
-              }
-              router.refresh();
-            },
-          },
+      resolveToast({
+        itemName: item.name,
+        verb,
+        remaining,
+        onUndo: async () => {
+          await undoResolveWithToast(undo, before, () => setLocalQuantity(before));
+          router.refresh();
         },
-      );
+      });
       // Bei der letzten Einheit gibt es hier nichts mehr zu sehen -- der
       // Artikel liegt jetzt im Archiv.
       if (remaining > 0) {
@@ -193,38 +184,38 @@ export function ItemDetail({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-0 px-5 pt-2">
+      <div className="flex flex-1 flex-col gap-0 px-[18px] pt-2">
         <div className="flex items-center justify-between">
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon-touch"
             aria-label="Zurück"
             onClick={leave}
-            className="-ml-1.5 rounded-2xl"
+            className="rounded-full"
           >
-            <ArrowLeft className="size-5.5" />
+            <ArrowLeft className="size-5" strokeWidth={2.4} />
           </Button>
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             {/* Ein echter Link statt eines Buttons mit render-Prop: Base UI
                 besteht zu Recht auf einem nativen <button>, und Bearbeiten
                 ist ohnehin eine Navigation, kein Formularknopf. */}
             <Link
               href={`/edit/${item.id}`}
               aria-label="Artikel bearbeiten"
-              className="flex size-11 items-center justify-center rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex size-11 items-center justify-center rounded-full bg-card text-foreground shadow-row outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <Pencil className="size-5" />
+              <Pencil className="size-[19px]" strokeWidth={2.2} />
             </Link>
             <ConfirmDialog
               trigger={
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon-touch"
                   disabled={busy}
                   aria-label="Artikel löschen"
-                  className="-mr-1.5 rounded-2xl text-danger"
+                  className="rounded-full text-danger-ink"
                 >
-                  <Trash2 className="size-5" />
+                  <Trash2 className="size-[19px]" strokeWidth={2.2} />
                 </Button>
               }
               title={<>„{item.name}“ löschen?</>}
@@ -235,29 +226,29 @@ export function ItemDetail({
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-4 pt-3.5 pb-6.5">
+        <div className="flex flex-col items-center gap-3.5 pt-[18px] pb-6">
           <span
             className={cn(
-              "flex size-23 items-center justify-center rounded-[30px]",
+              "flex size-26 items-center justify-center rounded-[36px]",
               styles.tint,
               styles.text,
             )}
           >
             <CategoryIcon
               categoryKey={item.category}
-              className="size-11.5"
-              strokeWidth={1.5}
+              className="size-[50px]"
+              strokeWidth={1.6}
             />
           </span>
           <div className="text-center">
-            <h1 className="text-2xl leading-snug text-balance">{item.name}</h1>
-            <p className="mt-1.5 text-[13.5px] font-medium text-muted-foreground">
+            <h1 className="text-[26px] leading-[1.25] text-balance">{item.name}</h1>
+            <p className="mt-1.5 text-[13.5px] font-semibold text-muted-foreground">
               {categoryLabel}
             </p>
           </div>
           <span
             className={cn(
-              "inline-flex h-8.5 items-center rounded-xl px-4 text-sm font-bold",
+              "inline-flex h-[38px] items-center rounded-full px-[18px] font-heading text-[15px] font-bold",
               styles.chip,
               !isClient && "opacity-0",
             )}
@@ -266,13 +257,13 @@ export function ItemDetail({
           </span>
         </div>
 
-        <dl className="overflow-hidden rounded-3xl border border-border bg-card">
-          <DetailRow
-            label="Haltbar bis"
-            value={formatMedium(item.expiryDate)}
-          />
+        <dl className="overflow-hidden rounded-[28px] bg-card px-[18px] py-1 shadow-card">
+          <DetailRow label="Haltbar bis" value={formatMedium(item.expiryDate)} />
           <DetailRow label="Ort" value={placeName ?? "Nicht zugeordnet"} />
-          <DetailRow label="Menge" value={`${quantity}×`} />
+          <DetailRow
+            label="Menge"
+            value={<QuantityPill>{quantity}×</QuantityPill>}
+          />
           <DetailRow label="Hinzugefügt" value={formatMedium(item.addedAt)} />
           <DetailRow
             label="Eingetragen von"
@@ -282,28 +273,28 @@ export function ItemDetail({
         </dl>
 
         {item.note && (
-          <p className="mt-3 rounded-[20px] border border-border bg-surface-2 px-4 py-3.5 text-sm leading-relaxed font-medium text-balance text-muted-foreground">
+          <p className="mt-3 rounded-[24px] bg-surface-2 px-[18px] py-3.5 text-sm leading-[1.65] font-semibold text-pretty text-muted-foreground">
             {item.note}
           </p>
         )}
       </div>
 
-      <div className="sticky bottom-0 flex flex-col gap-2.5 border-t border-border bg-card px-5 pt-3.5 pb-[max(env(safe-area-inset-bottom),1rem)]">
-        <button
+      <div className="sticky bottom-0 flex flex-col gap-2.5 rounded-t-[32px] bg-card px-[18px] pt-4 pb-[max(env(safe-area-inset-bottom),20px)] shadow-sheet">
+        <Button
           type="button"
           disabled={busy}
           onClick={() => resolve("used")}
-          className="flex h-14 items-center justify-center gap-2.5 rounded-lg bg-primary text-base font-bold text-primary-foreground disabled:opacity-60"
+          className="h-[58px] w-full gap-2.5 rounded-[22px] text-[17px] disabled:opacity-60"
         >
-          <Check className="size-5" strokeWidth={2.3} />
+          <Check className="size-5" strokeWidth={2.8} />
           Aufgebraucht
-        </button>
+        </Button>
         <div className="flex gap-2.5">
           <button
             type="button"
             disabled={busy}
             onClick={openRestock}
-            className="h-12.5 flex-1 rounded-lg border border-border bg-card text-[15px] font-semibold disabled:opacity-60"
+            className="h-[52px] flex-1 rounded-lg bg-surface-2 font-heading text-[15px] font-bold disabled:opacity-60"
           >
             Nachgekauft
           </button>
@@ -311,7 +302,7 @@ export function ItemDetail({
             type="button"
             disabled={busy}
             onClick={() => resolve("thrown_away")}
-            className="h-12.5 flex-1 rounded-lg border border-danger bg-danger-tint text-[15px] font-bold text-danger disabled:opacity-60"
+            className="h-[52px] flex-1 rounded-lg bg-danger-tint font-heading text-[15px] font-bold text-danger-ink disabled:opacity-60"
           >
             Weggeworfen
           </button>
@@ -337,26 +328,3 @@ export function ItemDetail({
   );
 }
 
-function DetailRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value: string;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2.5 px-4 py-3.5",
-        !last && "border-b border-border",
-      )}
-    >
-      <dt className="flex-1 text-sm font-medium text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="text-right text-sm font-bold">{value}</dd>
-    </div>
-  );
-}

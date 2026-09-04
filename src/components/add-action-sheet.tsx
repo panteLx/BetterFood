@@ -10,6 +10,8 @@ import {
   Receipt,
   type LucideIcon,
 } from "lucide-react";
+import { Avo } from "@/components/avo";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,12 @@ const OPTIONS: {
   hint: string;
   icon: LucideIcon;
   primary?: boolean;
+  /** Fläche und Textfarbe des 46px-Rundfelds -- pro Option ein eigener
+   *  Zustandston, damit die vier Wege auch ohne Text auseinanderzuhalten
+   *  sind. Die hervorgehobene Option liegt selbst schon auf der
+   *  Verlaufsfläche, ihr Feld braucht deshalb nur ein halbtransparentes
+   *  Weiß statt eines eigenen Tons. */
+  field: string;
 }[] = [
   {
     href: "/scan",
@@ -36,18 +44,21 @@ const OPTIONS: {
     hint: "Am schnellsten für Verpacktes",
     icon: Camera,
     primary: true,
+    field: "bg-white/22",
   },
   {
     href: "/scan-ean",
     label: "EAN eingeben",
     hint: "Wenn die Kamera nicht mitspielt",
     icon: Barcode,
+    field: "bg-primary-tint text-primary-deep",
   },
   {
     href: "/add",
     label: "Von Hand eintragen",
     hint: "Salat, Reste, Selbstgemachtes",
     icon: ClipboardList,
+    field: "bg-warning-tint text-warning-ink",
   },
   // Steht unten, weil er einen ganzen Einkauf auf einmal erfasst statt eines
   // Artikels -- und weil er als einziger etwas voraussetzt, das man nicht in
@@ -55,8 +66,9 @@ const OPTIONS: {
   {
     href: "/receipt",
     label: "Rechnung einlesen",
-    hint: "Wenn Lebensmittel mal wieder geliefert wurden",
+    hint: "Wenn Lebensmittel geliefert wurden",
     icon: Receipt,
+    field: "bg-badge-tint text-badge-ink",
   },
 ];
 
@@ -75,37 +87,42 @@ function AddOptionsSheet({
   }
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Wie möchtest du hinzufügen?"
-    >
-      <div className="flex flex-col gap-2">
+    <Sheet open={open} onOpenChange={onOpenChange} title="Was soll rein?" hideTitle>
+      {/* Sheet liefert den Titel schon barrierefrei (sr-only, via hideTitle)
+          -- diese Zeile ist die sichtbare Wiederholung mit Avo daneben und
+          deshalb aria-hidden, sonst kuendigte ein Screenreader "Was soll
+          rein?" zweimal an. */}
+      <div aria-hidden="true" className="flex items-center gap-2.75 px-1 pb-3.5">
+        <Avo size="sm" mood="happy" />
+        <span className="font-heading text-[20px] font-bold">Was soll rein?</span>
+      </div>
+      <div className="flex flex-col gap-2.25">
         {OPTIONS.map((option) => (
           <button
             key={option.href}
             type="button"
             onClick={() => go(option.href)}
             className={cn(
-              "flex items-center gap-3.5 rounded-[20px] p-3.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "flex items-center gap-3.5 rounded-[24px] p-[15px] text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
               option.primary
-                ? "bg-primary text-primary-foreground"
-                : "border border-border bg-surface-2",
+                ? "bg-(image:--gradient-primary) text-primary-foreground shadow-cta"
+                : "bg-surface-2",
             )}
           >
-            <option.icon
+            <span
               className={cn(
-                "size-6 shrink-0",
-                !option.primary && "text-primary",
+                "flex size-[46px] shrink-0 items-center justify-center rounded-full",
+                option.field,
               )}
-              strokeWidth={1.8}
-            />
+            >
+              <option.icon className="size-[23px]" strokeWidth={2} />
+            </span>
             <span>
-              <span className="block text-base font-bold">{option.label}</span>
+              <span className="block font-heading text-[17px] font-bold">{option.label}</span>
               <span
                 className={cn(
-                  "mt-0.5 block text-[13px] font-medium",
-                  option.primary ? "opacity-75" : "text-muted-foreground",
+                  "mt-0.5 block text-[12.5px] font-medium",
+                  option.primary ? "opacity-[.82]" : "text-muted-foreground",
                 )}
               >
                 {option.hint}
@@ -121,12 +138,11 @@ function AddOptionsSheet({
 /**
  * Der zentrale Knopf der Navigationsleiste.
  *
- * Er sass frueher als ueberstehender FAB auf der Leiste. Seit die Leiste eine
- * schwebende Insel ist, hat er dort keinen Boden mehr, auf dem er aufliegen
- * koennte -- er haette ueber einer Luecke gehangen. Jetzt steht er in der
- * Reihe, gleich gross wie die vier Ziele, und bleibt trotzdem die primaere
- * Aktion: er ist das einzige gefuellte Element zwischen vier dünn
- * gezeichneten Umrissen.
+ * Die Insel gibt ihm wieder einen Boden, auf dem er aufliegen kann -- damit
+ * ueberragt er sie erneut (siehe das negative margin-top in bottom-nav.tsx),
+ * statt gleich gross in der Reihe zu stehen wie in der Vorgaengerfassung.
+ * Er bleibt trotzdem die primaere Aktion: die Verlaufsflaeche ist das einzige
+ * gefuellte, gesaettigte Element neben vier duenn gezeichneten Umrissen.
  *
  * className, damit derselbe Knopf auch als groesserer Einzelgaenger unten
  * rechts auftreten kann, wenn die Leiste beim Lesen weggefahren ist (siehe
@@ -145,11 +161,11 @@ export function AddActionSheet({ className }: { className?: string }) {
         aria-label="Artikel hinzufügen"
         title="Artikel hinzufügen"
         className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-primary text-primary-foreground shadow-action outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "flex size-14 shrink-0 items-center justify-center rounded-full bg-(image:--gradient-primary) text-primary-foreground shadow-fab outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           className,
         )}
       >
-        <Plus className="size-6" strokeWidth={2.4} />
+        <Plus className="size-6.5" strokeWidth={2.8} />
       </button>
 
       <AddOptionsSheet open={open} onOpenChange={setOpen} />
@@ -170,13 +186,13 @@ export function AddItemButton({ label }: { label: string }) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-1 flex h-12 items-center rounded-[18px] bg-primary px-5.5 text-[15px] font-bold text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="mt-1 h-[54px] rounded-[20px] px-[26px] text-[16px]"
       >
         {label}
-      </button>
+      </Button>
 
       <AddOptionsSheet open={open} onOpenChange={setOpen} />
     </>
