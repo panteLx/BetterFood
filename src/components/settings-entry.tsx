@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { connection } from "next/server";
 import { SlidersHorizontal } from "lucide-react";
-import { isRecipesConfigured } from "@/lib/recipes";
+import { getRecipesEnabled } from "@/lib/recipes";
 
 /**
  * Der Weg zu den Einstellungen, wenn die Fußleiste keinen mehr hat.
@@ -19,12 +18,12 @@ import { isRecipesConfigured } from "@/lib/recipes";
  *
  * Eine eigene Server-Komponente und kein Schalter an HomeOverview: die
  * Antwort hängt an GEMINI_API_KEY, und der wird im laufenden Container
- * gelesen. Läge die Abfrage in der Seite, zöge das `connection()` davor die
- * ganze Startseite aus dem Prerender; hier betrifft es nur diesen Knopf.
+ * gelesen. Läge die Abfrage in der Seite, zöge das `connection()` in
+ * getRecipesEnabled() die ganze Startseite aus dem Prerender; hier betrifft es
+ * nur diesen Knopf.
  */
 export async function SettingsEntry() {
-  await connection();
-  if (!isRecipesConfigured()) return null;
+  if (!(await getRecipesEnabled())) return null;
 
   return (
     <Link

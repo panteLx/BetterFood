@@ -44,7 +44,7 @@ function assertEnvironment() {
   }
   if (!process.env.GEMINI_API_KEY) {
     console.warn(
-      "[start] GEMINI_API_KEY nicht gesetzt -- Rezeptvorschlaege sind aus: der Eintrag unter \"Mehr\" erscheint nicht, POST /api/recipes/generate antwortet mit 503.",
+      "[start] GEMINI_API_KEY nicht gesetzt -- Rezeptvorschlaege sind aus: die Fussleiste zeigt statt \"Rezepte\" wieder \"Mehr\", POST /api/recipes/generate antwortet mit 503.",
     );
   }
   if (!process.env.TRUSTED_PROXIES) {

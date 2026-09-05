@@ -24,12 +24,16 @@
  * Preisanpassung auseinandergelaufen.
  */
 
-import { addDays } from "@/lib/expiry";
+import { WEEK_WITHIN_DAYS, addDays } from "@/lib/expiry";
 import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
 import { DEFAULT_MONTHLY_GOAL } from "@/lib/monthly-goal";
 import type { ResolvedEntry } from "@/lib/stats";
-import type { SuggestionView } from "@/components/recipe-suggestions";
-import type { RecipeBudget } from "@/lib/recipes";
+import {
+  MAX_BATCHES_PER_DAY,
+  MAX_BATCHES_PER_DAY_HARD,
+  MAX_BATCHES_PER_HOUR,
+} from "@/lib/recipes/types";
+import type { RecipeBudget, SuggestionView } from "@/lib/recipes/types";
 import type { Item } from "@/db/schema";
 
 /** Die Demo kennt genau eine Liste; der Listenwechsel ist ohnehin gesperrt. */
@@ -317,18 +321,17 @@ const DEMO_RECIPE_SEEDS = [
  * Benutzung stammt, die es in der Demo nicht gab. Angefasst wird er ohnehin
  * nicht -- DemoSurface fängt den Klick ab, bevor die Rückfrage aufgeht.
  *
- * Die Zahlen stehen hier als Literale und nicht als Import von
- * MAX_BATCHES_PER_HOUR: lib/recipes.ts beginnt mit `import "server-only"`, und
- * diese Datei landet über /demo im Browser-Bundle. Ein Typ-Import ist
- * unbedenklich (er verschwindet beim Übersetzen), ein Wert-Import zöge das
- * ganze Modul mit. Laufen die beiden Stellen auseinander, sagt die Demo eine
- * Zahl zu niedrig oder zu hoch -- ein Schönheitsfehler in einer erfundenen
- * Ansicht, und damit der billigere der beiden Preise.
+ * Die echten Grenzen, nicht abgeschriebene: sie stehen in lib/recipes/types.ts
+ * und damit in der Hälfte des Moduls ohne `import "server-only"` -- gerade
+ * damit diese Datei sie als Werte lesen kann, denn sie landet über /demo im
+ * Browser-Bundle. Vorher standen hier 5/20/50 als Literale, mit einem
+ * Kommentar, der einräumte, dass sie irgendwann still auseinanderlaufen.
  */
 export const DEMO_RECIPE_BUDGET: RecipeBudget = {
-  hourLeft: 5,
-  dayLeft: 20,
-  hardLeft: 50,
+  state: "ok",
+  hourLeft: MAX_BATCHES_PER_HOUR,
+  dayLeft: MAX_BATCHES_PER_DAY,
+  hardLeft: MAX_BATCHES_PER_DAY_HARD,
   freeAt: null,
   hardFreeAt: null,
 };
@@ -357,7 +360,7 @@ export function buildDemoRecipeSuggestions(now: Date): SuggestionView[] {
         category: labelOf.get(seed.category) ?? seed.category,
         quantity: seed.quantity,
         expiryDate: addDays(seed.expiryInDays, now).toISOString(),
-        urgent: seed.expiryInDays <= 7,
+        urgent: seed.expiryInDays <= WEEK_WITHIN_DAYS,
       })),
     },
   ];

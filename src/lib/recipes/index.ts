@@ -1,80 +1,43 @@
 import "server-only";
 import { and, asc, count, desc, eq, gt, gte, isNull, lte, ne } from "drizzle-orm";
+import { connection } from "next/server";
 import { db } from "@/db";
 import { items, recipeSuggestions } from "@/db/schema";
-import { addDays, startOfDay } from "@/lib/expiry";
+import { WEEK_WITHIN_DAYS, addDays, daysUntil, startOfDay } from "@/lib/expiry";
 import { getCategoriesForList } from "@/lib/data";
+import {
+  MAX_BATCHES_PER_DAY,
+  MAX_BATCHES_PER_DAY_HARD,
+  MAX_BATCHES_PER_HOUR,
+} from "@/lib/recipes/types";
 import type { RecipeSuggestion } from "@/db/schema";
+import type {
+  ParsedSuggestion,
+  Recipe,
+  RecipeBasis,
+  RecipeBudget,
+  RecipeBudgetState,
+} from "@/lib/recipes/types";
+
+// Die Formen und Grenzen stehen in ./types (ohne "server-only", damit Karte
+// und Demo sie lesen können); wer das Feature benutzt, soll sie trotzdem von
+// hier bekommen und nicht wissen müssen, dass es zwei Dateien sind.
+export * from "@/lib/recipes/types";
 
 /**
  * Rezeptvorschläge rund um das, was bald abläuft.
  *
- * Das ganze Fachliche des Features steht in dieser einen Datei: Auswahl der
- * Artikel, Prompt, der Aufruf bei Google, das Prüfen der Antwort und die
- * beiden Abfragen auf die Historie. Die Route darunter
- * (api/recipes/generate) macht nur noch Sitzung, Statuscodes und Text --
- * dieselbe Arbeitsteilung wie zwischen api/push/test und lib/expiry-check.
+ * Das ganze Fachliche des Features steht hier: Auswahl der Artikel, Prompt,
+ * der Aufruf bei Google, das Prüfen der Antwort und die beiden Abfragen auf
+ * die Historie. Die Route darunter (api/recipes/generate) macht nur noch
+ * Sitzung, Statuscodes und Text -- dieselbe Arbeitsteilung wie zwischen
+ * api/push/test und lib/expiry-check.
+ *
+ * Daneben liegt ./types mit den Formen und den Grenzen. Die Trennung ist
+ * keine Ordnungsliebe, sondern die Bedingung des `import "server-only"` oben:
+ * Karte und Demo brauchen dieselben Typen und dieselben Zahlen, laufen aber
+ * im Browser. Dieselbe Aufteilung wie bei lib/receipt/types.ts.
  */
-
-// ---------------------------------------------------------------------------
-// Typen
-// ---------------------------------------------------------------------------
-
-/**
- * Ein Rezept, wie es das Modell liefert und wie es in der Karte steht.
- *
- * `emoji` ist die Titelfläche der Karte -- ein Bild wäre entweder ein
- * bezahlter zweiter Modellaufruf pro Rezept samt Ablage und Aufräumen, oder
- * ein fremder Bilderdienst, dem wir jeden Rezepttitel schicken und für den
- * die CSP (`img-src 'self' data: blob:`) erst geöffnet werden müsste. Ein
- * Emoji kostet nichts, kommt im selben Aufruf mit und ist auf jedem Gerät da.
- *
- * `uses` sind die Vorratsartikel, die das Rezept aufbraucht -- die Antwort
- * auf die Frage, warum ausgerechnet dieses Rezept hier steht.
- *
- * `buy` ist das Gegenstück: Zutaten, die der Haushalt nicht hat und für
- * dieses Gericht kaufen müsste. Ein Vorschlag, der ausschließlich aus dem
- * Kühlschrank bestehen darf, wird schnell einfallslos -- drei Gerichte aus
- * denselben acht Artikeln unterscheiden sich dann nur noch in der Reihenfolge
- * der Schritte. Zwei getrennte Felder statt eines gemeinsamen, weil die Karte
- * beides verschieden auszeichnet: was da ist, ist eine Begründung, was fehlt,
- * ist eine Aufgabe.
- */
-export type Recipe = {
-  emoji: string;
-  title: string;
-  description: string;
-  ingredients: string[];
-  steps: string[];
-  uses: string[];
-  buy: string[];
-};
-
-/** Ein Artikel, so wie er in den Prompt ging -- und so, wie er in basedOn steht. */
-export type RecipeBasis = {
-  name: string;
-  category: string;
-  quantity: number;
-  /** ISO-8601. Als Zeichenkette, weil die Zeile als JSON in der DB liegt. */
-  expiryDate: string;
-  /**
-   * Liegt der Artikel im Ablauffenster -- ist er also der Grund für den
-   * Vorschlag und nicht bloß Beiwerk?
-   *
-   * Gespeichert und nicht aus `expiryDate` gerechnet: die Ansicht zeigt alte
-   * Stapel, und ein Artikel, der im Mai dringend war, ist es im September
-   * nicht mehr. Gefragt ist aber, was damals dringend war.
-   */
-  urgent: boolean;
-};
-
-/** Eine Historienzeile mit bereits geparstem JSON. */
-export type ParsedSuggestion = {
-  id: number;
-  createdAt: Date;
-  recipes: Recipe[];
-  basedOn: RecipeBasis[];
-};
 
 /**
  * Warum eine Generierung gescheitert ist.
@@ -111,6 +74,23 @@ export class RecipeGenerationError extends Error {
  */
 export function isRecipesConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
+}
+
+/**
+ * Dasselbe für Server-Komponenten -- mit dem `connection()` davor.
+ *
+ * Ohne das rendert Next die Antwort mit dem Wert vom Bauzeitpunkt vor, und
+ * genau das ist der Fehler, den isRecipesConfigured() allein nicht verhindern
+ * kann: Er ist dem Aufrufer überlassen, und der vierte vergisst ihn. Vorbild
+ * sind getOidcDisplayName() in lib/oidc.ts und getRegistrationOpen() in
+ * lib/registration.ts, die für ihre Umgebungsvariablen genau so verfahren.
+ *
+ * Route-Handler brauchen ihn nicht -- die sind über requireSession() ohnehin
+ * dynamisch -- und benutzen weiter die synchrone Fassung.
+ */
+export async function getRecipesEnabled(): Promise<boolean> {
+  await connection();
+  return isRecipesConfigured();
 }
 
 /**
@@ -192,55 +172,8 @@ const MAX_OUTPUT_TOKENS = 16384;
  */
 const THINKING_LEVEL = "low";
 
-/**
- * Wie viele Stapel eine Liste erzeugen darf -- siehe getRecipeBudget.
- *
- * Zwei Fenster, weil sie zwei verschiedene Dinge verhindern. Die Stunde fängt
- * den Übermut ab (fünfmal hintereinander drücken, weil das dritte Gericht
- * nicht gefiel), der Tag das Dauerfeuer über einen Nachmittag hinweg. Nur eine
- * Stundengrenze ließe 120 Anfragen am Tag zu, nur eine Tagesgrenze ließe sie
- * alle in fünf Minuten zu.
- *
- * Die Zahlen sind bewusst unsere und nicht Googles: Deren Free-Tier-Grenzen
- * stehen inzwischen nicht mehr als Tabelle in der Dokumentation, sondern nur
- * noch im AI Studio des jeweiligen Kontos ("Rate limits depend on a variety of
- * factors ... and can be viewed in Google AI Studio"). Eine hier eingetragene
- * Zahl wäre also geraten und irgendwann still falsch. Stattdessen liegen diese
- * beiden so tief, dass sie unter jeder plausiblen Grenze bleiben: 20 Stapel
- * sind 60 Gerichte am Tag, und selbst wenn jeder Stapel die ganze Modellkette
- * durchprobiert (drei Anfragen, siehe generateRecipes), sind das 60 Anfragen.
- * Wer mehr braucht, ändert es hier -- und sieht an dieser Stelle, warum es
- * überhaupt eine Grenze gibt.
- */
-export const MAX_BATCHES_PER_HOUR = 5;
-export const MAX_BATCHES_PER_DAY = 20;
-
-/**
- * Die Grenze, die auch "auf eigene Verantwortung" nicht fällt.
- *
- * Die beiden oben sind Vorsicht und lassen sich mit einer ausdrücklichen
- * Bestätigung überschreiten -- wer abends Gäste hat und den fünften Vorschlag
- * braucht, soll ihn bekommen und nicht auf eine Uhr warten müssen, die wir
- * uns selbst ausgedacht haben. Diese hier ist etwas anderes: eine Notbremse
- * gegen die Endlosschleife, gegen den steckengebliebenen Finger und gegen den
- * Nachmittag, an dem jemand "mal schauen, was noch geht" spielt.
- *
- * 50 Stapel sind 150 Anfragen, wenn jeder die ganze Modellkette durchprobiert
- * -- weit jenseits dessen, was ein Haushalt an einem Tag kocht, und die
- * Gegend, in der ein Free-Tier-Kontingent tatsächlich zu Ende geht. Wer sie
- * anders braucht, ändert sie hier; sie soll erreichbar sein, aber niemals aus
- * Versehen.
- */
-export const MAX_BATCHES_PER_DAY_HARD = 50;
-
 /** Wie viele Vorschläge die Seite zeigt. Keine Pagination, aber auch kein endloses Scrollen. */
 const HISTORY_LIMIT = 30;
-
-/**
- * Das Fenster, in dem ein Artikel als dringend gilt -- dieselben sieben Tage,
- * nach denen auch der Vorrat gliedert (EXPIRY_BUCKETS in lib/expiry.ts).
- */
-const WINDOW_DAYS = 7;
 
 /**
  * Wie viele dringende und wie viele übrige Artikel mitgeschickt werden.
@@ -306,27 +239,44 @@ const MAX_TEXT_LENGTH = 500;
  * Testbenachrichtigung, die auch nicht darauf wartet, dass wirklich etwas
  * fällig ist (buildPreviewNotification in lib/expiry-check.ts).
  */
-export async function selectRecipeBasis(listId: number): Promise<RecipeBasis[]> {
-  const today = startOfDay(new Date());
-  const horizon = addDays(WINDOW_DAYS, today);
-  const inList = and(
+/**
+ * Woraus sich überhaupt kochen lässt: aktiv, in dieser Liste, nicht
+ * ausgeblendet, kein Getränk und nicht abgelaufen.
+ *
+ * Als eine Funktion und nicht zweimal hingeschrieben. Die Bedingung galt
+ * immer schon für beide Abfragen unten -- die Auswahl und die Zählung, die
+ * den Knopf freischaltet --, stand aber in zwei getrennten `and(...)`, über
+ * denen ein Kommentar mahnte, sie gleich zu halten. Ein Kommentar ist die
+ * schwächste Form, einen Zusammenhang zu erzwingen: Wer eine zweite
+ * übersprungene Kategorie einträgt, ändert sonst die eine Stelle und lässt
+ * den Knopf für einen Vorrat leuchten, aus dem die Auswahl nichts hergibt.
+ */
+function cookableFilter(listId: number, today: Date) {
+  return and(
     eq(items.status, "active"),
     eq(items.listId, listId),
     isNull(items.hiddenAt),
     ne(items.category, SKIP_CATEGORY),
+    gte(items.expiryDate, today),
   );
+}
+
+export async function selectRecipeBasis(listId: number): Promise<RecipeBasis[]> {
+  const today = startOfDay(new Date());
+  const horizon = addDays(WEEK_WITHIN_DAYS, today);
+  const cookable = cookableFilter(listId, today);
 
   const [urgent, pantry] = await Promise.all([
     db
       .select()
       .from(items)
-      .where(and(inList, gte(items.expiryDate, today), lte(items.expiryDate, horizon)))
+      .where(and(cookable, lte(items.expiryDate, horizon)))
       .orderBy(asc(items.expiryDate))
       .limit(MAX_URGENT),
     db
       .select()
       .from(items)
-      .where(and(inList, gt(items.expiryDate, horizon)))
+      .where(and(cookable, gt(items.expiryDate, horizon)))
       .orderBy(asc(items.expiryDate))
       .limit(MAX_PANTRY),
   ]);
@@ -362,23 +312,16 @@ export async function selectRecipeBasis(listId: number): Promise<RecipeBasis[]> 
  * aber sie kostet keine zweite Abfrage samt Kategorie-Zuordnung, deren
  * Ergebnis die Seite wegwirft.
  *
- * Die Bedingungen müssen deshalb dieselben bleiben wie oben, Getränke
- * eingeschlossen: ein Kasten Sprudel im Vorrat darf den Knopf nicht
- * freischalten, wenn die Auswahl darunter leer bliebe.
+ * Dass dabei dieselben Bedingungen gelten wie oben, Getränke eingeschlossen,
+ * erzwingt jetzt der gemeinsame cookableFilter(): ein Kasten Sprudel im
+ * Vorrat darf den Knopf nicht freischalten, wenn die Auswahl darunter leer
+ * bliebe.
  */
 export async function hasCookableItems(listId: number): Promise<boolean> {
   const row = await db
     .select({ n: count() })
     .from(items)
-    .where(
-      and(
-        eq(items.status, "active"),
-        eq(items.listId, listId),
-        isNull(items.hiddenAt),
-        ne(items.category, SKIP_CATEGORY),
-        gte(items.expiryDate, startOfDay(new Date())),
-      ),
-    )
+    .where(cookableFilter(listId, startOfDay(new Date())))
     .get();
 
   return (row?.n ?? 0) > 0;
@@ -530,9 +473,7 @@ function buildPrompt(basis: RecipeBasis[], today: Date, avoid: string[] = []): s
   if (urgent.length > 0) {
     lines.push("Muss bald weg:");
     for (const entry of urgent) {
-      const days = Math.round(
-        (startOfDay(new Date(entry.expiryDate)).getTime() - today.getTime()) / 86_400_000,
-      );
+      const days = daysUntil(new Date(entry.expiryDate), today);
       const when =
         days === 0 ? "läuft heute ab" : days === 1 ? "läuft morgen ab" : `noch ${days} Tage`;
       lines.push(`- "${entry.name}" — ${entry.category}, Menge ${entry.quantity}, ${when}`);
@@ -603,16 +544,12 @@ export async function generateRecipes(basis: RecipeBasis[], avoid: string[]): Pr
       // 30 Sekunden gewartet, ein zweiter Anlauf verdoppelt die Wartezeit,
       // statt sie zu retten. Auslastung und leeres Kontingent melden sich
       // dagegen binnen Millisekunden.
-      const retriable =
-        error instanceof RecipeGenerationError &&
-        (error.kind === "overloaded" || error.kind === "quota");
-      if (last || !retriable) throw error;
+      const kind = error instanceof RecipeGenerationError ? error.kind : null;
+      if (last || (kind !== "overloaded" && kind !== "quota")) throw error;
 
       console.warn(
         `Rezeptvorschlag: ${name} ${
-          (error as RecipeGenerationError).kind === "quota"
-            ? "hat kein Kontingent mehr"
-            : "ist ausgelastet"
+          kind === "quota" ? "hat kein Kontingent mehr" : "ist ausgelastet"
         }, weiter mit ${chain[index + 1]}`,
       );
     }
@@ -771,7 +708,7 @@ function answerText(payload: GeminiResponse | null): string {
  * Unvollständige Einträge fallen weg statt die ganze Zeile zu verwerfen: zwei
  * brauchbare Rezepte sind mehr wert als eine Fehlermeldung.
  */
-export function parseRecipes(value: unknown): Recipe[] {
+function parseRecipes(value: unknown): Recipe[] {
   if (!Array.isArray(value)) return [];
 
   const recipes: Recipe[] = [];
@@ -854,7 +791,7 @@ function emoji(value: unknown): string {
  * zurück statt zu werfen: eine kaputte Zeile aus einer früheren Fassung darf
  * nicht die ganze Seite mitnehmen.
  */
-export function parseSuggestion(row: RecipeSuggestion): ParsedSuggestion {
+function parseSuggestion(row: RecipeSuggestion): ParsedSuggestion {
   return {
     id: row.id,
     createdAt: row.createdAt,
@@ -950,13 +887,33 @@ export async function recentRecipeTitles(listId: number): Promise<string[]> {
 
   const titles = new Set<string>();
   for (const row of rows) {
-    for (const recipe of parseRecipes(safeParse(row.recipes))) {
+    for (const title of titlesOf(safeParse(row.recipes))) {
       if (titles.size >= AVOID_TITLES) return [...titles];
-      titles.add(recipe.title);
+      titles.add(title);
     }
   }
 
   return [...titles];
+}
+
+/**
+ * Nur die Titel aus einer gespeicherten Zeile.
+ *
+ * Und ausdrücklich nicht parseRecipes(): das prüft und kürzt für jedes der
+ * rund neun Rezepte auch Emoji, Beschreibung, bis zu zwanzig Zutaten und
+ * ebenso viele Schritte -- gut vierhundert Zeichenketten, von denen hier eine
+ * je Rezept überlebt. Das lief bisher in der Anfrage, vor der jemand wartet.
+ */
+function titlesOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const titles: string[] = [];
+  for (const entry of value.slice(0, MAX_RECIPES)) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const title = text((entry as Record<string, unknown>).title);
+    if (title) titles.push(title);
+  }
+  return titles;
 }
 
 /**
@@ -984,28 +941,9 @@ export async function recentRecipeTitles(listId: number): Promise<string[]> {
  * bewusst nicht nach Googles Tageswechsel um Mitternacht Pazifikzeit: Das hier
  * ist unser Budget, nicht deren, und ein rollendes Fenster kann niemand durch
  * Warten auf 9 Uhr morgens ausnutzen.
+ *
+ * `state` entsteht hier und nur hier -- die Form steht in ./types.
  */
-export type RecipeBudget = {
-  /** Wie viele Stapel in dieser Stunde und an diesem Tag noch gehen. */
-  hourLeft: number;
-  dayLeft: number;
-  /**
-   * Wie viele die Notbremse noch zulässt (MAX_BATCHES_PER_DAY_HARD). Ist das
-   * Null, hilft auch keine ausdrückliche Bestätigung mehr -- und genau daran
-   * unterscheidet die Oberfläche "willst du wirklich" von "heute nicht mehr".
-   */
-  hardLeft: number;
-  /**
-   * Wann der nächste Platz wieder frei wird, als ISO-Zeichenkette -- null,
-   * solange gerade welche frei sind. `freeAt` meint die beiden weichen
-   * Grenzen, `hardFreeAt` die Notbremse. Formatiert wird beides im Client
-   * (formatRelativeFuture), damit die Angabe in der Zeitzone des Telefons
-   * steht und nicht in der des Servers.
-   */
-  freeAt: string | null;
-  hardFreeAt: string | null;
-};
-
 export async function getRecipeBudget(listId: number): Promise<RecipeBudget> {
   const now = Date.now();
   const dayAgo = new Date(now - DAY_MS);
@@ -1047,7 +985,13 @@ export async function getRecipeBudget(listId: number): Promise<RecipeBudget> {
   const hardDeadline =
     hardLeft === 0 ? freesAt(rows, MAX_BATCHES_PER_DAY_HARD, DAY_MS) : null;
 
+  // Die Notbremse zuerst: Sie kennt kein Überschreiben, also ist "blocked"
+  // stärker als "braucht Bestätigung", auch wenn beides zugleich zutrifft.
+  const state: RecipeBudgetState =
+    hardLeft === 0 ? "blocked" : hourLeft === 0 || dayLeft === 0 ? "needsOverride" : "ok";
+
   return {
+    state,
     hourLeft,
     dayLeft,
     hardLeft,

@@ -68,6 +68,18 @@ const FAILURES: Record<RecipeGenerationError["kind"], { status: number; error: s
  * Schranken und Statuscodes.
  */
 export async function POST(request: Request) {
+  // Ganz nach vorn, vor Sitzung und Datenbank: Das ist ein Blick in die
+  // Umgebung und kostet nichts, waehrend requireSession() und
+  // requireActiveList() zusammen mehrere Abfragen sind. Auf einem Server ohne
+  // Schluessel zahlte bisher jede Anfrage den vollen Weg fuer eine Absage, die
+  // von niemandem abhaengt.
+  if (!isRecipesConfigured()) {
+    return NextResponse.json(
+      { error: "Rezeptvorschläge sind auf diesem Server nicht eingerichtet." },
+      { status: 503 },
+    );
+  }
+
   const session = await requireSession();
   const listId = await requireActiveList(session.user.id);
 
@@ -75,13 +87,6 @@ export async function POST(request: Request) {
   // kaputter zaehlt deshalb als "kein Ueberschreiben" und nicht als Fehler.
   const body = (await request.json().catch(() => null)) as { override?: unknown } | null;
   const override = body?.override === true;
-
-  if (!isRecipesConfigured()) {
-    return NextResponse.json(
-      { error: "Rezeptvorschläge sind auf diesem Server nicht eingerichtet." },
-      { status: 503 },
-    );
-  }
 
   if (generating.has(session.user.id)) {
     return NextResponse.json(
@@ -99,7 +104,7 @@ export async function POST(request: Request) {
   // Die Notbremse zuerst, und die kennt kein Ueberschreiben: Sie faengt die
   // Endlosschleife und den steckengebliebenen Finger ab, und beide wuerden
   // ein `override: true` genauso mitschicken wie ein Mensch.
-  if (budget.hardLeft === 0) {
+  if (budget.state === "blocked") {
     return NextResponse.json(
       {
         error: `Auch mit Bestätigung ist bei ${MAX_BATCHES_PER_DAY_HARD} Vorschlägen am Tag Schluss.`,
@@ -112,20 +117,20 @@ export async function POST(request: Request) {
   // Die beiden weichen Grenzen darf ueberschreiten, wer im Dialog ausdruecklich
   // bestaetigt hat. Serverseitig gelesen und nicht im Knopf entschieden: Der
   // graue Knopf ist die Hoeflichkeitsform, die Grenze liegt hier.
-  if ((budget.hourLeft === 0 || budget.dayLeft === 0) && !override) {
-    return NextResponse.json(
-      {
-        error:
-          budget.hourLeft === 0
-            ? `Höchstens ${MAX_BATCHES_PER_HOUR} Vorschläge pro Stunde.`
-            : `Höchstens ${MAX_BATCHES_PER_DAY} Vorschläge pro Tag.`,
-        budget,
-      },
-      { status: 429 },
-    );
-  }
+  if (budget.state === "needsOverride") {
+    if (!override) {
+      return NextResponse.json(
+        {
+          error:
+            budget.hourLeft === 0
+              ? `Höchstens ${MAX_BATCHES_PER_HOUR} Vorschläge pro Stunde.`
+              : `Höchstens ${MAX_BATCHES_PER_DAY} Vorschläge pro Tag.`,
+          budget,
+        },
+        { status: 429 },
+      );
+    }
 
-  if (override && (budget.hourLeft === 0 || budget.dayLeft === 0)) {
     // Ins Log, weil es der Betreiber sehen koennen muss: Wenn das Kontingent
     // des Schluessels ueberraschend leer ist, steht hier, woher.
     console.warn(

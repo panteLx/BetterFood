@@ -104,21 +104,14 @@ export default function SettingsPage() {
 
     fetch("/api/settings")
       .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (
-          data: {
-            leadDays?: number;
-            monthlyGoal?: number;
-          } | null,
-        ) => {
-          if (!active || !data) return;
-          const option = LEAD_DAY_OPTIONS.find(
-            (entry) => entry.days === data.leadDays,
-          );
-          setLeadDaysLabel(option?.label ?? `${data.leadDays} Tage vorher`);
-          setMonthlyGoalLabel(`${parseMonthlyGoal(data.monthlyGoal)} %`);
-        },
-      )
+      .then((data: { leadDays?: number; monthlyGoal?: number } | null) => {
+        if (!active || !data) return;
+        const option = LEAD_DAY_OPTIONS.find(
+          (entry) => entry.days === data.leadDays,
+        );
+        setLeadDaysLabel(option?.label ?? `${data.leadDays} Tage vorher`);
+        setMonthlyGoalLabel(`${parseMonthlyGoal(data.monthlyGoal)} %`);
+      })
       .catch(() => {
         // Ohne Wert steht die Zeile eben nur mit ihrem Namen da -- ein
         // Fehlertext wäre hier lauter als die Information wert ist.

@@ -1,6 +1,5 @@
-import { connection } from "next/server";
 import { optionalSession } from "@/lib/session";
-import { isRecipesConfigured } from "@/lib/recipes";
+import { getRecipesEnabled } from "@/lib/recipes";
 import { BottomNav } from "@/components/bottom-nav";
 
 /**
@@ -18,12 +17,10 @@ export async function BottomNavGate() {
   const session = await optionalSession();
   if (!session) return null;
 
-  // Vor dem Blick in die Umgebung: welches Ziel auf dem vierten Platz steht,
-  // haengt an GEMINI_API_KEY, und der wird im laufenden Container gelesen und
-  // nicht in dem Prozess, der das Image gebaut hat. Ohne connection() wuerde
-  // Next die Leiste mit dem Wert vom Bauzeitpunkt vorrendern -- dieselbe
-  // Begruendung wie in lib/oidc.ts.
-  await connection();
-
-  return <BottomNav recipes={isRecipesConfigured()} />;
+  // Welches Ziel auf dem vierten Platz steht, haengt an GEMINI_API_KEY. Das
+  // noetige connection() steckt in getRecipesEnabled() und nicht hier: Der
+  // Wert wird im laufenden Container gelesen und nicht in dem Prozess, der das
+  // Image gebaut hat, und diese Vorsicht gehoert an die Quelle statt in jeden
+  // Aufrufer -- dieselbe Bauart wie getRegistrationOpen() in lib/registration.ts.
+  return <BottomNav recipes={await getRecipesEnabled()} />;
 }

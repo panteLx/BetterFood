@@ -10,6 +10,12 @@
 // aufbrauchen?", nicht "was habe ich an Milchprodukten?".
 export const URGENT_WITHIN_DAYS = 3;
 
+// Das Ende von "diese Woche": der Eimer in EXPIRY_BUCKETS, das Fenster, aus
+// dem die Rezeptvorschläge ihre dringenden Artikel ziehen, und die Demo
+// meinten immer schon denselben Tag -- standen aber als drei einzelne Siebenen
+// in drei Dateien, die sich gegenseitig im Kommentar erklärten.
+export const WEEK_WITHIN_DAYS = 7;
+
 export type ExpiryStatus = "fresh" | "soon" | "expired";
 
 /** Mitternacht des Tages, in dem `date` liegt. */
@@ -212,13 +218,13 @@ export const EXPIRY_BUCKETS = [
     title: "Diese Woche",
     label: "Diese Woche",
     filter: null,
-    test: (days: number) => days >= 2 && days <= 7,
+    test: (days: number) => days >= 2 && days <= WEEK_WITHIN_DAYS,
   },
   {
     title: "Später",
     label: "Später",
     filter: null,
-    test: (days: number) => days > 7,
+    test: (days: number) => days > WEEK_WITHIN_DAYS,
   },
 ] as const satisfies readonly {
   title: string;

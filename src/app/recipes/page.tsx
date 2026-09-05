@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { ListSwitcher } from "@/components/list-switcher";
-import { RecipeSuggestions, type SuggestionView } from "@/components/recipe-suggestions";
+import { RecipeSuggestions } from "@/components/recipe-suggestions";
 import { requireActiveList, requireSession } from "@/lib/session";
 import { getListsWithCounts } from "@/lib/data";
 import {
@@ -11,6 +11,7 @@ import {
   hasCookableItems,
   isRecipesConfigured,
 } from "@/lib/recipes";
+import type { SuggestionView } from "@/lib/recipes/types";
 
 export const metadata: Metadata = {
   title: "Rezepte",

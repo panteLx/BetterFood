@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronDown,
@@ -16,23 +16,8 @@ import { EmptyState } from "@/components/empty-state";
 import { useIsClient } from "@/lib/use-is-client";
 import { formatRelativeFuture, formatRelativePast } from "@/lib/relative-time";
 import { STATUS_CLASSES } from "@/lib/expiry";
-import { cn } from "@/lib/utils";
-import type { Recipe, RecipeBasis, RecipeBudget } from "@/lib/recipes";
-
-/**
- * Ein Vorschlags-Stapel, wie ihn die Seite bekommt.
- *
- * createdAt als ISO-Zeichenkette und nicht als Date: dieselbe Form kommt aus
- * der Antwort der Route zurück (JSON kennt kein Date), und zwei Formen für
- * dasselbe Feld wären eine Fehlerquelle beim Voranstellen eines frischen
- * Stapels.
- */
-export type SuggestionView = {
-  id: number;
-  createdAt: string;
-  recipes: Recipe[];
-  basedOn: RecipeBasis[];
-};
+import { cn, normalizeProductName } from "@/lib/utils";
+import type { Recipe, RecipeBudget, SuggestionView } from "@/lib/recipes/types";
 
 /**
  * Rezeptvorschläge: der Knopf, der sie erzeugt, und die Historie darunter.
@@ -76,13 +61,16 @@ export function RecipeSuggestions({
     () => new Set(initialSuggestions.slice(0, 1).map((entry) => entry.id)),
   );
 
-  function toggle(id: number) {
+  // Stabil ueber useCallback, damit das memo an SuggestionBatch etwas nuetzt:
+  // eine frisch gebaute Funktion je Rendern waere eine neue Prop und liesse
+  // jeden Stapel neu rendern, sobald hier irgendein Zustand umspringt.
+  const toggle = useCallback((id: number) => {
     setOpenIds((current) => {
       const next = new Set(current);
       if (!next.delete(id)) next.add(id);
       return next;
     });
-  }
+  }, []);
 
   // Alles Datumsabhängige erst im Client: new Date() im Server-Render bricht
   // den Prerender der Route ab (siehe useIsClient).
@@ -135,18 +123,38 @@ export function RecipeSuggestions({
   // beiden Werte zählt: Ein Tagesbudget von 14 hilft nicht, wenn die Stunde
   // voll ist.
   const left = Math.min(budget.hourLeft, budget.dayLeft);
-  const exhausted = left === 0;
   // Die Notbremse. Ist auch die erreicht, hilft keine Bestätigung mehr -- und
-  // dann ist der Knopf wirklich aus, nicht nur ungewöhnlich.
-  const blocked = budget.hardLeft === 0;
+  // dann ist der Knopf wirklich aus, nicht nur ungewöhnlich. Der Ausnahmeweg
+  // steht nur offen, solange sie nicht gezogen ist; sonst verspräche ein
+  // "Trotzdem vorschlagen" etwas, das die Zeile darunter im selben Atemzug
+  // verneint. Beides entscheidet getRecipeBudget und nicht diese Datei: Die
+  // Regel stand vorher hier, in der Route und in der Demo je einmal.
+  const blocked = budget.state === "blocked";
+  const canOverride = budget.state === "needsOverride";
   const freeAt = budget[blocked ? "hardFreeAt" : "freeAt"];
   const freeIn =
     freeAt && now ? formatRelativeFuture(new Date(freeAt), now) : null;
 
-  // Der Ausnahmeweg steht nur offen, solange die Notbremse nicht auch schon
-  // gezogen ist. Sonst verspräche ein "Trotzdem vorschlagen" etwas, das die
-  // Zeile darunter im selben Atemzug verneint.
-  const canOverride = exhausted && !blocked;
+  /**
+   * Der Satz unter dem Knopf -- vier Lagen, vier Rückgaben.
+   *
+   * Als Funktion mit frühen Rückgaben und nicht als verschachtelter
+   * Ternäroperator: Der stand vierfach ineinander und trug in zwei seiner
+   * Zweige noch einen fünften für `freeIn`, war also nur noch als Ganzes zu
+   * lesen.
+   */
+  function hint(): string {
+    if (!hasItems) {
+      return "Dein Vorrat ist leer. Trag zuerst etwas ein, dann gibt es auch etwas zu kochen.";
+    }
+    if (blocked) {
+      return `Für heute ist Schluss – ${freeIn ? `${freeIn} geht es weiter.` : "gleich geht es weiter."}`;
+    }
+    if (canOverride) {
+      return `Dein Kontingent ist aufgebraucht${freeIn ? ` und füllt sich ${freeIn} wieder` : ""} – weiter geht es nur auf eigene Verantwortung.`;
+    }
+    return `Verwendet AI (Google Gemini) - Noch ${left} ${left === 1 ? "Vorschlag" : "Vorschläge"} frei.`;
+  }
 
   // Ohne Schlüssel gibt es nichts zu bedienen -- aber sehr wohl etwas zu
   // lesen: was einmal erzeugt wurde, ist bezahlt und bleibt stehen. Nur der
@@ -239,13 +247,7 @@ export function RecipeSuggestions({
           kennenlernt, fühlt sich wie eine Störung an; eine, die vorher
           dasteht, wie eine Regel. */}
       <p className="px-1 text-[12.5px] leading-snug font-medium text-muted-foreground">
-        {!hasItems
-          ? "Dein Vorrat ist leer. Trag zuerst etwas ein, dann gibt es auch etwas zu kochen."
-          : blocked
-            ? `Für heute ist Schluss – ${freeIn ? `${freeIn} geht es weiter.` : "gleich geht es weiter."}`
-            : exhausted
-              ? `Dein Kontingent ist aufgebraucht${freeIn ? ` und füllt sich ${freeIn} wieder` : ""} – weiter geht es nur auf eigene Verantwortung.`
-              : `Verwendet AI (Google Gemini) - Noch ${left} ${left === 1 ? "Vorschlag" : "Vorschläge"} frei.`}
+        {hint()}
       </p>
     </div>
   ) : suggestions.length > 0 ? (
@@ -285,7 +287,7 @@ export function RecipeSuggestions({
               suggestion={suggestion}
               now={now}
               open={openIds.has(suggestion.id)}
-              onToggle={() => toggle(suggestion.id)}
+              onToggle={toggle}
             />
           ))}
     </div>
@@ -310,12 +312,16 @@ const PILL =
  * verhindert das inzwischen (siehe buildPrompt), aber die Karte liest auch
  * Stapel, die vor dieser Korrektur entstanden sind -- und ein Vorschlag, der
  * deswegen die falsche Farbe trägt, behauptet, er rette nichts.
+ *
+ * Der Rest ist normalizeProductName() aus lib/utils.ts -- dieselbe Form, in
+ * der auch das Zusammenlegen zweier Artikel vergleicht (findMergeTarget in
+ * lib/item-merge.ts). Eine eigene Fassung hier war schon einmal eine zu viel:
+ * ihr fehlte das Zusammenziehen doppelter Leerzeichen, sodass "Gouda  am
+ * Stück" beim Zusammenlegen als derselbe Artikel galt, in der Rezeptkarte
+ * aber nicht.
  */
 function normalizeName(value: string): string {
-  return value
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .trim()
-    .toLowerCase();
+  return normalizeProductName(value.replace(/\s*\([^)]*\)\s*$/, ""));
 }
 
 /**
@@ -327,7 +333,7 @@ function normalizeName(value: string): string {
  * Artikeln") beantwortet die Frage "woraus" naemlich nicht, und fuer die
  * Kopfzeile eines geschlossenen Stapels ist sie zu viel.
  */
-function SuggestionBatch({
+const SuggestionBatch = memo(function SuggestionBatch({
   suggestion,
   now,
   open,
@@ -336,7 +342,7 @@ function SuggestionBatch({
   suggestion: SuggestionView;
   now: Date | null;
   open: boolean;
-  onToggle: () => void;
+  onToggle: (id: number) => void;
 }) {
   const count = suggestion.recipes.length;
 
@@ -354,6 +360,20 @@ function SuggestionBatch({
     [suggestion.recipes],
   );
 
+  // Einmal hier statt in jeder der drei Karten: Die Karten bekamen bisher
+  // `basedOn` gereicht und bauten sich daraus jede für sich denselben Satz
+  // dringender Namen -- dreimal dieselbe Schleife über dieselbe Liste, direkt
+  // neben usedNames, das aus derselben Quelle stammt.
+  const urgentNames = useMemo(
+    () =>
+      new Set(
+        suggestion.basedOn
+          .filter((entry) => entry.urgent)
+          .map((entry) => normalizeName(entry.name)),
+      ),
+    [suggestion.basedOn],
+  );
+
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex flex-col gap-2 px-5">
@@ -365,7 +385,7 @@ function SuggestionBatch({
           <button
             type="button"
             aria-expanded={open}
-            onClick={onToggle}
+            onClick={() => onToggle(suggestion.id)}
             className="flex w-full items-center justify-between gap-3 rounded-[14px] px-1 py-1 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <span className="truncate font-heading text-[13px] leading-none font-bold text-muted-foreground">
@@ -436,14 +456,14 @@ function SuggestionBatch({
             <RecipeCard
               key={`${suggestion.id}-${index}`}
               recipe={recipe}
-              basedOn={suggestion.basedOn}
+              urgentNames={urgentNames}
             />
           ))}
         </div>
       )}
     </section>
   );
-}
+});
 
 /**
  * Eine Rezeptkarte.
@@ -457,26 +477,18 @@ function SuggestionBatch({
  */
 function RecipeCard({
   recipe,
-  basedOn,
+  urgentNames,
 }: {
   recipe: Recipe;
-  basedOn: RecipeBasis[];
+  /**
+   * Welche Artikel dringend waren -- vom Stapel gereicht, weil er den Satz
+   * ohnehin schon bildet. Er stammt aus der gespeicherten Zeile und nicht aus
+   * dem heutigen Datum: eine Karte von letzter Woche würde sonst nachträglich
+   * die Farbe wechseln, obwohl sich an dem, was sie zeigt, nichts geändert hat.
+   */
+  urgentNames: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
-
-  // Welche Artikel dringend waren, steht in der gespeicherten Zeile und wird
-  // nicht aus dem heutigen Datum gerechnet: eine Karte von letzter Woche
-  // würde sonst nachträglich die Farbe wechseln, obwohl sich an dem, was sie
-  // zeigt, nichts geändert hat.
-  const urgentNames = useMemo(
-    () =>
-      new Set(
-        basedOn
-          .filter((entry) => entry.urgent)
-          .map((entry) => normalizeName(entry.name)),
-      ),
-    [basedOn],
-  );
 
   return (
     <article className="overflow-hidden rounded-[24px] bg-card shadow-row">

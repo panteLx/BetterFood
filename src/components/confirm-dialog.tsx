@@ -44,6 +44,33 @@ import {
  * an jeder gewoehnlichen Rueckfrage waere das eine Schikane, und wer drei
  * Haken am Tag setzt, liest den vierten nicht mehr.
  */
+/**
+ * Die drei Toenungen als Tabelle statt als verschachtelte Ternaeroperatoren.
+ *
+ * Mit der dritten stand dieselbe Fallunterscheidung zweimal im JSX -- einmal
+ * fuer das Symbolfeld, einmal fuer den Knopf --, und eine vierte haette beide
+ * angefasst. Der Haken hatte gar keine: Er war fest auf --warning gestellt,
+ * was ihn auf einem roten Loeschdialog gelb aufleuchten liesse. Als Zeile in
+ * dieser Tabelle folgt er der Toenung von selbst.
+ */
+const TONES = {
+  danger: {
+    chip: "bg-danger-tint text-danger",
+    button: "bg-danger text-background focus-visible:ring-danger/40",
+    check: "bg-danger text-background",
+  },
+  primary: {
+    chip: "bg-primary-tint text-primary",
+    button: "bg-primary text-primary-foreground focus-visible:ring-ring/50",
+    check: "bg-primary text-primary-foreground",
+  },
+  warning: {
+    chip: "bg-warning-tint text-warning-ink",
+    button: "bg-warning text-warning-on focus-visible:ring-warning/40",
+    check: "bg-warning text-warning-on",
+  },
+} as const;
+
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -60,7 +87,7 @@ export function ConfirmDialog({
   onOpenChange?: (open: boolean) => void;
   trigger?: React.ReactElement;
   icon?: LucideIcon;
-  tone?: "danger" | "primary" | "warning";
+  tone?: keyof typeof TONES;
   title: React.ReactNode;
   description: React.ReactNode;
   acknowledge?: React.ReactNode;
@@ -86,11 +113,7 @@ export function ConfirmDialog({
           <span
             className={cn(
               "flex size-14 shrink-0 items-center justify-center rounded-[16px]",
-              tone === "danger"
-                ? "bg-danger-tint text-danger"
-                : tone === "warning"
-                  ? "bg-warning-tint text-warning-ink"
-                  : "bg-primary-tint text-primary",
+              TONES[tone].chip,
             )}
           >
             <Icon className="size-6" strokeWidth={1.9} />
@@ -117,9 +140,7 @@ export function ConfirmDialog({
               <span
                 className={cn(
                   "mt-px flex size-5 shrink-0 items-center justify-center rounded-[7px] transition-colors",
-                  checked
-                    ? "bg-warning text-warning-on"
-                    : "bg-card shadow-row",
+                  checked ? TONES[tone].check : "bg-card shadow-row",
                 )}
               >
                 {checked && <Check className="size-3.5" strokeWidth={3.2} />}
@@ -137,11 +158,7 @@ export function ConfirmDialog({
             disabled={Boolean(acknowledge) && !checked}
             className={cn(
               "mt-5 h-13 w-full rounded-[16px] text-[15px] font-bold outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50",
-              tone === "danger"
-                ? "bg-danger text-background focus-visible:ring-danger/40"
-                : tone === "warning"
-                  ? "bg-warning text-warning-on focus-visible:ring-warning/40"
-                  : "bg-primary text-primary-foreground focus-visible:ring-ring/50",
+              TONES[tone].button,
             )}
           >
             {confirmLabel}
