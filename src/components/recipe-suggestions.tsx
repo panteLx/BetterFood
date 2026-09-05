@@ -3,8 +3,11 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  BookUp,
+  Check,
   ChevronDown,
   CookingPot,
+  ExternalLink,
   Loader2,
   ShoppingBasket,
   Sparkles,
@@ -30,17 +33,24 @@ import type { Recipe, RecipeBudget, SuggestionView } from "@/lib/recipes/types";
  * `configured`, `hasItems` und `initialBudget` kommen vom Server: die Seite
  * soll nicht erst nach einer fehlgeschlagenen Anfrage wissen, dass es nichts
  * zu holen gibt.
+ *
+ * `mealieEnabled` ist derselbe Gedanke für den Export-Knopf in der einzelnen
+ * Karte: ohne MEALIE_URL und MEALIE_TOKEN gibt es kein Ziel, und ein Knopf,
+ * der nur 503 sagen kann, ist schlechter als keiner. Anders als `configured`
+ * schaltet er nichts ab, was schon dasteht -- er fügt nur etwas hinzu.
  */
 export function RecipeSuggestions({
   initialSuggestions,
   configured,
   hasItems,
   initialBudget,
+  mealieEnabled,
 }: {
   initialSuggestions: SuggestionView[];
   configured: boolean;
   hasItems: boolean;
   initialBudget: RecipeBudget;
+  mealieEnabled: boolean;
 }) {
   const [suggestions, setSuggestions] = useState(initialSuggestions);
   const [busy, setBusy] = useState(false);
@@ -171,8 +181,21 @@ export function RecipeSuggestions({
         variant={canOverride ? "outline" : "default"}
         onClick={() => setAsking(true)}
         disabled={busy || !hasItems || blocked}
-        className="h-13 w-full rounded-[18px] text-[15px]"
+        className="relative h-13 w-full overflow-hidden rounded-[18px] text-[15px]"
       >
+        {/* Das Glanzband läuft nur, solange gefragt wird -- dasselbe wie über
+            der Monatsspur im Archiv. Ein Modellaufruf dauert je nach Kette
+            mehrere Sekunden, und in dieser Zeit war der drehende Kreis das
+            einzige, was sich auf der ganzen Seite bewegte: Ein Spinner sagt
+            "es hängt noch nicht", ein Band über die volle Breite sagt "hier
+            passiert gerade etwas". Innerhalb des Knopfes und nicht darüber,
+            damit overflow-hidden es an dessen Radius abschneidet. */}
+        {busy && (
+          <span
+            aria-hidden
+            className="sheen-band pointer-events-none absolute inset-y-0 w-[45%] animate-sheen"
+          />
+        )}
         {busy ? (
           <>
             <Loader2 className="size-4.5 animate-spin" />
@@ -288,6 +311,7 @@ export function RecipeSuggestions({
               now={now}
               open={openIds.has(suggestion.id)}
               onToggle={toggle}
+              mealieEnabled={mealieEnabled}
             />
           ))}
     </div>
@@ -301,6 +325,22 @@ export function RecipeSuggestions({
  */
 const PILL =
   "flex items-center gap-1 rounded-full px-2.5 py-1 font-heading text-[11.5px] leading-tight font-bold";
+
+/**
+ * Der Mealie-Knopf in der Titelfläche -- als Karte auf der getönten Fläche.
+ *
+ * Dieselbe Größe und Schrift wie PILL darunter, damit die Kopfzeile nicht mit
+ * einer dritten Formensprache anfängt; der Unterschied ist bewusst nur die
+ * Farbe der Fläche. `bg-card` statt einer weiteren Tönung, weil ein Element,
+ * das man antippen kann, sich von den Pillen unterscheiden muss, die man nur
+ * liest -- die Karte hebt sich vom primary-tint des Bandes ab, ohne eine
+ * eigene Farbe zu erfinden.
+ *
+ * Knopf und Link teilen sie sich: Nach dem Export steht an derselben Stelle
+ * ein <a>, und der darf nicht plötzlich anders aussehen oder springen.
+ */
+const BADGE_BUTTON =
+  "flex h-7.5 items-center gap-1.5 rounded-full bg-card px-2.5 font-heading text-[11.5px] leading-none font-bold shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /**
  * Ein Artikelname, so weit vereinheitlicht, dass zwei Schreibweisen desselben
@@ -338,11 +378,14 @@ const SuggestionBatch = memo(function SuggestionBatch({
   now,
   open,
   onToggle,
+  mealieEnabled,
 }: {
   suggestion: SuggestionView;
   now: Date | null;
   open: boolean;
   onToggle: (id: number) => void;
+  /** Nur durchgereicht -- gebraucht wird er erst in der einzelnen Karte. */
+  mealieEnabled: boolean;
 }) {
   const count = suggestion.recipes.length;
 
@@ -457,6 +500,9 @@ const SuggestionBatch = memo(function SuggestionBatch({
               key={`${suggestion.id}-${index}`}
               recipe={recipe}
               urgentNames={urgentNames}
+              suggestionId={suggestion.id}
+              recipeIndex={index}
+              mealieEnabled={mealieEnabled}
             />
           ))}
         </div>
@@ -478,6 +524,9 @@ const SuggestionBatch = memo(function SuggestionBatch({
 function RecipeCard({
   recipe,
   urgentNames,
+  suggestionId,
+  recipeIndex,
+  mealieEnabled,
 }: {
   recipe: Recipe;
   /**
@@ -487,18 +536,158 @@ function RecipeCard({
    * die Farbe wechseln, obwohl sich an dem, was sie zeigt, nichts geändert hat.
    */
   urgentNames: Set<string>;
+  /**
+   * Wo dieses Gericht in der Datenbank steht.
+   *
+   * Der Export schickt genau diese zwei Zahlen und nicht das Rezept: Was
+   * Mealie erreicht, liest die Route aus der gespeicherten Zeile (siehe
+   * getSuggestionForList). Der Browser sagt also, welches Gericht gemeint
+   * ist, nicht was darin steht.
+   */
+  suggestionId: number;
+  recipeIndex: number;
+  mealieEnabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
+  /**
+   * Wohin das Rezept in Mealie gegangen ist -- null, solange es das nicht ist.
+   *
+   * Nur im Zustand dieser Komponente und nicht in der Datenbank, und das ist
+   * eine bewusste Grenze: Ein "schon exportiert"-Vermerk wäre eine
+   * Schemaspalte für eine Frage, die Mealie selbst besser beantwortet -- dort
+   * steht das Rezept ja. Nach einem Neuladen ist der Knopf also wieder frisch;
+   * wer zweimal drückt, bekommt in Mealie ein zweites Rezept statt eines
+   * Fehlers, weil Mealie den Slug von sich aus durchnummeriert.
+   */
+  const [exportedUrl, setExportedUrl] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function exportToMealie() {
+    setSending(true);
+    try {
+      const res = await fetch("/api/recipes/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestionId, index: recipeIndex }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        url?: string;
+        error?: string;
+      } | null;
+
+      if (!res.ok || !data?.url) {
+        // Der Text kommt aus der Route: sie unterscheidet abgelehnten Token,
+        // unerreichbaren Server und Zeitüberschreitung, und jeder Fall hat
+        // dort seinen eigenen Satz.
+        toast.error(data?.error ?? "Das Rezept konnte nicht übertragen werden.");
+        return;
+      }
+
+      setExportedUrl(data.url);
+      toast.success("In Mealie gespeichert");
+    } catch {
+      toast.error("Das Rezept konnte nicht übertragen werden.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
-    <article className="overflow-hidden rounded-[24px] bg-card shadow-row">
-      <div className="flex h-22 items-center justify-center bg-primary-tint">
+    <article
+      className="animate-slide-in overflow-hidden rounded-[24px] bg-card shadow-row"
+      /* Der Versatz je Karte macht aus drei gleichzeitig auftauchenden
+         Kacheln ein Nacheinander -- dieselbe Staffelung wie auf /saved, nur
+         enger getaktet, weil hier drei Karten kommen und nicht drei
+         Abschnitte. Als Inline-Style und nicht als [animation-delay:...]:
+         Tailwind erzeugt seine Klassen beim Bauen aus dem Quelltext, und ein
+         aus recipeIndex zusammengesetzter Klassenname stünde dort nirgends.
+         Beim Aufklappen eines älteren Stapels läuft dieselbe Staffelung noch
+         einmal -- die Karten werden dabei tatsächlich neu eingehängt, und
+         genau dann ist die Bewegung auch gemeint. */
+      style={{ animationDelay: `${recipeIndex * 70}ms` }}
+    >
+      <div className="relative flex h-22 items-center justify-center bg-primary-tint">
         {/* aria-hidden: das Emoji ist der Ersatz für ein Foto und trägt keine
             Bedeutung, die nicht im Titel darunter schon steht. Vorgelesen
-            wäre es eine Unterbrechung ("Auflauf-Emoji") vor jeder Karte. */}
-        <span className="text-[46px] leading-none" aria-hidden="true">
+            wäre es eine Unterbrechung ("Auflauf-Emoji") vor jeder Karte.
+
+            Das Wippen ist dasselbe, mit dem Avo auf der Startseite steht: Die
+            Fläche ist der Ersatz für ein Rezeptfoto und wäre sonst der einzige
+            vollkommen ruhige Block der Seite. Dauer und Anlauf hängen am
+            Index, damit die drei Emojis nicht im Gleichschritt auf und ab
+            gehen -- drei synchron wippende Kacheln lesen sich als Fehler, drei
+            leicht versetzte als Leben. Der Grund für den Inline-Style ist
+            derselbe wie oben am <article>. */}
+        <span
+          className="animate-bob text-[46px] leading-none"
+          style={{
+            animationDuration: `${3.6 + recipeIndex * 0.45}s`,
+            animationDelay: `${recipeIndex * 260}ms`,
+          }}
+          aria-hidden="true"
+        >
           {recipe.emoji}
         </span>
+
+        {/* Der Export sitzt in der Titelfläche und nicht unter der
+            Zubereitung, wo er zuerst stand: Dort war er erst nach dem
+            Aufklappen zu sehen, und wer ein Rezept übernehmen will, weiß das
+            oft schon beim Überfliegen der Karte. Diese Fläche trägt bisher
+            nur das Emoji -- der Knopf kostet hier also keine einzige Zeile
+            Höhe, während er als eigene Zeile im Fuß jede der drei Karten
+            eines Stapels länger gemacht hätte.
+
+            Kurz beschriftet und nicht nur ein Symbol: Ein Pfeil-in-Kasten
+            allein sagt niemandem, wohin er zeigt. Das aria-label trägt den
+            ganzen Satz nach, weil "Mealie" ohne die umgebende Karte auch
+            nicht mehr verrät als das Symbol.
+
+            Keine Rückfrage wie beim Erzeugen: Das Ziel ist der eigene
+            Mealie-Server des Haushalts, nicht ein fremder Dienst, es kostet
+            kein Kontingent, und rückgängig macht man es dort mit einem
+            Klick. */}
+        {mealieEnabled && (
+          <div className="absolute top-2.5 right-2.5">
+            {exportedUrl ? (
+              // Nach dem Übertragen führt derselbe Platz dorthin, wo das
+              // Rezept jetzt liegt. Ein zweites Mal senden geht bewusst nicht
+              // mehr: das wären zwei gleiche Rezepte in Mealie, und wer das
+              // wirklich will, lädt die Seite neu.
+              //
+              // animate-pop läuft dabei genau einmal und genau im richtigen
+              // Moment, weil das <a> den Knopf erst ersetzt, wenn die Route
+              // geantwortet hat. Die Bestätigung steht damit dort, wohin der
+              // Finger ohnehin zeigt -- der Toast unten am Rand meldet
+              // dasselbe, ist aber nicht die Stelle, die man gerade ansieht.
+              <a
+                href={exportedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(BADGE_BUTTON, "animate-pop text-primary-deep")}
+              >
+                <Check className="size-3.5" strokeWidth={2.8} aria-hidden="true" />
+                In Mealie
+                <ExternalLink className="size-3" strokeWidth={2.4} aria-hidden="true" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                aria-label="Zu Mealie exportieren"
+                onClick={exportToMealie}
+                disabled={sending}
+                className={cn(BADGE_BUTTON, "text-primary-deep disabled:opacity-60")}
+              >
+                {sending ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <BookUp className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
+                )}
+                Mealie
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2.5 p-4">
@@ -608,6 +797,7 @@ function RecipeCard({
                 ))}
               </ol>
             </div>
+
           </div>
         )}
       </div>

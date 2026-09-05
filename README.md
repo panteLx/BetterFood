@@ -22,6 +22,7 @@ _BetterFood ist eine selbst gehostete PWA für den Lebensmittelvorrat eines Haus
 | **Erinnerungen**    | Web-Push je Stufe (Tage vorher, am Tag, danach) und Wochenübersicht        |
 | **Monatsziel**      | Wie viel vom Eingekauften tatsächlich gegessen wurde, samt Geld und CO₂     |
 | **Wissen**          | Gelernte Produkte und Kategorien, die die Erfassung mit der Zeit abkürzen  |
+| **Mealie**          | Vorgeschlagene Rezepte in eine eigene Mealie-Instanz exportieren           |
 | **Anmeldung**       | E-Mail und Passwort oder ein beliebiger OIDC-Anbieter                      |
 | **PWA**             | Installierbar, mit Service Worker und eigenen Icons                        |
 
@@ -135,6 +136,19 @@ GEMINI_MODEL=gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite
 Einen kostenlosen Schlüssel gibt es im [Google AI Studio](https://aistudio.google.com/apikey). Ohne `GEMINI_API_KEY` bleibt das Feature vollständig aus und `POST /api/recipes/generate` antwortet mit `503`.
 
 Auf Knopfdruck schlägt die App drei Gerichte vor, die bald ablaufende Artikel verwerten; fehlende Zutaten stehen auf der Karte gesondert als „noch zu kaufen". Erzeugt wird nur nach Bestätigung, nie automatisch — dabei gehen Vorratsdaten an Google. Die Menge ist begrenzt (5 Vorschläge pro Liste und Stunde, 20 pro Tag), mit einer bewusst überschreibbaren Bestätigung für Ausnahmen; die genauen Regeln stehen als Kommentare in `src/lib/recipes/`.
+
+### Mealie-Export
+
+```bash
+MEALIE_URL=https://mealie.example.org
+MEALIE_TOKEN=
+```
+
+Wer seine Rezepte in [Mealie](https://mealie.io) verwaltet, kann jeden Vorschlag von hier dorthin übernehmen: In der aufgeklappten Rezeptkarte steht dann „Zu Mealie exportieren", und nach dem Übertragen führt derselbe Platz direkt zum Rezept in Mealie.
+
+Den Token legt man in Mealie unter *Profil → API-Tokens* an; er ist langlebig und bindet den Export an genau dieses Konto und dessen Gruppe — ein Haushaltskonto also, nicht eines je BetterFood-Nutzer. Übertragen werden Titel, Beschreibung, Zutaten (als freier Text, nicht durch Mealies Zutaten-Parser gejagt) und die Zubereitungsschritte, dazu eine Notiz mit dem, was aus dem Vorrat kam und was noch zu kaufen ist. Gelesen oder verändert wird in Mealie nichts, was schon dort liegt.
+
+Ohne beide Variablen erscheint der Knopf nicht und `POST /api/recipes/export` antwortet mit `503`. Der Aufruf läuft immer serverseitig — die CSP dieser App ist `connect-src 'self'`, der Browser erreicht Mealie also gar nicht.
 
 ### Single Sign-on
 
