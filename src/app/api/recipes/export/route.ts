@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveList, requireSession } from "@/lib/session";
-import { getSuggestionForList } from "@/lib/recipes";
+import { getSuggestedRecipe } from "@/lib/recipes";
 import { MealieExportError, exportRecipe, isMealieConfigured } from "@/lib/mealie";
 
 /**
@@ -56,7 +56,7 @@ const FAILURES: Record<MealieExportError["kind"], { status: number; error: strin
  * Sends one recipe from a stored suggestion to Mealie.
  *
  * The body names the batch and the position within it, never the recipe
- * itself -- see getSuggestionForList for why. Everything about the foreign
+ * itself -- see getSuggestedRecipe for why. Everything about the foreign
  * server happens in lib/mealie.ts; here there is only session, guard rails
  * and status codes, the same division as between api/recipes/generate and
  * lib/recipes/.
@@ -74,36 +74,10 @@ export async function POST(request: Request) {
   }
 
   const session = await requireSession();
-  const listId = await requireActiveList(session.user.id);
 
-  const body = (await request.json().catch(() => null)) as {
-    suggestionId?: unknown;
-    index?: unknown;
-  } | null;
-
-  // Integer.isInteger and not a truthiness check: index 0 is the first recipe
-  // of every batch and therefore the most common value there is.
-  const suggestionId = body?.suggestionId;
-  const index = body?.index;
-  if (
-    typeof suggestionId !== "number" ||
-    !Number.isInteger(suggestionId) ||
-    typeof index !== "number" ||
-    !Number.isInteger(index) ||
-    index < 0
-  ) {
-    return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
-  }
-
-  const suggestion = await getSuggestionForList(listId, suggestionId);
-  const recipe = suggestion?.recipes[index];
-  // One answer for "no such batch", "belongs to another list" and "the batch
-  // has fewer recipes than that": all three mean the same thing from outside,
-  // and telling them apart would say whether an id exists elsewhere.
-  if (!recipe) {
-    return NextResponse.json({ error: "Dieses Rezept gibt es nicht mehr." }, { status: 404 });
-  }
-
+  // Before the list lookup, the body and the row read -- this is the case the
+  // Set exists for, and making the request it rejects pay for three queries
+  // first would defeat the point.
   if (exporting.has(session.user.id)) {
     return NextResponse.json(
       { error: "Es wird bereits ein Rezept übertragen. Einen Moment noch." },
@@ -111,10 +85,36 @@ export async function POST(request: Request) {
     );
   }
 
+  const listId = await requireActiveList(session.user.id);
+
+  const body = (await request.json().catch(() => null)) as {
+    suggestionId?: unknown;
+    index?: unknown;
+  } | null;
+
+  // Number.isInteger and not a truthiness check: index 0 is the first recipe
+  // of every batch and therefore the most common value there is. The typeof
+  // is what narrows `unknown` -- Number.isInteger alone does not.
+  const isId = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value);
+
+  const suggestionId = body?.suggestionId;
+  const index = body?.index;
+  if (!isId(suggestionId) || !isId(index) || index < 0) {
+    return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
+  }
+
+  // One answer for "no such batch", "belongs to another list" and "the batch
+  // has fewer recipes than that" -- see getSuggestedRecipe.
+  const recipe = await getSuggestedRecipe(listId, suggestionId, index);
+  if (!recipe) {
+    return NextResponse.json({ error: "Dieses Rezept gibt es nicht mehr." }, { status: 404 });
+  }
+
   exporting.add(session.user.id);
   try {
     const { url } = await exportRecipe(recipe);
-    return NextResponse.json({ url, title: recipe.title });
+    return NextResponse.json({ url });
   } catch (error) {
     if (error instanceof MealieExportError) {
       // Into the log in full: the sentence the browser gets is deliberately

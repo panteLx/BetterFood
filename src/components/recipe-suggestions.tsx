@@ -38,19 +38,26 @@ import type { Recipe, RecipeBudget, SuggestionView } from "@/lib/recipes/types";
  * Karte: ohne MEALIE_URL und MEALIE_TOKEN gibt es kein Ziel, und ein Knopf,
  * der nur 503 sagen kann, ist schlechter als keiner. Anders als `configured`
  * schaltet er nichts ab, was schon dasteht -- er fügt nur etwas hinzu.
+ *
+ * Als einziger der vier hat er einen Vorgabewert, und zwar "aus": Der Knopf
+ * schriebe in den Mealie-Server des Betreibers, und die Route dahinter
+ * verlangt ohnehin eine Sitzung. Wer diese Komponente irgendwo ohne
+ * angemeldeten Server einbaut -- /demo ist der bestehende Fall -- bekommt
+ * damit von selbst die richtige Seite, statt sie jedes Mal ausdrücklich
+ * abwählen zu müssen.
  */
 export function RecipeSuggestions({
   initialSuggestions,
   configured,
   hasItems,
   initialBudget,
-  mealieEnabled,
+  mealieEnabled = false,
 }: {
   initialSuggestions: SuggestionView[];
   configured: boolean;
   hasItems: boolean;
   initialBudget: RecipeBudget;
-  mealieEnabled: boolean;
+  mealieEnabled?: boolean;
 }) {
   const [suggestions, setSuggestions] = useState(initialSuggestions);
   const [busy, setBusy] = useState(false);
@@ -340,7 +347,21 @@ const PILL =
  * ein <a>, und der darf nicht plötzlich anders aussehen oder springen.
  */
 const BADGE_BUTTON =
-  "flex h-7.5 items-center gap-1.5 rounded-full bg-card px-2.5 font-heading text-[11.5px] leading-none font-bold shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+  "flex h-7.5 items-center gap-1.5 rounded-full bg-card px-2.5 font-heading text-[11.5px] leading-none font-bold text-primary-deep shadow-row outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+/**
+ * Wie weit der Export eines einzelnen Gerichts ist.
+ *
+ * Ein Feld und nicht zwei (`sending` neben `exportedUrl`): Die Karte liest
+ * genau diese drei Fälle, und "wird gerade gesendet und liegt schon in
+ * Mealie" ist keiner davon. Als zwei Booleans wäre er trotzdem darstellbar
+ * gewesen, und jede spätere Änderung müsste zwei Setter über
+ * try/return/catch hinweg im Gleichschritt halten -- ein vergessener
+ * `setSending(false)` hinterlässt einen dauerhaft toten Knopf.
+ */
+type ExportState = { kind: "idle" } | { kind: "sending" } | { kind: "done"; url: string };
+
+const EXPORT_IDLE: ExportState = { kind: "idle" };
 
 /**
  * Ein Artikelname, so weit vereinheitlicht, dass zwei Schreibweisen desselben
@@ -384,10 +405,71 @@ const SuggestionBatch = memo(function SuggestionBatch({
   now: Date | null;
   open: boolean;
   onToggle: (id: number) => void;
-  /** Nur durchgereicht -- gebraucht wird er erst in der einzelnen Karte. */
   mealieEnabled: boolean;
 }) {
   const count = suggestion.recipes.length;
+
+  /**
+   * Was aus diesem Stapel schon nach Mealie gegangen ist, je Position.
+   *
+   * Der Zustand liegt hier und nicht in der Karte, die ihn anzeigt, und das
+   * ist der ganze Punkt: RecipeCard entsteht erst beim Aufklappen (siehe das
+   * `open &&` unten) und wird beim Zuklappen wieder ausgehängt. Lag der
+   * Vermerk dort, kam der Knopf nach Zuklappen und Wiederaufklappen frisch
+   * zurück, obwohl das Rezept längst in Mealie stand -- und der nächste Druck
+   * legte dort ein zweites, gleiches an. Der Stapel selbst bleibt über beides
+   * hinweg stehen, hier überlebt der Vermerk es also.
+   *
+   * Nur im Speicher und nicht in der Datenbank: Ein "schon exportiert"-Vermerk
+   * wäre eine Schemaspalte für eine Frage, die Mealie selbst besser
+   * beantwortet -- dort steht das Rezept ja. Nach einem Neuladen ist der Knopf
+   * daher wieder frisch; wer dann zweimal drückt, bekommt in Mealie ein
+   * zweites Rezept statt eines Fehlers, weil Mealie den Slug von sich aus
+   * durchnummeriert.
+   */
+  const [exports, setExports] = useState<Map<number, ExportState>>(() => new Map());
+
+  /**
+   * Ein Gericht dieses Stapels nach Mealie schicken.
+   *
+   * Verschickt werden die Stapel-ID und die Position, nie das Rezept selbst:
+   * Was Mealie erreicht, liest die Route aus der gespeicherten Zeile (siehe
+   * getSuggestedRecipe). Der Browser sagt also, welches Gericht gemeint ist,
+   * nicht was darin steht.
+   */
+  async function exportToMealie(index: number) {
+    const mark = (state: ExportState) =>
+      setExports((current) => new Map(current).set(index, state));
+
+    mark({ kind: "sending" });
+    try {
+      const res = await fetch("/api/recipes/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestionId: suggestion.id, index }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        url?: string;
+        error?: string;
+      } | null;
+
+      if (!res.ok || !data?.url) {
+        // Der Text kommt aus der Route: sie unterscheidet abgelehnten Token,
+        // unerreichbaren Server und Zeitüberschreitung, und jeder Fall hat
+        // dort seinen eigenen Satz.
+        toast.error(data?.error ?? "Das Rezept konnte nicht übertragen werden.");
+        mark(EXPORT_IDLE);
+        return;
+      }
+
+      const url = data.url;
+      mark({ kind: "done", url });
+      toast.success("In Mealie gespeichert");
+    } catch {
+      toast.error("Das Rezept konnte nicht übertragen werden.");
+      mark(EXPORT_IDLE);
+    }
+  }
 
   // Alles, was irgendein Gericht dieses Stapels tatsächlich aufbraucht.
   // Normalisiert, weil die Karten unten für dieselbe Zuordnung dasselbe tun --
@@ -500,9 +582,10 @@ const SuggestionBatch = memo(function SuggestionBatch({
               key={`${suggestion.id}-${index}`}
               recipe={recipe}
               urgentNames={urgentNames}
-              suggestionId={suggestion.id}
               recipeIndex={index}
               mealieEnabled={mealieEnabled}
+              exportState={exports.get(index) ?? EXPORT_IDLE}
+              onExport={() => exportToMealie(index)}
             />
           ))}
         </div>
@@ -524,9 +607,10 @@ const SuggestionBatch = memo(function SuggestionBatch({
 function RecipeCard({
   recipe,
   urgentNames,
-  suggestionId,
   recipeIndex,
   mealieEnabled,
+  exportState,
+  onExport,
 }: {
   recipe: Recipe;
   /**
@@ -536,62 +620,19 @@ function RecipeCard({
    * die Farbe wechseln, obwohl sich an dem, was sie zeigt, nichts geändert hat.
    */
   urgentNames: Set<string>;
-  /**
-   * Wo dieses Gericht in der Datenbank steht.
-   *
-   * Der Export schickt genau diese zwei Zahlen und nicht das Rezept: Was
-   * Mealie erreicht, liest die Route aus der gespeicherten Zeile (siehe
-   * getSuggestionForList). Der Browser sagt also, welches Gericht gemeint
-   * ist, nicht was darin steht.
-   */
-  suggestionId: number;
+  /** Nur für die gestaffelte Bewegung unten -- die Karte adressiert nichts. */
   recipeIndex: number;
   mealieEnabled: boolean;
+  /**
+   * Wie weit der Export ist, und was ihn auslöst -- beides vom Stapel.
+   *
+   * Diese Komponente hält davon nichts selbst, denn sie überlebt das
+   * Zuklappen nicht (siehe `exports` in SuggestionBatch).
+   */
+  exportState: ExportState;
+  onExport: () => void;
 }) {
   const [open, setOpen] = useState(false);
-
-  /**
-   * Wohin das Rezept in Mealie gegangen ist -- null, solange es das nicht ist.
-   *
-   * Nur im Zustand dieser Komponente und nicht in der Datenbank, und das ist
-   * eine bewusste Grenze: Ein "schon exportiert"-Vermerk wäre eine
-   * Schemaspalte für eine Frage, die Mealie selbst besser beantwortet -- dort
-   * steht das Rezept ja. Nach einem Neuladen ist der Knopf also wieder frisch;
-   * wer zweimal drückt, bekommt in Mealie ein zweites Rezept statt eines
-   * Fehlers, weil Mealie den Slug von sich aus durchnummeriert.
-   */
-  const [exportedUrl, setExportedUrl] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-
-  async function exportToMealie() {
-    setSending(true);
-    try {
-      const res = await fetch("/api/recipes/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ suggestionId, index: recipeIndex }),
-      });
-      const data = (await res.json().catch(() => null)) as {
-        url?: string;
-        error?: string;
-      } | null;
-
-      if (!res.ok || !data?.url) {
-        // Der Text kommt aus der Route: sie unterscheidet abgelehnten Token,
-        // unerreichbaren Server und Zeitüberschreitung, und jeder Fall hat
-        // dort seinen eigenen Satz.
-        toast.error(data?.error ?? "Das Rezept konnte nicht übertragen werden.");
-        return;
-      }
-
-      setExportedUrl(data.url);
-      toast.success("In Mealie gespeichert");
-    } catch {
-      toast.error("Das Rezept konnte nicht übertragen werden.");
-    } finally {
-      setSending(false);
-    }
-  }
 
   return (
     <article
@@ -649,11 +690,12 @@ function RecipeCard({
             Klick. */}
         {mealieEnabled && (
           <div className="absolute top-2.5 right-2.5">
-            {exportedUrl ? (
+            {exportState.kind === "done" ? (
               // Nach dem Übertragen führt derselbe Platz dorthin, wo das
               // Rezept jetzt liegt. Ein zweites Mal senden geht bewusst nicht
               // mehr: das wären zwei gleiche Rezepte in Mealie, und wer das
-              // wirklich will, lädt die Seite neu.
+              // wirklich will, lädt die Seite neu. Zuklappen genügt dafür
+              // nicht -- der Vermerk liegt im Stapel und überlebt es.
               //
               // animate-pop läuft dabei genau einmal und genau im richtigen
               // Moment, weil das <a> den Knopf erst ersetzt, wenn die Route
@@ -661,10 +703,10 @@ function RecipeCard({
               // Finger ohnehin zeigt -- der Toast unten am Rand meldet
               // dasselbe, ist aber nicht die Stelle, die man gerade ansieht.
               <a
-                href={exportedUrl}
+                href={exportState.url}
                 target="_blank"
-                rel="noreferrer"
-                className={cn(BADGE_BUTTON, "animate-pop text-primary-deep")}
+                rel="noopener noreferrer"
+                className={cn(BADGE_BUTTON, "animate-pop")}
               >
                 <Check className="size-3.5" strokeWidth={2.8} aria-hidden="true" />
                 In Mealie
@@ -674,11 +716,11 @@ function RecipeCard({
               <button
                 type="button"
                 aria-label="Zu Mealie exportieren"
-                onClick={exportToMealie}
-                disabled={sending}
-                className={cn(BADGE_BUTTON, "text-primary-deep disabled:opacity-60")}
+                onClick={onExport}
+                disabled={exportState.kind === "sending"}
+                className={cn(BADGE_BUTTON, "disabled:opacity-60")}
               >
-                {sending ? (
+                {exportState.kind === "sending" ? (
                   <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                 ) : (
                   <BookUp className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
@@ -797,7 +839,6 @@ function RecipeCard({
                 ))}
               </ol>
             </div>
-
           </div>
         )}
       </div>

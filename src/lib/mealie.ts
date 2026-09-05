@@ -1,5 +1,4 @@
 import "server-only";
-import { connection } from "next/server";
 import type { Recipe } from "@/lib/recipes/types";
 
 /**
@@ -48,6 +47,9 @@ export class MealieExportError extends Error {
  * generous for a self-hosted instance on the same network and still short
  * enough that a Mealie that has gone away does not leave the button spinning
  * for a minute.
+ *
+ * The group lookup is a fourth request but does not add a fourth timeout to
+ * that budget: it is started alongside the chain, not after it.
  */
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -55,7 +57,21 @@ const REQUEST_TIMEOUT_MS = 8000;
 // Configuration
 // ---------------------------------------------------------------------------
 
+/** The environment, once it has been read, trimmed and found usable. */
+type MealieConfig = { base: string; token: string };
+
 /**
+ * The resolved configuration, or null if this server has none worth using.
+ *
+ * One place reads the environment and decides whether it is usable, rather
+ * than a presence check here and the actual parse somewhere down in the
+ * request path. That split is what let `MEALIE_URL=mealie.example.org` -- no
+ * scheme -- count as configured: the button rendered, the route's 503 gate
+ * let the request through, and the operator's typo surfaced as a
+ * network-flavoured failure at the end of an export instead of the feature
+ * simply not being offered. With the parse in the predicate, "unreachable"
+ * goes back to meaning only that the network said no.
+ *
  * Deliberately a function and not a module constant: it is read at call time,
  * in the running container with its environment -- not in the process that
  * built the image at some point. Same reasoning as isRecipesConfigured() in
@@ -63,55 +79,34 @@ const REQUEST_TIMEOUT_MS = 8000;
  *
  * Both values or neither. A URL without a token would produce a button that
  * always answers 401, and a token without a URL has nowhere to go.
- */
-export function isMealieConfigured(): boolean {
-  return Boolean(process.env.MEALIE_URL?.trim() && process.env.MEALIE_TOKEN?.trim());
-}
-
-/**
- * The same for server components -- with the `connection()` in front.
- *
- * Without it Next prerenders the answer with the value from build time, and
- * that is exactly the mistake isMealieConfigured() alone cannot prevent: it
- * is left to the caller, and the fourth caller forgets. Route handlers do not
- * need it (requireSession() makes them dynamic anyway) and keep using the
- * synchronous form.
- */
-export async function getMealieEnabled(): Promise<boolean> {
-  await connection();
-  return isMealieConfigured();
-}
-
-/**
- * The instance address, without a trailing slash.
  *
  * The pathname survives on purpose: Mealie behind a reverse proxy under
  * `https://haus.example/mealie` is a normal setup, and cutting to the origin
  * would send every request to the wrong place. Only the trailing slash goes,
  * because every path below is written with a leading one.
  *
- * A bad value throws as "unreachable" rather than crashing at startup: this
- * is an optional feature, and a typo in MEALIE_URL should cost the export
- * button, not the whole app.
+ * A bad value returns null rather than throwing at startup: this is an
+ * optional feature, and a typo in MEALIE_URL should cost the export button,
+ * not the whole app.
  */
-function baseUrl(): string {
-  const raw = process.env.MEALIE_URL?.trim() ?? "";
+function mealieConfig(): MealieConfig | null {
+  const raw = process.env.MEALIE_URL?.trim();
+  const token = process.env.MEALIE_TOKEN?.trim();
+  if (!raw || !token) return null;
 
   let parsed: URL;
   try {
     parsed = new URL(raw);
   } catch {
-    throw new MealieExportError("unreachable", `MEALIE_URL ist keine gültige Adresse: "${raw}"`);
+    return null;
   }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
 
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new MealieExportError(
-      "unreachable",
-      `MEALIE_URL muss mit http:// oder https:// beginnen, nicht mit "${parsed.protocol}"`,
-    );
-  }
+  return { base: `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, ""), token };
+}
 
-  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
+export function isMealieConfigured(): boolean {
+  return mealieConfig() !== null;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,18 +122,18 @@ function baseUrl(): string {
  * `kind` -- the route turns it into a sentence.
  */
 async function call(
+  cfg: MealieConfig,
   path: string,
   init?: { method: "POST" | "PUT"; body: unknown },
 ): Promise<unknown> {
-  const token = process.env.MEALIE_TOKEN?.trim() ?? "";
-  const url = `${baseUrl()}${path}`;
+  const url = `${cfg.base}${path}`;
 
   let res: Response;
   try {
     res = await fetch(url, {
       method: init?.method ?? "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cfg.token}`,
         Accept: "application/json",
         ...(init ? { "Content-Type": "application/json" } : {}),
       },
@@ -155,7 +150,7 @@ async function call(
     if (error instanceof Error && error.name === "TimeoutError") {
       throw new MealieExportError("timeout", `Mealie hat auf ${path} nicht rechtzeitig geantwortet`);
     }
-    throw new MealieExportError("unreachable", `Mealie ist unter ${baseUrl()} nicht erreichbar`);
+    throw new MealieExportError("unreachable", `Mealie ist unter ${cfg.base} nicht erreichbar`);
   }
 
   if (res.status === 401 || res.status === 403) {
@@ -198,21 +193,26 @@ async function call(
  */
 let cachedGroupSlug: string | null | undefined;
 
-async function groupSlug(): Promise<string | null> {
+async function groupSlug(cfg: MealieConfig): Promise<string | null> {
   if (cachedGroupSlug !== undefined) return cachedGroupSlug;
 
   try {
-    const self = await call("/api/users/self");
+    const self = await call(cfg, "/api/users/self");
     const slug = (self as { groupSlug?: unknown } | null)?.groupSlug;
     cachedGroupSlug = typeof slug === "string" && slug ? slug : null;
+    return cachedGroupSlug;
   } catch {
-    // Deliberately swallowed: this call exists to make the link nicer, and a
-    // recipe that landed in Mealie must not be reported as a failure just
-    // because we could not work out its prettiest URL.
-    cachedGroupSlug = null;
+    // Swallowed: this call exists to make the link nicer, and a recipe that
+    // landed in Mealie must not be reported as a failure just because we
+    // could not work out its prettiest URL.
+    //
+    // Deliberately NOT written to the cache. The reasoning above only
+    // justifies remembering an *answer* -- a timeout or a moment of DNS
+    // trouble is not one, and caching it would degrade every link for the
+    // rest of the container's life over a single blip during the first
+    // export. Left `undefined`, so the next export asks again.
+    return null;
   }
-
-  return cachedGroupSlug;
 }
 
 /**
@@ -223,8 +223,8 @@ async function groupSlug(): Promise<string | null> {
  * The older form still redirects on new instances, so it is the fallback --
  * used whenever /api/users/self did not name a group.
  */
-function recipeUrl(slug: string, group: string | null): string {
-  return group ? `${baseUrl()}/g/${group}/r/${slug}` : `${baseUrl()}/recipe/${slug}`;
+function recipeUrl(base: string, slug: string, group: string | null): string {
+  return group ? `${base}/g/${group}/r/${slug}` : `${base}/recipe/${slug}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,9 +269,10 @@ function toIngredient(line: string) {
  * would arrive as an ordinary recipe from nowhere. `notes` is the one free
  * text area Mealie shows on the recipe page, so that is where it goes.
  *
- * Returns an array so the caller can spread it: with neither list filled
- * there is nothing worth saying, and an empty note block on every exported
- * recipe would be noise.
+ * Returns an array because that is the shape Mealie's `notes` field takes --
+ * an empty one when neither list is filled, because there is then nothing
+ * worth saying and an empty note block on every exported recipe would be
+ * noise.
  */
 function provenanceNotes(recipe: Recipe): { title: string; text: string }[] {
   const lines: string[] = [];
@@ -301,28 +302,42 @@ function provenanceNotes(recipe: Recipe): { title: string; text: string }[] {
  * the two, given the button does not remember across a reload.
  */
 export async function exportRecipe(recipe: Recipe): Promise<{ slug: string; url: string }> {
-  const created = await call("/api/recipes", { method: "POST", body: { name: recipe.title } });
+  const cfg = mealieConfig();
+  // The route checks isMealieConfigured() before it gets here, so this is the
+  // net rather than the gate -- it exists so a future second caller cannot
+  // reach Mealie with a half-filled environment.
+  if (!cfg) {
+    throw new MealieExportError(
+      "unreachable",
+      "MEALIE_URL/MEALIE_TOKEN fehlen oder MEALIE_URL ist keine gültige http(s)-Adresse",
+    );
+  }
+
+  // Started here and awaited at the very end: /api/users/self needs nothing
+  // the three writes below produce, so it runs alongside them instead of
+  // adding a fourth round trip after them -- on the first export of a process
+  // that was a whole extra request on the wall clock. Safe to leave floating
+  // because groupSlug() swallows its own failures and never rejects.
+  const group = groupSlug(cfg);
+
+  const created = await call(cfg, "/api/recipes", { method: "POST", body: { name: recipe.title } });
 
   // Mealie answers this one with the bare slug as a JSON string. Older
   // versions wrap it in an object, so both are accepted -- it is one line
   // here and an unexplainable failure on someone else's instance otherwise.
-  const slug =
-    typeof created === "string"
-      ? created
-      : typeof (created as { slug?: unknown } | null)?.slug === "string"
-        ? ((created as { slug: string }).slug)
-        : null;
-
-  if (!slug) {
+  const reported =
+    typeof created === "string" ? created : (created as { slug?: unknown } | null)?.slug;
+  if (typeof reported !== "string" || !reported) {
     throw new MealieExportError("upstream", "Mealie hat auf das Anlegen keinen Slug zurückgegeben");
   }
+  const slug = reported;
 
-  const current = await call(`/api/recipes/${encodeURIComponent(slug)}`);
+  const current = await call(cfg, `/api/recipes/${encodeURIComponent(slug)}`);
   if (typeof current !== "object" || current === null) {
     throw new MealieExportError("upstream", `Mealie lieferte das angelegte Rezept ${slug} nicht zurück`);
   }
 
-  await call(`/api/recipes/${encodeURIComponent(slug)}`, {
+  await call(cfg, `/api/recipes/${encodeURIComponent(slug)}`, {
     method: "PUT",
     body: {
       ...current,
@@ -340,5 +355,5 @@ export async function exportRecipe(recipe: Recipe): Promise<{ slug: string; url:
     },
   });
 
-  return { slug, url: recipeUrl(slug, await groupSlug()) };
+  return { slug, url: recipeUrl(cfg.base, slug, await group) };
 }

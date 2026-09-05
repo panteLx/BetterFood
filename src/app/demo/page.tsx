@@ -105,16 +105,14 @@ export default function DemoPage() {
           // umstellt, und das Aufklappen eines Rezepts (aria-expanded) ist
           // genau so einer.
           <div className="pt-4">
-            {/* mealieEnabled ausdrücklich aus: Der Export-Knopf schriebe in
-                den Mealie-Server des Betreibers, und /demo ist die einzige
-                Seite ohne Anmeldung -- die Route dahinter verlangt eine
-                Sitzung und käme hier über 401 nicht hinaus. */}
+            {/* Ohne mealieEnabled, und das ist die Vorgabe der Komponente:
+                /demo ist die einzige Seite ohne Anmeldung, und die Route
+                hinter dem Export-Knopf verlangt eine Sitzung. */}
             <RecipeSuggestions
               initialSuggestions={recipeSuggestions}
               configured
               hasItems
               initialBudget={DEMO_RECIPE_BUDGET}
-              mealieEnabled={false}
             />
           </div>
         ) : tab === "start" ? (

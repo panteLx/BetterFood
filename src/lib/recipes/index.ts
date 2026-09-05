@@ -885,7 +885,7 @@ export async function getRecipeSuggestions(listId: number): Promise<ParsedSugges
 }
 
 /**
- * One stored batch of this list -- or null if it belongs to a different one.
+ * One dish out of one stored batch of this list -- or null if there is none.
  *
  * The list id is part of the query and not checked afterwards, so an id
  * guessed from a neighbouring household simply finds nothing. That matters
@@ -895,18 +895,25 @@ export async function getRecipeSuggestions(listId: number): Promise<ParsedSugges
  * what actually leaves the house is what this row says. A route that trusted
  * the body would let anyone with a session write arbitrary text into the
  * household's Mealie.
+ *
+ * Addressing a dish by (batch, position) is domain knowledge and stays here
+ * rather than in the route: "there is no such batch", "it belongs to another
+ * list" and "that batch has fewer dishes than that" all end up as the same
+ * null on purpose. Telling them apart outside would say whether an id exists
+ * elsewhere.
  */
-export async function getSuggestionForList(
+export async function getSuggestedRecipe(
   listId: number,
   id: number,
-): Promise<ParsedSuggestion | null> {
+  index: number,
+): Promise<Recipe | null> {
   const [row] = await db
     .select()
     .from(recipeSuggestions)
     .where(and(eq(recipeSuggestions.id, id), eq(recipeSuggestions.listId, listId)))
     .limit(1);
 
-  return row ? parseSuggestion(row) : null;
+  return row ? (parseSuggestion(row).recipes[index] ?? null) : null;
 }
 
 /**
