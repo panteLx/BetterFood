@@ -212,7 +212,7 @@ export const recipeSuggestions = sqliteTable(
       .references(() => lists.id, { onDelete: "cascade" }),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-    // Die Rezepte als JSON-Text (siehe Recipe in lib/recipes.ts). Der einzige
+    // Die Rezepte als JSON-Text (siehe Recipe in lib/recipes/types.ts). Der einzige
     // JSON-Blob im Schema, und das mit Ansage: die Struktur kommt aus einer
     // Modellantwort, hat ausserhalb dieser einen Karte keinen Leser und wird
     // nie einzeln abgefragt, sortiert oder gejoint. Eine normalisierte

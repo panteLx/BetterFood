@@ -261,6 +261,40 @@ function cookableFilter(listId: number, today: Date) {
   );
 }
 
+/**
+ * Wie lang ein Name oder eine Kategorie in den Prompt darf.
+ *
+ * Großzügig für echte Lebensmittel ("Bio-Vollmilch 3,5% haltbar 1l" sind 32
+ * Zeichen) und eng genug, dass ein einzelner Artikel die Anfrage nicht
+ * aufbläht. Die 500er-Kappung in text() greift erst beim Zurücklesen
+ * gespeicherter Zeilen -- auf dem Weg zum Modell stand bisher nichts.
+ */
+const MAX_PROMPT_FIELD = 80;
+
+/**
+ * Macht eine Zeichenkette prompt-tauglich.
+ *
+ * buildPrompt schreibt jeden Artikel als `- "Name" — Kategorie, Menge N` in
+ * eine Liste. Ein Name mit Zeilenumbruch und Anführungszeichen bricht aus
+ * dieser Zeile aus und kann eigene Anweisungen an das Modell platzieren --
+ * und Namen kommen nicht nur aus dem Haushalt: lib/off.ts übernimmt sie von
+ * Open Food Facts (von jedem editierbar), der Belegimport aus einer OCR.
+ * POST /api/items prüft nur auf nichtleer, hier ist also die letzte Stelle
+ * vor dem Modell.
+ *
+ * Umbrüche werden zu Leerzeichen statt gelöscht, damit aus zwei Wörtern
+ * nicht eines wird; die Anführungszeichen werden zu einfachen, weil das den
+ * Namen lesbar lässt, statt ihn zu verstümmeln.
+ */
+function promptSafe(value: string): string {
+  const flat = value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/["`]/g, "'")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return flat.length > MAX_PROMPT_FIELD ? `${flat.slice(0, MAX_PROMPT_FIELD - 1)}…` : flat;
+}
+
 export async function selectRecipeBasis(listId: number): Promise<RecipeBasis[]> {
   const today = startOfDay(new Date());
   const horizon = addDays(WEEK_WITHIN_DAYS, today);
@@ -289,8 +323,8 @@ export async function selectRecipeBasis(listId: number): Promise<RecipeBasis[]> 
   const labelOf = new Map(categories.map((category) => [category.key, category.label]));
 
   const toBasis = (item: typeof items.$inferSelect, isUrgent: boolean): RecipeBasis => ({
-    name: item.name,
-    category: labelOf.get(item.category) ?? item.category,
+    name: promptSafe(item.name),
+    category: promptSafe(labelOf.get(item.category) ?? item.category),
     quantity: item.quantity,
     expiryDate: item.expiryDate.toISOString(),
     urgent: isUrgent,
@@ -491,7 +525,7 @@ function buildPrompt(basis: RecipeBasis[], today: Date, avoid: string[] = []): s
   if (avoid.length > 0) {
     if (lines.length > 0) lines.push("");
     lines.push("Zuletzt schon vorgeschlagen:");
-    for (const title of avoid) lines.push(`- ${title}`);
+    for (const title of avoid) lines.push(`- ${promptSafe(title)}`);
   }
 
   lines.push("");

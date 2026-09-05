@@ -134,7 +134,7 @@ GEMINI_MODEL=gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite
 
 Einen kostenlosen Schlüssel gibt es im [Google AI Studio](https://aistudio.google.com/apikey). Ohne `GEMINI_API_KEY` bleibt das Feature vollständig aus und `POST /api/recipes/generate` antwortet mit `503`.
 
-Auf Knopfdruck schlägt die App drei Gerichte vor, die bald ablaufende Artikel verwerten; fehlende Zutaten stehen auf der Karte gesondert als „noch zu kaufen". Erzeugt wird nur nach Bestätigung, nie automatisch — dabei gehen Vorratsdaten an Google. Die Menge ist begrenzt (5 Vorschläge pro Liste und Stunde, 20 pro Tag), mit einer bewusst überschreibbaren Bestätigung für Ausnahmen; die genauen Regeln stehen als Kommentare in `src/lib/recipes.ts`.
+Auf Knopfdruck schlägt die App drei Gerichte vor, die bald ablaufende Artikel verwerten; fehlende Zutaten stehen auf der Karte gesondert als „noch zu kaufen". Erzeugt wird nur nach Bestätigung, nie automatisch — dabei gehen Vorratsdaten an Google. Die Menge ist begrenzt (5 Vorschläge pro Liste und Stunde, 20 pro Tag), mit einer bewusst überschreibbaren Bestätigung für Ausnahmen; die genauen Regeln stehen als Kommentare in `src/lib/recipes/`.
 
 ### Single Sign-on
 

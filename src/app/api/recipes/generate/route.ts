@@ -42,7 +42,7 @@ const FAILURES: Record<RecipeGenerationError["kind"], { status: number; error: s
       "Google hat für diesen Schlüssel kein Kontingent mehr – das ist nicht unsere Grenze. Es setzt sich von selbst zurück, spätestens morgen.",
   },
   // Erst wenn auch das letzte Modell der Kette ausgelastet war -- vorher
-  // wechselt lib/recipes.ts von selbst weiter.
+  // wechselt lib/recipes/index.ts von selbst weiter.
   overloaded: {
     status: 503,
     error: "Der Rezeptdienst ist gerade überlastet. In ein paar Minuten noch einmal versuchen.",
@@ -64,15 +64,15 @@ const FAILURES: Record<RecipeGenerationError["kind"], { status: number; error: s
 /**
  * Erzeugt einen Stapel Rezeptvorschläge aus dem, was bald abläuft.
  *
- * Fachlich passiert alles in lib/recipes.ts -- hier stehen nur Sitzung,
+ * Fachlich passiert alles in lib/recipes/ -- hier stehen nur Sitzung,
  * Schranken und Statuscodes.
  */
 export async function POST(request: Request) {
   // Ganz nach vorn, vor Sitzung und Datenbank: Das ist ein Blick in die
-  // Umgebung und kostet nichts, waehrend requireSession() und
+  // Umgebung und kostet nichts, während requireSession() und
   // requireActiveList() zusammen mehrere Abfragen sind. Auf einem Server ohne
-  // Schluessel zahlte bisher jede Anfrage den vollen Weg fuer eine Absage, die
-  // von niemandem abhaengt.
+  // Schlüssel zahlte bisher jede Anfrage den vollen Weg für eine Absage, die
+  // von niemandem abhängt.
   if (!isRecipesConfigured()) {
     return NextResponse.json(
       { error: "Rezeptvorschläge sind auf diesem Server nicht eingerichtet." },
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   const listId = await requireActiveList(session.user.id);
 
   // Der Knopf schickt normalerweise keinen Rumpf -- ein fehlender oder
-  // kaputter zaehlt deshalb als "kein Ueberschreiben" und nicht als Fehler.
+  // kaputter zaehlt deshalb als "kein Überschreiben" und nicht als Fehler.
   const body = (await request.json().catch(() => null)) as { override?: unknown } | null;
   const override = body?.override === true;
 
@@ -95,68 +95,75 @@ export async function POST(request: Request) {
     );
   }
 
-  // Das Budget geht bei jeder Antwort mit zurueck, auch bei dieser Absage:
-  // Die Seite zeigt es unter dem Knopf an, und sie soll es nicht schaetzen
-  // muessen. Der erschoepfte Fall ist damit derselbe Datensatz wie der
-  // erlaubte, nur mit Null darin.
-  const budget = await getRecipeBudget(listId);
+  // Der Platz wird hier belegt und nicht erst unmittelbar vor dem Modell:
+  // Zwischen der Prüfung oben und dem Aufruf liegen zwei await -- das Budget
+  // und die Auswahl. Stünde das add erst dahinter, kämen fünf gleichzeitige
+  // Anfragen alle an der Sperre vorbei UND läsen alle dasselbe leere Budget,
+  // bevor die erste eine Zeile geschrieben hat: genau die Lücke, die diese
+  // Sperre schließen soll. Ab hier gibt nur noch das finally ganz unten
+  // wieder frei -- auch auf den Absage-Wegen.
+  generating.add(session.user.id);
+  try {
+    // Das Budget geht bei jeder Antwort mit zurück, auch bei dieser Absage:
+    // Die Seite zeigt es unter dem Knopf an, und sie soll es nicht schätzen
+    // müssen. Der erschöpfte Fall ist damit derselbe Datensatz wie der
+    // erlaubte, nur mit Null darin.
+    const budget = await getRecipeBudget(listId);
 
-  // Die Notbremse zuerst, und die kennt kein Ueberschreiben: Sie faengt die
-  // Endlosschleife und den steckengebliebenen Finger ab, und beide wuerden
-  // ein `override: true` genauso mitschicken wie ein Mensch.
-  if (budget.state === "blocked") {
-    return NextResponse.json(
-      {
-        error: `Auch mit Bestätigung ist bei ${MAX_BATCHES_PER_DAY_HARD} Vorschlägen am Tag Schluss.`,
-        budget,
-      },
-      { status: 429 },
-    );
-  }
-
-  // Die beiden weichen Grenzen darf ueberschreiten, wer im Dialog ausdruecklich
-  // bestaetigt hat. Serverseitig gelesen und nicht im Knopf entschieden: Der
-  // graue Knopf ist die Hoeflichkeitsform, die Grenze liegt hier.
-  if (budget.state === "needsOverride") {
-    if (!override) {
+    // Die Notbremse zuerst, und die kennt kein Überschreiben: Sie fängt die
+    // Endlosschleife und den steckengebliebenen Finger ab, und beide würden
+    // ein `override: true` genauso mitschicken wie ein Mensch.
+    if (budget.state === "blocked") {
       return NextResponse.json(
         {
-          error:
-            budget.hourLeft === 0
-              ? `Höchstens ${MAX_BATCHES_PER_HOUR} Vorschläge pro Stunde.`
-              : `Höchstens ${MAX_BATCHES_PER_DAY} Vorschläge pro Tag.`,
+          error: `Auch mit Bestätigung ist bei ${MAX_BATCHES_PER_DAY_HARD} Vorschlägen am Tag Schluss.`,
           budget,
         },
         { status: 429 },
       );
     }
 
-    // Ins Log, weil es der Betreiber sehen koennen muss: Wenn das Kontingent
-    // des Schluessels ueberraschend leer ist, steht hier, woher.
-    console.warn(
-      `Rezeptvorschlag: Liste ${listId} erzeugt auf eigene Verantwortung über die Grenze hinaus ` +
-        `(Stunde ${budget.hourLeft}, Tag ${budget.dayLeft}, Notbremse ${budget.hardLeft})`,
-    );
-  }
+    // Die beiden weichen Grenzen darf überschreiten, wer im Dialog ausdrücklich
+    // bestätigt hat. Serverseitig gelesen und nicht im Knopf entschieden: Der
+    // graue Knopf ist die Höflichkeitsform, die Grenze liegt hier.
+    if (budget.state === "needsOverride") {
+      if (!override) {
+        return NextResponse.json(
+          {
+            error:
+              budget.hourLeft === 0
+                ? `Höchstens ${MAX_BATCHES_PER_HOUR} Vorschläge pro Stunde.`
+                : `Höchstens ${MAX_BATCHES_PER_DAY} Vorschläge pro Tag.`,
+            budget,
+          },
+          { status: 429 },
+        );
+      }
 
-  const basis = await selectRecipeBasis(listId);
-  if (basis.length === 0) {
-    return NextResponse.json(
-      { error: "Dein Vorrat ist leer – es gibt nichts, woraus sich etwas kochen ließe." },
-      { status: 400 },
-    );
-  }
+      // Ins Log, weil es der Betreiber sehen können muss: Wenn das Kontingent
+      // des Schluessels überraschend leer ist, steht hier, woher.
+      console.warn(
+        `Rezeptvorschlag: Liste ${listId} erzeugt auf eigene Verantwortung über die Grenze hinaus ` +
+          `(Stunde ${budget.hourLeft}, Tag ${budget.dayLeft}, Notbremse ${budget.hardLeft})`,
+      );
+    }
 
-  generating.add(session.user.id);
-  try {
+    const basis = await selectRecipeBasis(listId);
+    if (basis.length === 0) {
+      return NextResponse.json(
+        { error: "Dein Vorrat ist leer – es gibt nichts, woraus sich etwas kochen ließe." },
+        { status: 400 },
+      );
+    }
+
     // Erst hier und nicht oben neben der Auswahl: die Titel werden nur
     // gebraucht, wenn wirklich gefragt wird, und alle Schranken davor
     // brechen ohne sie ab.
     const recipes = await generateRecipes(basis, await recentRecipeTitles(listId));
     const suggestion = await saveSuggestion(listId, session.user.id, recipes, basis);
-    // Nach dem Schreiben neu gelesen und nicht im Client heruntergezaehlt:
-    // Die Liste kann mehreren Leuten gehoeren, und wer gerade auf einem
-    // zweiten Geraet erzeugt hat, verbraucht dasselbe Budget.
+    // Nach dem Schreiben neu gelesen und nicht im Client heruntergezählt:
+    // Die Liste kann mehreren Leuten gehören, und wer gerade auf einem
+    // zweiten Gerät erzeugt hat, verbraucht dasselbe Budget.
     return NextResponse.json({ suggestion, budget: await getRecipeBudget(listId) });
   } catch (error) {
     if (error instanceof RecipeGenerationError) {
