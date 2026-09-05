@@ -105,6 +105,9 @@ export default function DemoPage() {
           // umstellt, und das Aufklappen eines Rezepts (aria-expanded) ist
           // genau so einer.
           <div className="pt-4">
+            {/* Ohne mealieEnabled, und das ist die Vorgabe der Komponente:
+                /demo ist die einzige Seite ohne Anmeldung, und die Route
+                hinter dem Export-Knopf verlangt eine Sitzung. */}
             <RecipeSuggestions
               initialSuggestions={recipeSuggestions}
               configured

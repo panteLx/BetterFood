@@ -11,6 +11,7 @@ import {
   hasCookableItems,
   isRecipesConfigured,
 } from "@/lib/recipes";
+import { isMealieConfigured } from "@/lib/mealie";
 import type { SuggestionView } from "@/lib/recipes/types";
 
 export const metadata: Metadata = {
@@ -91,13 +92,19 @@ async function ResolvedRecipes() {
           danach auch die richtigen Zeilen -- angezeigt wurden aber weiter
           die der alten Liste, bis jemand von Hand neu lud. Mit der Listen-ID
           als key baut React die Komponente neu auf, statt sie
-          weiterzuverwenden. */}
+          weiterzuverwenden.
+
+          isMealieConfigured() und isRecipesConfigured() stehen hier in ihrer
+          synchronen Fassung: Das connection() ganz oben nimmt diese Komponente
+          ohnehin aus dem Prerender, die Werte werden also im laufenden
+          Container gelesen und nicht in dem, der das Image gebaut hat. */}
       <RecipeSuggestions
         key={listId}
         initialSuggestions={view}
         configured={isRecipesConfigured()}
         hasItems={cookable}
         initialBudget={budget}
+        mealieEnabled={isMealieConfigured()}
       />
     </>
   );
