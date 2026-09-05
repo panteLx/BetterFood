@@ -35,8 +35,9 @@ Domain logic and all DB access live in `src/lib/**` (`data.ts` cached queries, `
 
 ## Style
 
-- Comments and user-facing strings are **German**; identifiers, git history and PRs are **English**.
-- Use real umlauts (ä/ö/ü/ß) in new text. Older files transliterate them (ae/oe/ue) — convert those when you are editing the file anyway.
+- User-facing strings are **German**. Everything else — comments, identifiers, git history, PRs — is **English**.
+- Comments were German until 2026-09-05 and most of the tree still is. Write new ones in English; leave existing German ones alone unless you are rewriting that comment anyway. A file with both is expected for a while — do not translate a whole file as a side errand.
+- Use real umlauts (ä/ö/ü/ß) in German text. Older files transliterate them (ae/oe/ue) — convert those when you are editing the file anyway.
 - Comments explain **why**, with rationale, measured numbers and past bugs. That prose density is the house style, not noise.
 - Double quotes, semicolons, 2-space indent, trailing commas, ~100-column width. No Prettier or Biome in the repo — `npm run lint` (ESLint flat config) is the only formatter.
 - Files under `src/components/ui/` are shadcn-generated with very long class strings. Do not reformat them.

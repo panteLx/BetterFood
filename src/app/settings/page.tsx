@@ -3,24 +3,23 @@ import { RecipesSettingsRow } from "@/components/recipes-settings-row";
 import { SettingsScreen } from "@/components/settings-screen";
 
 /**
- * Die Seite ist nur noch die Hülle -- der Bildschirm selbst steht in
+ * The page is only the shell -- the screen itself lives in
  * components/settings-screen.tsx.
  *
- * Aufgeteilt, weil eine einzige Zeile eine Antwort vom Server braucht: Ob
- * „Rezepte" hier auftaucht, hängt an GEMINI_API_KEY, und den liest nur der
- * Server. Der Bildschirm bleibt eine Client-Komponente (Theme, Session, zwei
- * fetch-Aufrufe), und eine Client-Komponente kann keine Server-Komponente
- * rendern -- also reicht die Seite sie als Prop hinein. Dieselbe Bauart wie
- * `settingsEntry` in app/page.tsx.
+ * Split apart because a single row needs an answer from the server: whether
+ * "Rezepte" shows up here hangs on GEMINI_API_KEY, and only the server reads
+ * that. The screen stays a client component (theme, session, two fetches), and
+ * a client component cannot render a server component -- so the page hands it
+ * in as a prop. Same shape as `settingsEntry` in app/page.tsx.
  *
- * Hinter <Suspense>, weil RecipesSettingsRow die Umgebung liest und dafür ein
- * `connection()` braucht: ohne die Grenze zöge das die ganze Seite aus dem
- * Prerender. Ohne Platzhalter, denn der häufigere Fall ist „keine Zeile" --
- * reservierte Luft am Ende der Karte stünde dann dauerhaft leer.
+ * Behind <Suspense>, because RecipesSettingsRow reads the environment and
+ * needs a `connection()` for it: without the boundary that would pull the
+ * whole page out of the prerender. No fallback, because the common case is
+ * "no row" -- reserved space at the end of the card would then sit empty.
  *
- * Der key ist nicht dekorativ: React reicht eine Suspense-Grenze, die als
- * Prop über die Server/Client-Grenze geht, als Liste weiter und meldet sonst
- * „Each child in a list should have a unique key prop" in der Konsole.
+ * The key is not decorative: React passes a Suspense boundary that crosses the
+ * server/client boundary as a prop along as a list, and otherwise logs "Each
+ * child in a list should have a unique key prop" to the console.
  */
 export default function SettingsPage() {
   return (
