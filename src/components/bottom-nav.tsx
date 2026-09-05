@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, Home, List, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Archive, CookingPot, Home, List, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHideOnScrollDown } from "@/lib/use-hide-on-scroll";
 import { AddActionSheet } from "@/components/add-action-sheet";
@@ -15,10 +15,23 @@ const LEFT_ITEMS = [
   { href: "/", label: "Start", icon: Home },
   { href: "/inventory", label: "Vorrat", icon: List },
 ] as const;
-const RIGHT_ITEMS = [
-  { href: "/archive", label: "Archiv", icon: Archive },
-  { href: "/settings", label: "Mehr", icon: SlidersHorizontal },
-] as const;
+
+/**
+ * Die beiden Plätze rechts vom Hinzufügen-Knopf.
+ *
+ * Vier Ziele wollen dorthin, drei passen hin. Weichen muss "Mehr": die
+ * Einstellungen werden ein paar Mal im Jahr geöffnet, Archiv und Rezepte
+ * dagegen im Alltag -- das eine als Rückblick, das andere als Frage, die sich
+ * jeden Abend neu stellt. Mit Rezeptdienst stehen deshalb beide hier, und die
+ * Einstellungen ziehen an den Kopf der Startseite um (SettingsEntry).
+ *
+ * Ohne Schlüssel gibt es kein Rezeptziel und der Platz wird frei, dann steht
+ * "Mehr" wieder da, wo es immer stand. Ein sechstes Symbol wäre die
+ * naheliegende Alternative gewesen, macht die Insel aber spürbar enger.
+ */
+const RECIPES_ITEM = { href: "/recipes", label: "Rezepte", icon: CookingPot } as const;
+const ARCHIVE_ITEM = { href: "/archive", label: "Archiv", icon: Archive } as const;
+const MORE_ITEM = { href: "/settings", label: "Mehr", icon: SlidersHorizontal } as const;
 
 // Seiten, die den Bildschirm fuer sich beanspruchen: Anmeldung und
 // Registrierung haben noch keine Session, Kamera und Formulare haben ihre
@@ -43,7 +56,9 @@ const HIDDEN_PREFIXES = [
 ];
 
 // Unterseiten von "Mehr": die Leiste soll dort weiterhin "Mehr" markieren,
-// nicht ins Leere zeigen.
+// nicht ins Leere zeigen. Steht "Mehr" gar nicht in der Leiste, markiert auf
+// diesen Seiten eben nichts -- erreicht werden sie dann ueber den Kopf der
+// Startseite.
 const SETTINGS_PREFIXES = ["/settings", "/knowledge"];
 
 // Ein Wert fuer beide: die fixierte Leiste und der Platzhalter, der ihr im
@@ -93,7 +108,7 @@ function NavLink({
 // node_modules/next/dist/docs Fehlermeldung "blocking-prerender-client-hook").
 // Deshalb steckt BottomNav im Layout hinter einem <Suspense> -- gerendert wird
 // sie ohnehin nur fuer angemeldete Nutzer (siehe BottomNavGate).
-export function BottomNav() {
+export function BottomNav({ recipes }: { recipes: boolean }) {
   const pathname = usePathname();
   // Beide Hooks vor dem fruehen Return: React verlangt bei jedem Rendern
   // dieselbe Reihenfolge, und auf den Vollbildseiten wuerde sonst einer
@@ -101,6 +116,8 @@ export function BottomNav() {
   const hidden = useHideOnScrollDown();
 
   if (HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
+
+  const rightItems = recipes ? [RECIPES_ITEM, ARCHIVE_ITEM] : [ARCHIVE_ITEM, MORE_ITEM];
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -171,7 +188,7 @@ export function BottomNav() {
               Entwurf den Knopf hier ruhiger pulsen laesst als z. B. die
               Zeile "Abgelaufen". */}
           <AddActionSheet className="-mt-3.5 animate-squish [animation-duration:3.4s]" />
-          {RIGHT_ITEMS.map((item) => (
+          {rightItems.map((item) => (
             <NavLink key={item.href} {...item} active={isActive(item.href)} />
           ))}
         </div>

@@ -24,10 +24,16 @@
  * Preisanpassung auseinandergelaufen.
  */
 
-import { addDays } from "@/lib/expiry";
+import { WEEK_WITHIN_DAYS, addDays } from "@/lib/expiry";
 import { DEFAULT_CATEGORIES, DEFAULT_PLACES } from "@/lib/categories";
 import { DEFAULT_MONTHLY_GOAL } from "@/lib/monthly-goal";
 import type { ResolvedEntry } from "@/lib/stats";
+import {
+  MAX_BATCHES_PER_DAY,
+  MAX_BATCHES_PER_DAY_HARD,
+  MAX_BATCHES_PER_HOUR,
+} from "@/lib/recipes/types";
+import type { RecipeBudget, SuggestionView } from "@/lib/recipes/types";
 import type { Item } from "@/db/schema";
 
 /** Die Demo kennt genau eine Liste; der Listenwechsel ist ohnehin gesperrt. */
@@ -225,6 +231,143 @@ export function buildDemoResolvedEntries(now: Date): ResolvedEntry[] {
     resolvedAt: addDays(-seed.daysAgo, now),
     category: seed.category,
   }));
+}
+
+/**
+ * Ein Stapel Rezeptvorschläge, wie ihn die echte Seite nach einem Klick
+ * zeigen würde.
+ *
+ * Fest hingeschrieben und nicht erzeugt: die Demo hat keinen Schlüssel, kein
+ * Kontingent und keine Wartezeit -- sie soll zeigen, wie das Ergebnis
+ * aussieht. Die drei Gerichte greifen bewusst auf den Demo-Vorrat zu, damit
+ * die Zuordnung "verbraucht diesen Artikel" stimmt.
+ *
+ * Ihre Zusammensetzung ist ebenso gewählt und nicht geraten: In jeder Karte
+ * stehen alle drei Sorten Pillen einmal nebeneinander -- gelb der ablaufende
+ * Artikel, ruhig der Vorrat, der Zeit hat, und mit Korb das, was noch fehlt.
+ * Das dritte Gericht kommt ganz ohne Ablaufendes aus und zeigt damit, dass
+ * Konserve und Gefrierfach mitgedacht werden.
+ */
+const DEMO_RECIPE_SEEDS = [
+  {
+    emoji: "🍳",
+    title: "Spinat-Frittata",
+    description:
+      "Bringt den Blattspinat von morgen weg und schmilzt den Gouda gleich mit hinein.",
+    uses: ["Blattspinat", "Gouda am Stück"],
+    buy: ["Eier", "Zwiebeln"],
+    ingredients: [
+      "1 Packung Blattspinat",
+      "6 Eier",
+      "100 g Gouda, gerieben",
+      "1 Zwiebel",
+      "Salz und Pfeffer",
+    ],
+    steps: [
+      "Zwiebel würfeln und in der Pfanne glasig dünsten.",
+      "Spinat dazugeben und zusammenfallen lassen, dann kräftig würzen.",
+      "Eier verquirlen, über das Gemüse gießen und den Käse darüber verteilen.",
+      "Zugedeckt bei kleiner Hitze 12 Minuten stocken lassen.",
+    ],
+  },
+  {
+    emoji: "🥣",
+    title: "Joghurt-Dip mit Röstbrot",
+    description: "Der Joghurt läuft heute ab – mit Minze und Zitrone wird er zum Dip fürs Brot.",
+    uses: ["Naturjoghurt", "Vollkornbrot"],
+    buy: ["Minze", "Zitrone", "Knoblauch"],
+    ingredients: [
+      "2 Becher Naturjoghurt",
+      "4 Scheiben Vollkornbrot",
+      "1 Handvoll Minze",
+      "1 Zitrone",
+      "1 Knoblauchzehe",
+      "Olivenöl, Salz",
+    ],
+    steps: [
+      "Joghurt mit gepresstem Knoblauch, Zitronenabrieb, Öl und Salz verrühren.",
+      "Minze fein hacken und unterheben.",
+      "Brot in Streifen schneiden und in der Pfanne goldbraun rösten.",
+      "Dip 10 Minuten durchziehen lassen und lauwarm dazu servieren.",
+    ],
+  },
+  {
+    emoji: "🍅",
+    title: "Ofen-Gnocchi mit Erbsen",
+    description: "Räumt Konserve und Gefrierfach auf – dazu braucht es nur Gnocchi und Mozzarella.",
+    uses: ["Passierte Tomaten", "Erbsen tiefgekühlt"],
+    buy: ["Gnocchi", "Mozzarella", "Zwiebeln"],
+    ingredients: [
+      "500 g Gnocchi",
+      "1 Packung passierte Tomaten",
+      "200 g Erbsen, tiefgekühlt",
+      "1 Kugel Mozzarella",
+      "2 Zwiebeln, Olivenöl und Salz",
+    ],
+    steps: [
+      "Zwiebeln würfeln, in Öl andünsten und die Tomaten dazugeben.",
+      "Sauce 10 Minuten einkochen, kräftig salzen und die Erbsen unterrühren.",
+      "Gnocchi roh in die Auflaufform geben, Sauce darüber, Mozzarella zerzupfen.",
+      "Bei 200 °C 20 Minuten backen, bis der Käse Farbe hat.",
+    ],
+  },
+];
+
+/**
+ * Das Budget, das die Demo anzeigt.
+ *
+ * Volle Stunde, voller Tag: Der Knopf soll dort aussehen wie beim ersten
+ * eigenen Besuch, und "noch 4 Vorschläge frei" wäre eine Zahl, die aus einer
+ * Benutzung stammt, die es in der Demo nicht gab. Angefasst wird er ohnehin
+ * nicht -- DemoSurface fängt den Klick ab, bevor die Rückfrage aufgeht.
+ *
+ * Die echten Grenzen, nicht abgeschriebene: sie stehen in lib/recipes/types.ts
+ * und damit in der Hälfte des Moduls ohne `import "server-only"` -- gerade
+ * damit diese Datei sie als Werte lesen kann, denn sie landet über /demo im
+ * Browser-Bundle. Vorher standen hier 5/20/50 als Literale, mit einem
+ * Kommentar, der einräumte, dass sie irgendwann still auseinanderlaufen.
+ */
+export const DEMO_RECIPE_BUDGET: RecipeBudget = {
+  state: "ok",
+  hourLeft: MAX_BATCHES_PER_HOUR,
+  dayLeft: MAX_BATCHES_PER_DAY,
+  hardLeft: MAX_BATCHES_PER_DAY_HARD,
+  freeAt: null,
+  hardFreeAt: null,
+};
+
+/**
+ * Der Vorschlags-Stapel relativ zum Stichtag.
+ *
+ * `basedOn` entsteht aus denselben Artikel-Vorlagen wie der Demo-Vorrat und
+ * teilt sie nach derselben Grenze auf wie die echte Auswahl: bis sieben Tage
+ * dringend, alles Spätere Vorrat, Abgelaufenes gar nicht (siehe
+ * selectRecipeBasis). Damit stimmen Namen und Restlaufzeiten zusammen, egal
+ * an welchem Tag jemand die Demo öffnet.
+ */
+export function buildDemoRecipeSuggestions(now: Date): SuggestionView[] {
+  const labelOf = new Map(DEMO_CATEGORIES.map((category) => [category.key, category.label]));
+
+  return [
+    {
+      id: 1,
+      // Nicht "gerade eben": ein Stapel, der in derselben Sekunde entstanden
+      // ist, in der die Seite geladen wurde, sieht aus wie ein Fehler.
+      createdAt: addMinutes(-25, now).toISOString(),
+      recipes: DEMO_RECIPE_SEEDS,
+      basedOn: DEMO_ITEM_SEEDS.filter((seed) => seed.expiryInDays >= 0).map((seed) => ({
+        name: seed.name,
+        category: labelOf.get(seed.category) ?? seed.category,
+        quantity: seed.quantity,
+        expiryDate: addDays(seed.expiryInDays, now).toISOString(),
+        urgent: seed.expiryInDays <= WEEK_WITHIN_DAYS,
+      })),
+    },
+  ];
+}
+
+function addMinutes(minutes: number, from: Date): Date {
+  return new Date(from.getTime() + minutes * 60_000);
 }
 
 /**

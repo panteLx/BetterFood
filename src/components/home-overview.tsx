@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -278,6 +278,7 @@ export function HomeOverview({
   lists,
   activeListId,
   userName,
+  settingsEntry,
 }: {
   initialItems: Item[];
   /**
@@ -296,6 +297,13 @@ export function HomeOverview({
   })[];
   activeListId: number;
   userName: string;
+  /**
+   * Der Knopf zu den Einstellungen -- oder nichts, wenn die Fußleiste ihn
+   * noch selbst trägt. Als fertiges Element von der Seite hereingereicht und
+   * nicht als Schalter: die Entscheidung liest die Umgebung des Servers,
+   * und die hat in einer Client-Komponente nichts zu suchen.
+   */
+  settingsEntry?: ReactNode;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
@@ -519,6 +527,7 @@ export function HomeOverview({
             {dateLine}
           </p>
         </div>
+        {settingsEntry}
         <ListSwitcher activeListId={activeListId} lists={lists} />
       </div>
 

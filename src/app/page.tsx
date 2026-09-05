@@ -1,7 +1,9 @@
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { and, eq, isNull, ne } from "drizzle-orm";
+import { Suspense } from "react";
 import { HomeOverview } from "@/components/home-overview";
+import { SettingsEntry } from "@/components/settings-entry";
 import { requireSession, requireActiveList } from "@/lib/session";
 import {
   getCategoriesForList,
@@ -59,6 +61,21 @@ export default async function HomePage() {
         // Nur der Vorname: "Guten Morgen, Lena Krüger" liest sich wie ein
         // Serienbrief.
         userName={session.user.name?.split(" ")[0] || "du"}
+        // Hinter <Suspense>, weil SettingsEntry die Umgebung liest und dafuer
+        // ein connection() braucht: ohne die Grenze zoege das die ganze
+        // Startseite aus dem Prerender. Ohne Platzhalter, denn der haeufigere
+        // Fall ist "kein Knopf" -- 40px reservierte Luft neben dem
+        // Listenwechsel waeren dann dauerhaft leer.
+        //
+        // Der key ist nicht dekorativ: React reicht eine Suspense-Grenze, die
+        // als Prop ueber die Server/Client-Grenze geht, als Liste weiter und
+        // meldet sonst "Each child in a list should have a unique key prop"
+        // in der Konsole.
+        settingsEntry={
+          <Suspense key="settings-entry" fallback={null}>
+            <SettingsEntry />
+          </Suspense>
+        }
       />
     </div>
   );

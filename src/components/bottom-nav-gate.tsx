@@ -1,4 +1,5 @@
 import { optionalSession } from "@/lib/session";
+import { getRecipesEnabled } from "@/lib/recipes";
 import { BottomNav } from "@/components/bottom-nav";
 
 /**
@@ -16,5 +17,10 @@ export async function BottomNavGate() {
   const session = await optionalSession();
   if (!session) return null;
 
-  return <BottomNav />;
+  // Welches Ziel auf dem vierten Platz steht, haengt an GEMINI_API_KEY. Das
+  // noetige connection() steckt in getRecipesEnabled() und nicht hier: Der
+  // Wert wird im laufenden Container gelesen und nicht in dem Prozess, der das
+  // Image gebaut hat, und diese Vorsicht gehoert an die Quelle statt in jeden
+  // Aufrufer -- dieselbe Bauart wie getRegistrationOpen() in lib/registration.ts.
+  return <BottomNav recipes={await getRecipesEnabled()} />;
 }

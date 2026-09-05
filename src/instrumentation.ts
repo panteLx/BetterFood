@@ -42,6 +42,11 @@ function assertEnvironment() {
       "[start] CRON_SECRET nicht gesetzt -- POST /api/cron/check-expiry antwortet mit 503. Der eingebaute Zeitgeber laeuft davon unabhaengig weiter.",
     );
   }
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn(
+      "[start] GEMINI_API_KEY nicht gesetzt -- Rezeptvorschlaege sind aus: die Fussleiste zeigt statt \"Rezepte\" wieder \"Mehr\", POST /api/recipes/generate antwortet mit 503.",
+    );
+  }
   if (!process.env.TRUSTED_PROXIES) {
     console.warn(
       "[start] TRUSTED_PROXIES nicht gesetzt -- hinter einem Reverse Proxy gilt das Anmelde-Limit dann global statt pro IP und die Geraeteliste zeigt keine Adresse.",
