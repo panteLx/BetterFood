@@ -13,18 +13,18 @@ _BetterFood ist eine selbst gehostete PWA für den Lebensmittelvorrat eines Haus
 
 ## Funktionen
 
-| Funktion            | Beschreibung                                                              |
-| ------------------- | ------------------------------------------------------------------------- |
-| **Vorrat**          | Artikel mit Menge, Ort und Ablaufdatum — mit Blick auf das, was zuerst geht |
-| **Barcode-Scan**    | Produktdaten aus Open Food Facts, serverseitig abgefragt                   |
-| **Kassenbon**       | PDF einlesen und die erkannten Posten übernehmen                           |
-| **Listen**          | Mehrere Vorratslisten, geteilt mit den Haushaltsmitgliedern                |
-| **Erinnerungen**    | Web-Push je Stufe (Tage vorher, am Tag, danach) und Wochenübersicht        |
-| **Monatsziel**      | Wie viel vom Eingekauften tatsächlich gegessen wurde, samt Geld und CO₂     |
-| **Wissen**          | Gelernte Produkte und Kategorien, die die Erfassung mit der Zeit abkürzen  |
-| **Mealie**          | Vorgeschlagene Rezepte in eine eigene Mealie-Instanz exportieren           |
-| **Anmeldung**       | E-Mail und Passwort oder ein beliebiger OIDC-Anbieter                      |
-| **PWA**             | Installierbar, mit Service Worker und eigenen Icons                        |
+| Funktion         | Beschreibung                                                                |
+| ---------------- | --------------------------------------------------------------------------- |
+| **Vorrat**       | Artikel mit Menge, Ort und Ablaufdatum — mit Blick auf das, was zuerst geht |
+| **Barcode-Scan** | Produktdaten aus Open Food Facts, serverseitig abgefragt                    |
+| **Kassenbon**    | PDF einlesen und die erkannten Posten übernehmen                            |
+| **Listen**       | Mehrere Vorratslisten, geteilt mit den Haushaltsmitgliedern                 |
+| **Erinnerungen** | Web-Push je Stufe (Tage vorher, am Tag, danach) und Wochenübersicht         |
+| **Monatsziel**   | Wie viel vom Eingekauften tatsächlich gegessen wurde, samt Geld und CO₂     |
+| **Wissen**       | Gelernte Produkte und Kategorien, die die Erfassung mit der Zeit abkürzen   |
+| **Mealie**       | Vorgeschlagene Rezepte in eine eigene Mealie-Instanz exportieren            |
+| **Anmeldung**    | E-Mail und Passwort oder ein beliebiger OIDC-Anbieter                       |
+| **PWA**          | Installierbar, mit Service Worker und eigenen Icons                         |
 
 ## Schnellstart
 
@@ -121,7 +121,7 @@ Danach `docker compose up -d --force-recreate`. Anmelden funktioniert weiter, nu
 TRUSTED_PROXIES=127.0.0.1/32,::1/128,172.16.0.0/12
 ```
 
-`X-Forwarded-For` ist nur dann vertrauenswürdig, wenn ein Proxy ihn geschrieben hat, den man selbst kontrolliert. Ohne diesen Wert kann better-auth die Client-IP nicht ermitteln, und die Folgen sind still, aber real: das Limit für Anmeldeversuche (3 pro 10 Sekunden) gilt dann **für alle Nutzer zusammen** — ein einzelner Passwort-Rater sperrt damit jede Anmeldung aus —, und die Geräteliste unter *Einstellungen → Konto* zeigt keine IP-Adresse mehr, obwohl genau die dort das Erkennen eines fremden Zugriffs tragen soll.
+`X-Forwarded-For` ist nur dann vertrauenswürdig, wenn ein Proxy ihn geschrieben hat, den man selbst kontrolliert. Ohne diesen Wert kann better-auth die Client-IP nicht ermitteln, und die Folgen sind still, aber real: das Limit für Anmeldeversuche (3 pro 10 Sekunden) gilt dann **für alle Nutzer zusammen** — ein einzelner Passwort-Rater sperrt damit jede Anmeldung aus —, und die Geräteliste unter _Einstellungen → Konto_ zeigt keine IP-Adresse mehr, obwohl genau die dort das Erkennen eines fremden Zugriffs tragen soll.
 
 Ist die App **direkt** erreichbar, gehört `TRUSTED_PROXIES=` stattdessen leer gesetzt — dann wird kein vom Client gesetzter Header ausgewertet.
 
@@ -146,7 +146,7 @@ MEALIE_TOKEN=
 
 Wer seine Rezepte in [Mealie](https://mealie.io) verwaltet, kann jeden Vorschlag von hier dorthin übernehmen: In der aufgeklappten Rezeptkarte steht dann „Zu Mealie exportieren", und nach dem Übertragen führt derselbe Platz direkt zum Rezept in Mealie.
 
-Den Token legt man in Mealie unter *Profil → API-Tokens* an; er ist langlebig und bindet den Export an genau dieses Konto und dessen Gruppe — ein Haushaltskonto also, nicht eines je BetterFood-Nutzer. Übertragen werden Titel, Beschreibung, Zutaten (als freier Text, nicht durch Mealies Zutaten-Parser gejagt) und die Zubereitungsschritte, dazu eine Notiz mit dem, was aus dem Vorrat kam und was noch zu kaufen ist. Gelesen oder verändert wird in Mealie nichts, was schon dort liegt.
+Den Token legt man in Mealie unter _Profil → API-Tokens_ an; er ist langlebig und bindet den Export an genau dieses Konto und dessen Gruppe — ein Haushaltskonto also, nicht eines je BetterFood-Nutzer. Übertragen werden Titel, Beschreibung, Zutaten (als freier Text, nicht durch Mealies Zutaten-Parser gejagt) und die Zubereitungsschritte, dazu eine Notiz mit dem, was aus dem Vorrat kam und was noch zu kaufen ist. Gelesen oder verändert wird in Mealie nichts, was schon dort liegt.
 
 Ohne beide Variablen erscheint der Knopf nicht und `POST /api/recipes/export` antwortet mit `503`. Der Aufruf läuft immer serverseitig — die CSP dieser App ist `connect-src 'self'`, der Browser erreicht Mealie also gar nicht.
 
@@ -200,10 +200,10 @@ Das hebt die Version in `package.json`/`package-lock.json` an, committet, taggt,
 
 Ganz unten auf der Einstellungsseite, verlinkt auf die zugehörigen Release-Notizen bzw. den Commit:
 
-| Anzeige            | Woher das Image stammt                                  |
-| ------------------ | ------------------------------------------------------- |
-| `v1.0.0`           | aus dem Tag `v1.0.0` gebaut — ein Release                |
-| `dev (9312a14)`    | aus einem Push auf `main` gebaut — Zwischenstand         |
+| Anzeige         | Woher das Image stammt                           |
+| --------------- | ------------------------------------------------ |
+| `v1.0.0`        | aus dem Tag `v1.0.0` gebaut — ein Release        |
+| `dev (9312a14)` | aus einem Push auf `main` gebaut — Zwischenstand |
 
 Beide Werte schreibt der Build als Literale fest (`next.config.ts` → [`src/lib/version.ts`](src/lib/version.ts)): die Version stammt immer aus `package.json`, den Commit setzt allein der Workflow und allein für Branch-Pushes. Ein lokaler `npm run dev` zeigt deshalb die Version aus `package.json`, auch wenn der Arbeitsstand längst weiter ist — was lokal läuft, weiß ohnehin nur `git status`.
 
@@ -213,21 +213,22 @@ Beide Werte schreibt der Build als Literale fest (`next.config.ts` → [`src/lib
 
 Die Images liegen unter `ghcr.io/pantelx/betterfood`:
 
-| Tag      | Beschreibung                  |
-| -------- | ----------------------------- |
-| `latest` | aktuellstes Release           |
-| `vX.Y.Z` | eine bestimmte Version        |
-| `main`   | Entwicklungsstand (instabil)  |
+| Tag      | Beschreibung                 |
+| -------- | ---------------------------- |
+| `latest` | aktuellstes Release          |
+| `vX.Y.Z` | eine bestimmte Version       |
+| `main`   | Entwicklungsstand (instabil) |
 
 ## Tech-Stack
 
-| Schicht    | Technologie                              |
-| ---------- | ---------------------------------------- |
-| Framework  | Next.js 16 (App Router), React 19, TypeScript |
-| Datenbank  | SQLite, Drizzle ORM                      |
-| Anmeldung  | better-auth                              |
-| UI         | Tailwind CSS v4, shadcn/ui auf Base UI   |
-| Produkte   | Open Food Facts                          |
+| Schicht   | Technologie                                   |
+| --------- | --------------------------------------------- |
+| Node.js   | v22+                                          |
+| Framework | Next.js 16 (App Router), React 19, TypeScript |
+| Datenbank | SQLite, Drizzle ORM                           |
+| Anmeldung | better-auth                                   |
+| UI        | Tailwind CSS v4, shadcn/ui auf Base UI        |
+| Produkte  | Open Food Facts                               |
 
 ## Unterstützen
 
