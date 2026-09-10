@@ -2,7 +2,7 @@
 
 # ---- Builder ----
 # Keep this tag in sync with .nvmrc by hand on a Node major bump.
-FROM node:24-bookworm-slim AS builder
+FROM node:26-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/app/.next/cache \
     COMMIT_SHA=$COMMIT_SHA npm run build
 
 # ---- Runner ----
-FROM node:24-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
