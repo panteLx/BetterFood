@@ -1,0 +1,58 @@
+version: 2
+updates:
+  # npm dependencies (root)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # 13.0 rewrote the driver onto N-API and dropped the install script that
+      # used to fetch a prebuilt binary (`prebuild-install || node-gyp rebuild`).
+      # The package still ships binding.gyp, and npm falls back to `node-gyp
+      # rebuild` for a package that has one without an install script -- which
+      # fails in the builder image, because the Dockerfile deliberately carries
+      # no python3/make/g++ toolchain. Revisit once upstream stops triggering
+      # node-gyp, and expect to reinstate that toolchain if it does not.
+      - dependency-name: "better-sqlite3"
+        versions:
+          - ">= 13.0.0"
+      # 10 removes the deprecated rule-context methods, which eslint-plugin-react
+      # still calls (`contextOrFilename.getFilename is not a function`). Its
+      # newest release, 7.37.5, caps its peer range at eslint ^9.7, and
+      # eslint-config-next pins ^7.37.0 -- so there is no override that fixes
+      # this. eslint-config-next's own peer range of ">=9.0.0" is what lets npm
+      # install 10 in the first place. Revisit once that chain supports 10.
+      - dependency-name: "eslint"
+        versions:
+          - ">= 10.0.0"
+
+  # GitHub Actions workflows (root)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker base image (picks up node:24-bookworm-slim)
+  #
+  # A Node major lands as its own PR, and that PR fails on purpose: the
+  # container workflow compares the FROM tags against .nvmrc, which Dependabot
+  # does not touch. Bump .nvmrc in the same PR to make it green.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
