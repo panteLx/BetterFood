@@ -49,13 +49,13 @@ const CHECK_SURFACE: Record<ExpiryStatus, string> = {
  * an einer festen Kante werden aus denselben Angaben Ziffern in einer
  * Spalte -- die Reihenfolge liest sich dann ohne einen einzigen Satz.
  *
- * Die beiden häufigsten Aktionen liegen weiterhin in der Wischgeste: nach
- * rechts heißt aufgebraucht, nach links weggeworfen. Die Geste ist bewusst
- * NICHT der einzige Weg -- der Rundknopf rechts hakt direkt ab, und das
- * Antippen der übrigen Zeile führt auf die Detailseite, wo dieselben
- * Aktionen als richtige Buttons stehen. Eine Wischgeste ist per Tastatur und
- * mit Screenreader nicht bedienbar, und ein Vorrat, den man nur mit dem
- * Finger abhaken kann, wäre für einen Teil der Nutzer gar nicht bedienbar.
+ * The two most common actions still live in the swipe gesture: right means
+ * thrown away, left means used up. The gesture is deliberately NOT the only
+ * way -- the round button on the right checks off directly, and tapping the
+ * rest of the row opens the detail page, where the same actions exist as
+ * proper buttons. A swipe gesture is not operable by keyboard or screen
+ * reader, and a pantry that could only be checked off with a finger would be
+ * unusable for part of the users.
  */
 export function ItemRow({
   item,
@@ -93,8 +93,8 @@ export function ItemRow({
 }) {
   const router = useRouter();
   const { offset, dragging, wasSwipe, handlers } = useSwipeActions({
-    onSwipeRight: onConsume,
-    onSwipeLeft: onDiscard,
+    onSwipeRight: onDiscard,
+    onSwipeLeft: onConsume,
     disabled,
   });
 
@@ -116,7 +116,7 @@ export function ItemRow({
       // bruchteiliger Zeilenhöhe die Unterkante an.
       className={cn(
         "relative overflow-x-clip rounded-[24px] transition-colors",
-        offset > 0 ? "bg-primary-tint" : offset < 0 ? "bg-danger-tint" : undefined,
+        offset > 0 ? "bg-danger-tint" : offset < 0 ? "bg-primary-tint" : undefined,
       )}
     >
       <div
@@ -125,19 +125,19 @@ export function ItemRow({
       >
         <span
           className={cn(
-            "text-primary-deep transition-opacity",
+            "text-danger-ink transition-opacity",
             offset > REVEAL_DISTANCE ? "opacity-100" : "opacity-0",
           )}
         >
-          🎉 Aufgebraucht
+          Weggeworfen
         </span>
         <span
           className={cn(
-            "text-danger-ink transition-opacity",
+            "text-primary-deep transition-opacity",
             offset < -REVEAL_DISTANCE ? "opacity-100" : "opacity-0",
           )}
         >
-          Weggeworfen
+          🎉 Aufgebraucht
         </span>
       </div>
 

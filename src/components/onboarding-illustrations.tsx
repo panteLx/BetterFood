@@ -85,14 +85,14 @@ export function SwipeIllustration() {
       <rect x="14" y="52" width="212" height="46" rx="16" className="fill-[var(--primary-tint)]" />
       <path
         d="M34 75h16m-16 0 6-6m-6 6 6 6"
-        className="stroke-primary"
+        className="stroke-[var(--danger)]"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M206 75h-16m16 0-6-6m6 6-6 6"
-        className="stroke-[var(--danger)]"
+        className="stroke-primary"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
