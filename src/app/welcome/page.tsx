@@ -29,7 +29,7 @@ const SLIDES = [
   {
     illustration: SwipeIllustration,
     title: "Abhaken mit einer Wischgeste",
-    body: "Nach rechts wischen heißt aufgebraucht, nach links weggeworfen. Falsch gewischt? Der Hinweis unten macht es rückgängig.",
+    body: "Nach rechts wischen heißt weggeworfen, nach links aufgebraucht. Falsch gewischt? Der Hinweis unten macht es rückgängig.",
   },
   {
     illustration: ReminderIllustration,
