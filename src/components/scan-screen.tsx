@@ -3,23 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  BrowserCodeReader,
-  BrowserMultiFormatReader,
-  HTMLCanvasElementLuminanceSource,
-} from "@zxing/browser";
-import type { IScannerControls } from "@zxing/browser";
-import {
-  BarcodeFormat,
-  ChecksumException,
-  DecodeHintType,
-  FormatException,
-  NotFoundException,
-  ReaderException,
-} from "@zxing/library";
 import { CalendarClock, Flashlight, FlashlightOff, X } from "lucide-react";
 import { toast } from "sonner";
-import { Avo } from "@/components/avo";
 import type { StepPatch } from "@/components/review-step";
 import { ScanExpirySheet } from "@/components/scan-expiry-sheet";
 import { buttonVariants } from "@/components/ui/button";
@@ -35,186 +20,11 @@ import {
   useBatch,
   type BatchEntry,
 } from "@/lib/review-batch";
-import { readAutoExpiry, setAutoExpiry, useAutoExpiry } from "@/lib/scan-prefs";
+import { setAutoExpiry, useAutoExpiry } from "@/lib/scan-prefs";
+import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 import { cn } from "@/lib/utils";
 import type { Category, Place } from "@/db/schema";
 
-// @zxing/browser meldet fuer sein Canvas-Bild "Drehen wird unterstuetzt",
-// kann es aber nicht: HTMLCanvasElementLuminanceSource initialisiert
-// tempCanvasElement nie, und getTempCanvasElement() prueft mit
-// "null === this.tempCanvasElement" -- bei undefined greift der Zweig nicht,
-// die Methode liefert undefined zurueck und rotate() wirft
-// "Could not create a Canvas element.".
-//
-// Der OneDReader betritt diesen Pfad bei jedem Frame, den er nicht lesen
-// konnte, sobald TRY_HARDER gesetzt ist (OneDReader.decode: tryHarder &&
-// image.isRotateSupported()). Der MultiFormatReader faengt den Fehler ab,
-// haelt ihn aber fuer unerwartet und schreibt eine Warnung -- daher die
-// Konsolenflut auf /scan, obwohl der Scanner einwandfrei arbeitet.
-//
-// Deshalb hier die ehrliche Antwort: gedreht werden kann nicht. Damit
-// ueberspringt der Reader den Zweig, statt ihn jedes Mal krachen zu lassen.
-// Gekostet hat er ohnehin nichts -- selbst mit erzeugtem Canvas taeuscht
-// rotate() nur: es tauscht den Puffer aus, laesst width/height der
-// LuminanceSource aber unveraendert, das gedrehte Bild waere also gar nicht
-// lesbar. TRY_HARDER bleibt gesetzt, denn seinen zweiten Effekt -- deutlich
-// dichter abgetastete Bildzeilen -- liefert es weiterhin.
-HTMLCanvasElementLuminanceSource.prototype.isRotateSupported = function () {
-  return false;
-};
-
-// Die Warnung blieb trotzdem, denn sie hat noch eine zweite Quelle. Im
-// Java-Original erben NotFound-, Checksum- und FormatException von
-// ReaderException, und genau darauf verlaesst sich MultiFormatReader:
-// "instanceof ReaderException" heisst "Leser probiert, nichts gefunden,
-// weiter", alles andere schreibt er als non-ReaderException in die Konsole.
-// Die TypeScript-Portierung (@zxing/library 0.23.0) laesst die drei aber
-// direkt von Exception erben -- ReaderException ist dort eine Klasse ohne
-// Nachkommen. Damit ist jeder Frame ohne Code eine Warnung, zwei pro
-// Sekunde, in jedem Browser und jeder Umgebung.
-//
-// Hier wird die Erbfolge des Originals nachgezogen. Die drei bleiben, was
-// sie sind (der eigene Konstruktor steht als Eigenschaft auf dem Prototyp,
-// instanceof NotFoundException trifft weiterhin), sie sind nur zusaetzlich
-// eine ReaderException -- und der MultiFormatReader geht wieder still zum
-// naechsten Frame ueber.
-for (const decodeException of [
-  NotFoundException,
-  ChecksumException,
-  FormatException,
-]) {
-  if (!(decodeException.prototype instanceof ReaderException)) {
-    Object.setPrototypeOf(decodeException.prototype, ReaderException.prototype);
-  }
-}
-
-// Ohne Hints probiert der MultiFormatReader pro Frame saemtliche Formate durch
-// -- QR, Micro-QR, Aztec, DataMatrix, PDF417 und alle 1D-Varianten. Auf
-// Lebensmitteln steht nichts davon: dort sind es EAN-13, EAN-8, UPC-A oder
-// UPC-E. Die Beschraenkung spart pro Bild ein Vielfaches an Rechenzeit, der
-// Code rastet schneller ein und das Telefon bleibt kuehler.
-const SCAN_HINTS = new Map<DecodeHintType, unknown>([
-  [
-    DecodeHintType.POSSIBLE_FORMATS,
-    [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-    ],
-  ],
-  [DecodeHintType.TRY_HARDER, true],
-]);
-
-// Waehrend der kontinuierlichen Live-Scan-Schleife feuert der Decoder bei
-// jedem Frame ohne vollstaendig lesbaren Code eine dieser drei Exceptions --
-// das ist normales Verhalten (kein Code im Bild / Code nur teilweise
-// erkannt), nicht der Fehlerfall. Auf manchen Geraeten (v.a. Mobil-Kameras
-// mit hoeherer Aufloesung) tritt das haeufiger als NotFoundException auf,
-// daher muessen auch Checksum-/FormatException ignoriert werden - sonst
-// blinkt die Fehlermeldung auch bei einem erfolgreichen Scan kurz auf.
-//
-// instanceof statt err.name-Stringvergleich: im Next.js-Produktionsbuild
-// werden Klassennamen minifiziert (z.B. "NotFoundException" -> "e"), daher
-// lieferte err.name in Produktion nie einen Treffer und JEDER "kein Code im
-// Bild"-Frame wurde faelschlich als fataler Fehler behandelt -- das war die
-// eigentliche Ursache der staendigen Fehlermeldung auf dem iPhone.
-function isExpectedDecodeError(err: unknown) {
-  return (
-    err instanceof NotFoundException ||
-    err instanceof ChecksumException ||
-    err instanceof FormatException
-  );
-}
-
-// Jeder Fehler, der NICHT in EXPECTED_DECODE_ERRORS steht, wird von
-// @zxing/browser intern als fatal behandelt: die Scan-Schleife bricht ab
-// UND der Kamera-Stream wird disposed (siehe BrowserCodeReader.scan/
-// decodeFromStream). Auf iPhones passiert das vor allem beim allerersten
-// Frame, wenn readyState schon "playing" meldet, videoWidth/-Height aber
-// noch 0 sind (canvas.getImageData wirft dann ein natives IndexSizeError,
-// keine ZXing-Exception) -- daher starten wir die Kamera hier automatisch
-// neu statt den Nutzer mit einer toten Kamera sitzen zu lassen.
-//
-// Fuer genau dieses "Video noch nicht bereit"-Szenario bekommt der Restart
-// ein eigenes, grosszuegigeres Budget: auf manchen iPhones dauert es laenger
-// als die 2*250ms des allgemeinen Budgets, bis videoWidth/-Height einen Wert
-// > 0 melden, wodurch sonst die Fehlermeldung aufblitzt, bevor ueberhaupt
-// ein Frame gescannt wurde -- der Scan-Loop laeuft danach aber normal weiter.
-// Ein echter, wiederholter Fehler bei bereits laufendem Video (kleines
-// Budget) bleibt weiterhin ein Fehlerfall.
-const MAX_SILENT_RESTARTS = 2;
-const MAX_STARTUP_RESTARTS = 12;
-
-// Ein einzelner Treffer ist kein Beweis. Zwar traegt jeder dieser vier
-// Codes eine Pruefziffer, aber die faengt nur einen Teil der Lesefehler ab:
-// bei EAN-8 und UPC-E sind es acht bzw. sechs Stellen, sodass eine falsch
-// gelesene Ziffernfolge mit rund 1:10 trotzdem eine gueltige Pruefziffer
-// ergibt -- und weil der Decoder zehnmal in der Sekunde ueber ein
-// verwackeltes Bild laeuft, passiert dieses 1:10 im Alltag oft genug. Genau
-// das ist das "beim ersten Mal falsch, beim zweiten Mal richtig".
-//
-// Deshalb zaehlt hier nicht der erste Treffer, sondern der wiederholte:
-// derselbe Code muss mehrfach hintereinander herauskommen. Ein Lesefehler
-// ist zufaellig und faellt beim naechsten Frame anders aus, der echte Code
-// dagegen bleibt derselbe. Die kurzen Formate brauchen einen Treffer mehr,
-// weil ihre Pruefziffer weniger absichert.
-const REQUIRED_MATCHES = 2;
-const REQUIRED_MATCHES_SHORT = 3;
-
-// Die Serie muss zusammenhaengen: liegt zwischen zwei gleichen Treffern zu
-// viel Zeit, war der zweite ein neuer Scan und kein Beleg fuer den ersten.
-const MATCH_WINDOW_MS = 2000;
-
-// Seit dem Batch-Scan haelt der Scanner nach einem Treffer nicht mehr an --
-// und damit stellt sich eine Frage, die es vorher nicht gab: wann zaehlt
-// derselbe Code ein zweites Mal? Die Serie nach dem Treffer
-// zurueckzusetzen reicht dafuer nicht. Wer die Packung noch in der Hand
-// haelt, waehrend er ueberlegt, liefert weiter lesbare Frames; die Serie
-// waere nach zwei Bildern erneut voll und der Joghurt haette stillschweigend
-// Menge 4.
-//
-// Deshalb zaehlt der Code erst wieder, wenn er zwischendurch aus dem Bild
-// war: jede vollstaendige Serie -- angenommen oder nicht -- frischt den
-// Zeitstempel auf, und nur eine Pause laenger als dieses Fenster macht ihn
-// wieder zaehlbar. Anderthalb Sekunden, weil eine Serie bei
-// delayBetweenScanAttempts = 500ms schon rund eine halbe Sekunde
-// ununterbrochener Sicht braucht: kuerzer waere die Pause nicht sicher von
-// einem verwackelten Frame zu unterscheiden, laenger stuende sie dem im Weg,
-// der zwei gleiche Becher bewusst nacheinander scannt.
-const REHIT_COOLDOWN_MS = 1500;
-
-// delayBetweenScanSuccess ist die Pause NACH einem Treffer -- mit dem
-// Vorgabewert 500ms haette jede Bestaetigung eine halbe Sekunde gekostet.
-// Auf 100ms gesenkt liegt die Serie innerhalb eines Wimpernschlags, der
-// bestaetigte Scan fuehlt sich also so schnell an wie vorher der
-// ungepruefte. delayBetweenScanAttempts bleibt bei der Vorgabe: das ist die
-// Pause zwischen erfolglosen Versuchen, und die haelt das Telefon kuehl.
-const READER_OPTIONS = {
-  delayBetweenScanAttempts: 500,
-  delayBetweenScanSuccess: 100,
-};
-
-// Je hoeher aufgeloest das Bild, desto mehr Pixel liegen auf einem Strich --
-// und ein Strichcode, dessen schmalste Linie nur ein bis zwei Pixel breit
-// ist, ist die eigentliche Quelle der Fehllesungen. Ohne Angabe liefern
-// viele Kameras 640x480; "ideal" erzwingt nichts, sondern nimmt das
-// naechstbeste, was das Geraet kann.
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "environment",
-  width: { ideal: 1280 },
-  height: { ideal: 720 },
-};
-
-/**
- * Haelt einen Leser an, ohne dass sein Versprechen unbehandelt liegenbleibt.
- *
- * `IScannerControls.stop` ist als `void` typisiert, ist auf einem Geraet mit
- * Licht aber asynchron: @zxing/browser haengt dort ein `switchTorch(false)`
- * an (BrowserCodeReader.decodeFromStream). Ein `applyConstraints` auf einer
- * bereits gestoppten Spur lehnt ab -- und das landete als unbehandelte
- * Ablehnung in der Konsole, ausgerechnet beim Verlassen des Screens.
- */
 /**
  * Der Zustand einer Zeile im Ablagefach, als eine Entscheidung statt zweier.
  *
@@ -247,18 +57,6 @@ const TRAY_STATUS: Record<TrayStatus, { className: string; label: string }> = {
   new: { className: "text-warning", label: "neu" },
 };
 
-function stopReader(controls: IScannerControls | null | undefined): void {
-  if (!controls) return;
-  void Promise.resolve(controls.stop() as unknown).catch(() => {});
-}
-
-type MatchStreak = {
-  text: string | null;
-  format: BarcodeFormat | null;
-  count: number;
-  at: number;
-};
-
 export function ScanScreen({
   categories,
   places,
@@ -269,39 +67,11 @@ export function ScanScreen({
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const trayRef = useRef<HTMLUListElement>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
-  const streakRef = useRef<MatchStreak>({
-    text: null,
-    format: null,
-    count: 0,
-    at: 0,
-  });
-  const lastHitRef = useRef<{ text: string | null; at: number }>({
-    text: null,
-    at: 0,
-  });
-  const silentRestartsRef = useRef(0);
-  const startupRestartsRef = useRef(0);
-  const [error, setError] = useState<string | null>(null);
-  const [retrySession, setRetrySession] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
-  const [torchAvailable, setTorchAvailable] = useState(false);
 
   // Der Batch liegt nicht im State dieses Screens, sondern in einem Speicher
-  // ausserhalb von React (siehe lib/review-batch.ts). Das loest zwei Probleme
-  // auf einmal.
-  //
-  // Erstens die Decoder-Schleife: @zxing/browser bekommt sie genau einmal je
-  // Kamerastart uebergeben, sie schliesst also ueber die Werte des Rendern,
-  // in dem sie entstanden ist. Ueber einen State-Wert saehe sie nach jedem
-  // Treffer weiterhin den leeren Batch und legte fuer denselben Barcode eine
-  // zweite Zeile an, statt die Menge zu erhoehen.
-  //
-  // Zweitens die Rueckkehr aus dem Pruef-Flow: /scan bleibt unter Cache
-  // Components per <Activity> am Leben, eine Kopie im State zeigte danach
-  // also noch den Stand von vor der Pruefung -- genau der Bug, den /confirm
-  // mit der Produkt-DB schon einmal hatte.
+  // ausserhalb von React (siehe lib/review-batch.ts): /scan bleibt unter Cache
+  // Components per <Activity> am Leben, eine Kopie im State zeigte nach der
+  // Rueckkehr aus dem Pruef-Flow also noch den Stand von vor der Pruefung.
   const batch = useBatch();
   // Der Prüf-Batch ist geteilt: der Rechnungsimport schreibt in denselben
   // Speicher, damit Scan und Beleg in einem Durchlauf geprueft werden. Die
@@ -315,14 +85,8 @@ export function ScanScreen({
   const [resolving, setResolving] = useState<string[]>([]);
   const [lastTouchedId, setLastTouchedId] = useState<string | null>(null);
 
-  /* ---------------------------------------------------------------- *
-   * Das MHD-Blatt
-   *
-   * Der Prüf-Schritt darf auch hier stehen, statt erst hinter dem
-   * Abschluss-Knopf: wer die Packung noch in der Hand hält, liest das Datum
-   * ohnehin gerade ab. Der Schalter darunter entscheidet nur, ob das Blatt von
-   * selbst aufgeht -- angetippt werden kann eine Ablage-Zeile immer.
-   * ---------------------------------------------------------------- */
+  // Der Schalter entscheidet nur, ob das MHD-Blatt von selbst aufgeht --
+  // angetippt werden kann eine Ablage-Zeile immer.
   const autoExpiry = useAutoExpiry();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -331,50 +95,20 @@ export function ScanScreen({
    *
    * Erst beim Öffnen gesetzt und nicht im Render: `new Date()` während des
    * Prerender bricht unter `cacheComponents` die Route ab (derselbe Grund,
-   * warum `review-step.tsx` hinter `useIsClient` wartet). Ein Handler läuft
-   * ausschließlich im Browser -- und stempelt nebenbei bei jedem Öffnen neu,
-   * was einem Tab recht ist, der über Mitternacht offen bleibt.
+   * warum `review-step.tsx` hinter `useIsClient` wartet).
    */
   const [today, setToday] = useState<Date | null>(null);
-  /**
-   * Solange das gesetzt ist, werden gelesene Codes verworfen.
-   *
-   * @zxing/browser kennt kein Pausieren -- `IScannerControls` hat nur `stop()`,
-   * und das beendet in `decodeFromConstraints` auch die Tracks
-   * (BrowserCodeReader.js). Jedes Anhalten wäre also ein Kaltstart, und genau
-   * die abzuschaffen ist der Sinn des Batch-Scans. Die Schleife dreht deshalb
-   * weiter und der Treffer fällt bei uns unter den Tisch: zwei Dekodierungen
-   * pro Sekunde, solange das Blatt offen ist, sind billiger als ein Neustart
-   * der Kamera.
-   *
-   * Ein Ref und kein State: der Decoder-Callback wird @zxing genau einmal je
-   * Kamerastart übergeben und sähe einen State-Wert für immer als `false`.
-   */
-  const blockCaptureRef = useRef(false);
 
   const activeEntry = batch.find((entry) => entry.id === activeId) ?? null;
   const pendingIndex = firstPendingIndex(batch);
 
-  const openSheet = useCallback((id: string) => {
-    setToday(startOfDay(new Date()));
-    blockCaptureRef.current = true;
-    setActiveId(id);
-  }, []);
+  // An open sheet must not be left behind when <Activity> hides the screen: it would come back
+  // over the camera on the next visit, and the scanner stays paused while it is open.
+  useEffect(() => () => setActiveId(null), []);
 
-  /**
-   * Blatt zu -- und der Scanner wieder scharf.
-   *
-   * Die beiden Refs müssen dabei frisch gestempelt werden, sonst zählt die
-   * Packung, die noch in der Hand liegt, sofort ein zweites Mal:
-   * `REHIT_COOLDOWN_MS` rechnet ab der letzten vollständigen Serie, und die lag
-   * vor dem Öffnen -- also längst außerhalb der Sperrzeit. Der Joghurt hätte
-   * stillschweigend Menge 2.
-   */
-  function closeSheet() {
-    streakRef.current = { text: null, format: null, count: 0, at: 0 };
-    lastHitRef.current = { text: activeEntry?.barcode ?? null, at: Date.now() };
-    blockCaptureRef.current = false;
-    setActiveId(null);
+  function openSheet(id: string) {
+    setToday(startOfDay(new Date()));
+    setActiveId(id);
   }
 
   /** Dieselbe Projektion wie im Prüf-Flow (`applyAndAdvance`), nur ohne Route. */
@@ -388,26 +122,23 @@ export function ScanScreen({
     updateBatch((entries) =>
       entries.map((entry) => (entry.id === id ? { ...entry, ...change } : entry)),
     );
-    closeSheet();
+    setActiveId(null);
   }
 
   /**
    * Der Abschluss von hier aus -- für den Fall, dass im Blatt schon alles
    * entschieden wurde und der Prüf-Flow nichts mehr zu fragen hätte.
+   *
+   * `committing` pausiert den Scanner: ein Code, der während des Imports gelesen
+   * wird, läge nicht im abgeschickten Payload, und das clearBatch() danach
+   * löschte ihn still.
    */
   async function handleCommit() {
-    // Zuerst sperren: ein Code, der während des Imports gelesen wird, legt
-    // einen Eintrag an, der nicht im abgeschickten Payload steht -- und das
-    // clearBatch() danach löscht ihn. Ein still verschluckter Artikel.
-    blockCaptureRef.current = true;
     // Frisch aus dem Speicher: zwischen dem Render, der diesen Knopf gezeichnet
-    // hat, und dem Antippen kann ein Treffer liegen. Dann ist wieder etwas
-    // offen, und der Weg dorthin ist der Prüf-Flow -- nicht ein Import, der
-    // diesen Artikel gerade verlieren würde.
+    // hat, und dem Antippen kann ein Treffer liegen.
     const current = readBatch();
     const stillOpen = firstPendingIndex(current);
     if (stillOpen >= 0) {
-      blockCaptureRef.current = false;
       router.push(`/review/${stillOpen}`);
       return;
     }
@@ -427,11 +158,13 @@ export function ScanScreen({
         `/saved?name=${encodeURIComponent(outcome.summary)}&method=${outcome.method}`,
       );
     } catch (caught) {
-      setCommitting(false);
-      blockCaptureRef.current = false;
       toast.error(
         caught instanceof Error ? caught.message : "Der Import ist fehlgeschlagen.",
       );
+    } finally {
+      // Also on success: <Activity> keeps this state, and a screen that comes back still
+      // "committing" would drop every code on the next visit.
+      setCommitting(false);
     }
   }
 
@@ -449,15 +182,12 @@ export function ScanScreen({
    * Erst die eigene Liste (`/api/items/known` -> `product_knowledge`), denn
    * die traegt die Einordnung: Kategorie, Ort und den Namen, unter dem der
    * Nutzer das Produkt selbst gefuehrt hat. Nur wenn sie ihn nicht kennt,
-   * geht die zweite Frage an Open Food Facts -- die liefert ausschliesslich
-   * einen Namen und ist ein Aufruf nach draussen, den ein bekanntes Produkt
-   * nicht rechtfertigt. Serverseitig, wie die CSP es verlangt: `connect-src`
-   * ist `'self'`, der OFF-Aufruf steckt hinter `/api/lookup`.
+   * geht die zweite Frage an Open Food Facts -- serverseitig, wie die CSP es
+   * verlangt (`connect-src 'self'`, der OFF-Aufruf steckt hinter `/api/lookup`).
    *
-   * Beides laeuft nebenher weiter, waehrend gescannt wird. Der Eintrag steht
-   * schon in der Ablage, bevor die Antwort da ist -- sonst haette der Nutzer
-   * fuer eine halbe Sekunde keinen Beleg dafuer, dass sein Scan angekommen
-   * ist, und wuerde ein zweites Mal ueber dieselbe Packung fahren.
+   * Der Eintrag steht schon in der Ablage, bevor die Antwort da ist -- sonst
+   * haette der Nutzer fuer eine halbe Sekunde keinen Beleg dafuer, dass sein
+   * Scan angekommen ist.
    */
   const resolveEntry = useCallback(
     async (id: string, barcode: string) => {
@@ -505,34 +235,28 @@ export function ScanScreen({
    * Derselbe Barcode ein zweites Mal erhoeht die Menge, statt eine zweite
    * Zeile anzulegen (die Regel steht in `mergeEntry`, weil der
    * Rechnungsimport sie genauso braucht). Nachgefragt wird dann nicht noch
-   * einmal -- Name und Einordnung stehen ja schon da.
+   * einmal, und das Blatt geht auch nicht wieder auf -- sonst datierte man
+   * denselben Joghurt zweimal.
    */
-  const captureBarcode = useCallback(
-    (barcode: string) => {
-      // Frisch aus dem Speicher, nicht aus dem Render-Wert: dieser Callback
-      // haengt an der Decoder-Schleife und lebt laenger als der Render, in
-      // dem er entstanden ist.
-      const existing = readBatch().find((entry) => entry.barcode === barcode);
-      const entry = createEntry(
-        existing
-          ? { source: "scan", barcode, quantity: 1 }
-          : { source: "scan", barcode, name: barcode, quantity: 1 },
-      );
-      updateBatch((entries) => mergeEntry(entries, entry));
-      setLastTouchedId(existing ? existing.id : entry.id);
-      // Ein zweites Mal derselbe Code ist eine Menge, keine neue Entscheidung:
-      // nachgefragt wird nicht noch einmal, und das Blatt geht auch nicht
-      // wieder auf -- sonst datierte man denselben Joghurt zweimal. Ueber die
-      // Ablage antippen geht natuerlich weiter.
-      if (existing) return;
-      setResolving((ids) => [...ids, entry.id]);
-      void resolveEntry(entry.id, barcode);
-      // Nicht ueber den Hook-Wert: dieser Callback haengt an der
-      // Decoder-Schleife und saehe einen Umschalter mitten im Einkauf nie.
-      if (readAutoExpiry()) openSheet(entry.id);
-    },
-    [openSheet, resolveEntry],
-  );
+  function captureBarcode(barcode: string) {
+    const existing = readBatch().find((entry) => entry.barcode === barcode);
+    const entry = createEntry(
+      existing
+        ? { source: "scan", barcode, quantity: 1 }
+        : { source: "scan", barcode, name: barcode, quantity: 1 },
+    );
+    updateBatch((entries) => mergeEntry(entries, entry));
+    setLastTouchedId(existing ? existing.id : entry.id);
+    if (existing) return;
+    setResolving((ids) => [...ids, entry.id]);
+    void resolveEntry(entry.id, barcode);
+    if (autoExpiry) openSheet(entry.id);
+  }
+
+  const scanner = useBarcodeScanner(videoRef, {
+    paused: activeId !== null || committing,
+    onCode: captureBarcode,
+  });
 
   // Die zuletzt getroffene Zeile ins Sichtfeld holen. Bei einem langen
   // Einkauf scrollt die Ablage, und der Beleg dafuer, dass der Scan
@@ -543,212 +267,6 @@ export function ScanScreen({
       ?.querySelector(`[data-entry-id="${lastTouchedId}"]`)
       ?.scrollIntoView({ block: "nearest" });
   }, [lastTouchedId, batch]);
-
-  useEffect(() => {
-    // streakRef/lastHitRef/silentRestartsRef sind Refs und ueberleben das
-    // Verstecken via <Activity> (siehe node_modules/next/dist/docs/
-    // 01-app/02-guides/preserving-ui-state.md) -- ohne diesen Reset traege
-    // jeder Besuch die halbe Serie und die Sperrzeit des vorigen mit sich
-    // herum, und der erste Code nach der Rueckkehr wuerde je nachdem zu
-    // frueh oder gar nicht gezaehlt. Dieser Effect laeuft bei jedem
-    // Hidden->Visible-Wechsel erneut, also gibt jeder Besuch hier eine
-    // frische Scan-Session.
-    let active = true;
-    let restartTimeoutId: ReturnType<typeof setTimeout> | undefined;
-    streakRef.current = { text: null, format: null, count: 0, at: 0 };
-    lastHitRef.current = { text: null, at: 0 };
-    silentRestartsRef.current = 0;
-    startupRestartsRef.current = 0;
-
-    function isVideoReady() {
-      const video = videoRef.current;
-      return !!video && video.videoWidth > 0 && video.videoHeight > 0;
-    }
-
-    function startScanning() {
-      if (!active) return;
-      setError(null);
-      setVideoReady(false);
-      // Jeder (Neu-)Start bekommt einen frischen Stream, also auch einen
-      // frischen Torch-Zustand.
-      setTorchOn(false);
-      setTorchAvailable(false);
-      const reader = new BrowserMultiFormatReader(SCAN_HINTS, READER_OPTIONS);
-
-      reader
-        .decodeFromConstraints(
-          { video: VIDEO_CONSTRAINTS },
-          videoRef.current ?? undefined,
-          (result, err) => {
-            if (!active) return;
-            if (result) {
-              // Blatt offen oder Import unterwegs: die Schleife laeuft weiter,
-              // der Treffer zaehlt nicht. Absichtlich hier und nicht vor
-              // "if (result)" -- der Fehlerzweig darunter startet die Kamera
-              // nach einem harten Fehler neu, und die Sperre darf ihn nicht
-              // aushebeln.
-              if (blockCaptureRef.current) return;
-              const text = result.getText();
-              const format = result.getBarcodeFormat();
-              const now = Date.now();
-              const streak = streakRef.current;
-
-              // Derselbe Code wie eben: die Serie waechst. Ein anderer Code
-              // -- oder eine zu lange Pause -- setzt sie auf diesen Treffer
-              // zurueck, statt zwei unabhaengige Lesungen zu addieren.
-              const continues =
-                streak.text === text &&
-                streak.format === format &&
-                now - streak.at <= MATCH_WINDOW_MS;
-              streakRef.current = {
-                text,
-                format,
-                count: continues ? streak.count + 1 : 1,
-                at: now,
-              };
-
-              const required =
-                format === BarcodeFormat.EAN_8 || format === BarcodeFormat.UPC_E
-                  ? REQUIRED_MATCHES_SHORT
-                  : REQUIRED_MATCHES;
-              if (streakRef.current.count < required) return;
-
-              // Die Serie hat sich erfuellt -- der Code ist im Bild. Das
-              // haelt die Sperrzeit offen, unabhaengig davon, ob der Treffer
-              // gleich auch gezaehlt wird: siehe REHIT_COOLDOWN_MS.
-              const lastHit = lastHitRef.current;
-              const repeat =
-                lastHit.text === text && now - lastHit.at < REHIT_COOLDOWN_MS;
-              lastHitRef.current = { text, at: now };
-
-              // Die Serie faengt von vorn an. Ohne das waere sie im naechsten
-              // Bild sofort wieder voll (count zaehlt ja weiter), und
-              // derselbe Code schluege im Sekundentakt erneut an.
-              streakRef.current = { text: null, format: null, count: 0, at: 0 };
-
-              // Der Scanner laeuft weiter: kein stop(), kein router.push.
-              // Genau das ist der Batch-Scan -- gesammelt wird jetzt,
-              // geprueft wird danach in /review.
-              // Ein gelesener Code beweist, dass die Kamera laeuft.
-              clearScanError();
-              if (!repeat) captureBarcode(text);
-              return;
-            }
-            if (err && !isExpectedDecodeError(err)) {
-              console.error("Barcode scan error:", err);
-              const videoStillStarting = !isVideoReady();
-              const canRestart = videoStillStarting
-                ? startupRestartsRef.current < MAX_STARTUP_RESTARTS
-                : silentRestartsRef.current < MAX_SILENT_RESTARTS;
-              if (canRestart) {
-                if (videoStillStarting) {
-                  startupRestartsRef.current += 1;
-                } else {
-                  silentRestartsRef.current += 1;
-                }
-                // Ueber stopReader und nicht direkt: derselbe Leser, dasselbe
-                // asynchrone stop() wie beim Verlassen des Screens. Bei
-                // eingeschaltetem Licht lehnt das angehaengte switchTorch(false)
-                // ab, und bis zu zwoelf Startversuche hinterliessen ebenso viele
-                // unbehandelte Ablehnungen in der Konsole.
-                stopReader(controlsRef.current);
-                restartTimeoutId = setTimeout(() => {
-                  if (active) startScanning();
-                }, 250);
-              } else {
-                setError("Fehler beim Scannen. Bitte erneut versuchen.");
-              }
-            }
-          },
-        )
-        .then((controls) => {
-          if (!active) {
-            stopReader(controls);
-          } else {
-            controlsRef.current = controls;
-            // Vorratsschrank und Kuehlschrank sind dunkel. switchTorch ist in
-            // @zxing/browser als experimentell markiert und fehlt auf vielen
-            // Geraeten -- deshalb erscheint der Schalter nur, wenn er da ist.
-            setTorchAvailable(typeof controls.switchTorch === "function");
-          }
-        })
-        .catch((err: Error) => {
-          console.error("Camera start error:", err);
-          if (active) {
-            setError(
-              err.name === "NotAllowedError"
-                ? "Kamera-Zugriff wurde verweigert. Bitte in den Browser-Einstellungen erlauben."
-                : "Kamera konnte nicht gestartet werden.",
-            );
-          }
-        });
-    }
-
-    // React StrictMode (dev only) runs this effect's setup, then its cleanup,
-    // then the setup again, synchronously. Deferring den Start um einen Tick
-    // sorgt dafuer, dass nur der ueberlebende Durchlauf die Kamera oeffnet -
-    // sonst kollidieren zwei gleichzeitige getUserMedia-Aufrufe.
-    const timeoutId = setTimeout(startScanning, 0);
-
-    return () => {
-      active = false;
-      clearTimeout(timeoutId);
-      clearTimeout(restartTimeoutId);
-      stopReader(controlsRef.current);
-      controlsRef.current = null;
-      // Der Griff, der wirklich loslaesst.
-      //
-      // React raeumt diesen Effect auch auf, wenn Cache Components den
-      // Screen nur per <Activity> versteckt (node_modules/next/dist/docs/
-      // 01-app/02-guides/preserving-ui-state.md, "Effect and media
-      // cleanup") -- der Zeitpunkt stimmte also, das stop() darueber traf
-      // aber nur den zuletzt eingetragenen Leser. @zxing/browser fuehrt
-      // ueber BrowserCodeReader.streamTracker Buch ueber JEDEN Stream, den
-      // sein getUserMedia geoeffnet hat; releaseAllStreams beendet deren
-      // Spuren. Damit erlischt die Kameraleuchte auch dann, wenn oben
-      // trotz allem noch etwas durchgerutscht ist -- und der naechste
-      // Besuch findet ein freies Geraet vor statt eines, das noch belegt
-      // ist und ein schwarzes Bild liefert.
-      BrowserCodeReader.releaseAllStreams();
-    };
-  }, [captureBarcode, retrySession]);
-
-  function handleRetry() {
-    setRetrySession((s) => s + 1);
-  }
-
-  /**
-   * Nimmt eine Fehlermeldung zurueck, sobald sie widerlegt ist.
-   *
-   * Sie wurde bisher nur beim Start geloescht. Ein Startholpern -- auf
-   * iPhones meldet das Video "playing", bevor videoWidth einen Wert hat --
-   * verbrauchte also das Neustart-Budget, setzte die Meldung, und der Leser,
-   * der danach einwandfrei lief, nahm sie nie zurueck: der Testlauf zeigte
-   * "Fehler beim Scannen" ueber einer Ablage, in der gerade ein frisch
-   * gelesener Barcode stand. Ein laufendes Bild und ein erkannter Code sind
-   * der Gegenbeweis, und beide melden sich hier.
-   *
-   * Der funktionale Updater ist kein Zierrat: React bricht ab, wenn er
-   * denselben Wert zurueckgibt, also kostet der Aufruf im Normalfall -- kein
-   * Fehler gesetzt -- kein zusaetzliches Rendern, obwohl er bei jedem
-   * Treffer kommt.
-   */
-  function clearScanError() {
-    setError((current) => (current === null ? current : null));
-    silentRestartsRef.current = 0;
-    startupRestartsRef.current = 0;
-  }
-
-  async function toggleTorch() {
-    const next = !torchOn;
-    try {
-      await controlsRef.current?.switchTorch?.(next);
-      setTorchOn(next);
-    } catch {
-      // Manche Geraete melden die Faehigkeit und verweigern sie dann doch.
-      setTorchAvailable(false);
-    }
-  }
 
   // Die Kamera ist der Inhalt dieses Screens, nicht ein Element darin: der
   // Abstand aus dem Layout wird hier zurueckgenommen, damit das Bild bis an
@@ -771,24 +289,8 @@ export function ScanScreen({
           statt ueber explizite Positionierung bestimmt wird. */}
       <video
         ref={videoRef}
-        onPlaying={() => {
-          // "playing" heisst nur, dass Frames fliessen -- Safari braucht danach
-          // noch ein bis zwei gemalte Frames, bis die object-cover-Zuschneidung
-          // tatsaechlich korrekt gerendert ist (sonst blitzt kurz ein falsch
-          // zugeschnittenes erstes Frame auf). Zwei verschachtelte rAF warten,
-          // bis mindestens ein Paint dazwischen stattgefunden hat, bevor wir
-          // aufdecken.
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              setVideoReady(true);
-              // Das Bild steht -- was beim Start schiefging, ist damit
-              // erledigt und darf nicht als Fehler stehenbleiben.
-              clearScanError();
-            });
-          });
-        }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
-          videoReady ? "opacity-100" : "opacity-0"
+          scanner.videoReady ? "opacity-100" : "opacity-0"
         }`}
         muted
         playsInline
@@ -798,7 +300,7 @@ export function ScanScreen({
       <div
         aria-hidden="true"
         className={`absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_30%,#2c3a30_0%,#16201a_60%,#0d1512_100%)] transition-opacity duration-300 ${
-          videoReady ? "opacity-0" : "opacity-100"
+          scanner.videoReady ? "opacity-0" : "opacity-100"
         }`}
       />
 
@@ -812,15 +314,15 @@ export function ScanScreen({
           <X className="size-5" strokeWidth={2} />
         </button>
         <span className="font-heading text-base font-bold">Scanner</span>
-        {torchAvailable ? (
+        {scanner.torchAvailable ? (
           <button
             type="button"
-            aria-label={torchOn ? "Licht ausschalten" : "Licht einschalten"}
-            aria-pressed={torchOn}
-            onClick={toggleTorch}
+            aria-label={scanner.torchOn ? "Licht ausschalten" : "Licht einschalten"}
+            aria-pressed={scanner.torchOn}
+            onClick={scanner.toggleTorch}
             className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
           >
-            {torchOn ? (
+            {scanner.torchOn ? (
               <Flashlight className="size-5" />
             ) : (
               <FlashlightOff className="size-5" />
@@ -831,7 +333,7 @@ export function ScanScreen({
         )}
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6.5">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-6.5">
         {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
             bleibt genau der Ausschnitt hell, in dem der Code liegen soll --
             der zweite Ring mit seinen 2000px Streuung *ist* die Abdunklung,
@@ -839,22 +341,12 @@ export function ScanScreen({
         <div className="relative h-[186px] w-[262px] overflow-hidden rounded-[34px] shadow-[0_0_0_3px_rgb(255_255_255/0.92),0_0_0_2000px_rgb(0_0_0/0.46)]">
           <span className="bg-primary-light absolute inset-x-4.5 top-4.5 h-1 animate-scan rounded-full shadow-[0_0_20px_var(--primary-light)]" />
         </div>
-        <div className="flex items-center gap-3 rounded-[24px] bg-white/10 px-4 py-3 backdrop-blur-[8px]">
-          <Avo size="sm" mood="happy" onDark />
-          {/* Der Text folgt dem Schalter: "Geprüft wird danach" wäre im
-              eingeschalteten Zustand schlicht falsch, und die Zusage darüber,
-              wann das MHD kommt, ist das Einzige, was die beiden Abläufe
-              unterscheidet. */}
-          <p className="font-heading text-[15px] leading-snug font-bold text-pretty text-white/90">
-            {autoExpiry ? "Scannen, eintragen, weiter." : "Einfach weiterscannen."}
-            <br />
-            <span className="font-sans text-[12.5px] font-semibold text-white/60">
-              {autoExpiry
-                ? "Nach jedem Code fragt das Blatt gleich nach dem MHD."
-                : "Geprüft wird danach — einer nach dem anderen."}
-            </span>
-          </p>
-        </div>
+        {/* One line, not a card: everything here sits on top of the viewfinder. The text follows
+            the switch, because when the date is asked for is the only difference between the two
+            flows. */}
+        <p className="rounded-full bg-black/40 px-3 py-1 text-center text-[12px] font-semibold text-white/80 backdrop-blur-[6px]">
+          {autoExpiry ? "MHD wird nach jedem Code abgefragt." : "Einfach weiterscannen, geprüft wird danach."}
+        </p>
 
         {/* Der Schalter steht hier und nicht unter "Mehr": wie jemand sein
             Telefon beim Einräumen hält, entscheidet er in dem Moment, in dem er
@@ -866,24 +358,24 @@ export function ScanScreen({
           aria-pressed={autoExpiry}
           onClick={() => setAutoExpiry(!autoExpiry)}
           className={cn(
-            "font-heading flex h-11 items-center gap-2 rounded-full px-4 text-[13px] font-bold backdrop-blur-[8px] outline-none focus-visible:ring-3 focus-visible:ring-white/50",
+            "font-heading -mt-1 flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold backdrop-blur-[8px] outline-none focus-visible:ring-3 focus-visible:ring-white/50",
             autoExpiry
               ? "bg-white/92 text-[#0b1f14]"
               : "border border-white/20 bg-white/10 text-white/75",
           )}
         >
-          <CalendarClock className="size-4" strokeWidth={2.2} />
+          <CalendarClock className="size-3.5" strokeWidth={2.2} />
           MHD gleich abfragen
         </button>
 
-        {error && (
+        {scanner.error && (
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
             <p className="text-center text-sm font-semibold text-[#e88e78]">
-              {error}
+              {scanner.error}
             </p>
             <button
               type="button"
-              onClick={handleRetry}
+              onClick={scanner.retry}
               className="h-10 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white"
             >
               Kamera neu starten
@@ -1072,7 +564,7 @@ export function ScanScreen({
                 Einkauf liegen lassen. */}
             <Link
               href="/scan-ean"
-              className="font-heading flex h-11 items-center justify-center text-sm font-bold text-white/62"
+              className="font-heading flex h-9 items-center justify-center text-[13px] font-bold text-white/62"
             >
               EAN von Hand eingeben
             </Link>
@@ -1081,13 +573,13 @@ export function ScanScreen({
           <>
             <Link
               href="/scan-ean"
-              className="flex h-13 items-center justify-center rounded-[22px] border border-white/25 bg-white/10 text-[15px] font-semibold text-white backdrop-blur-sm"
+              className="mx-auto flex h-10 items-center justify-center rounded-full border border-white/25 bg-white/10 px-5 text-[13px] font-semibold text-white backdrop-blur-sm"
             >
               EAN von Hand eingeben
             </Link>
             <Link
               href="/add"
-              className="flex h-11 items-center justify-center text-sm font-semibold text-white/60"
+              className="flex h-9 items-center justify-center text-[13px] font-semibold text-white/60"
             >
               Kein Barcode vorhanden
             </Link>
@@ -1107,7 +599,7 @@ export function ScanScreen({
           categories={categories}
           places={places}
           today={today}
-          onClose={closeSheet}
+          onClose={() => setActiveId(null)}
           onDecide={decideActive}
         />
       )}

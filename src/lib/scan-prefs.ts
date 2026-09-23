@@ -65,18 +65,6 @@ export function useAutoExpiry(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/**
- * Der Schalter, ohne React.
- *
- * Für den Decoder-Callback: @zxing/browser bekommt ihn genau einmal je
- * Kamerastart übergeben, er schließt also über die Werte des Rendern, in dem
- * er entstanden ist. Über den Hook-Wert sähe er einen Umschalter mitten im
- * Einkauf nie.
- */
-export function readAutoExpiry(): boolean {
-  return getSnapshot();
-}
-
 export function setAutoExpiry(next: boolean): void {
   cached = next;
   try {
