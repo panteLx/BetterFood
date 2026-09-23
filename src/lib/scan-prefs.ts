@@ -81,3 +81,62 @@ export function setAutoExpiry(next: boolean): void {
   }
   for (const listener of listeners) listener();
 }
+
+/*
+ * The chosen camera, per device like the switch above. `null` means automatic: the browser picks
+ * a back camera and may switch lenses on its own. The label is kept because Safari does not
+ * always keep deviceIds stable across launches; the scanner finds the lens again by name.
+ */
+export const SCAN_CAMERA_KEY = "bf.scan.camera.v1";
+
+export type ScanCamera = { deviceId: string; label: string };
+
+let cachedCamera: ScanCamera | null | undefined;
+
+function readCamera(): ScanCamera | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SCAN_CAMERA_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "deviceId" in parsed &&
+      "label" in parsed &&
+      typeof parsed.deviceId === "string" &&
+      typeof parsed.label === "string"
+    ) {
+      return { deviceId: parsed.deviceId, label: parsed.label };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getCameraSnapshot(): ScanCamera | null {
+  if (cachedCamera === undefined) cachedCamera = readCamera();
+  return cachedCamera;
+}
+
+function getCameraServerSnapshot(): ScanCamera | null {
+  return null;
+}
+
+export function useScanCamera(): ScanCamera | null {
+  return useSyncExternalStore(subscribe, getCameraSnapshot, getCameraServerSnapshot);
+}
+
+export function setScanCamera(camera: ScanCamera | null): void {
+  cachedCamera = camera;
+  try {
+    if (camera) {
+      window.localStorage.setItem(SCAN_CAMERA_KEY, JSON.stringify(camera));
+    } else {
+      window.localStorage.removeItem(SCAN_CAMERA_KEY);
+    }
+  } catch {
+    // Blocked storage: the choice holds for this visit only.
+  }
+  for (const listener of listeners) listener();
+}

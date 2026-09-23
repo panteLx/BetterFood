@@ -23,6 +23,7 @@ import {
   NotFoundException,
   ReaderException,
 } from "@zxing/library";
+import type { ScanCamera } from "@/lib/scan-prefs";
 
 // @zxing/browser meldet fuer sein Canvas-Bild "Drehen wird unterstuetzt",
 // kann es aber nicht: HTMLCanvasElementLuminanceSource initialisiert
@@ -185,11 +186,39 @@ const READER_OPTIONS = {
 // ist, ist die eigentliche Quelle der Fehllesungen. Ohne Angabe liefern
 // viele Kameras 640x480; "ideal" erzwingt nichts, sondern nimmt das
 // naechstbeste, was das Geraet kann.
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "environment",
+const VIDEO_SIZE: MediaTrackConstraints = {
   width: { ideal: 1280 },
   height: { ideal: 720 },
 };
+
+function videoConstraints(deviceId: string | null): MediaTrackConstraints {
+  return deviceId
+    ? { ...VIDEO_SIZE, deviceId: { exact: deviceId } }
+    : { ...VIDEO_SIZE, facingMode: "environment" };
+}
+
+// Android: "camera2 1, facing front"; iOS: "Front Camera" / "Frontkamera".
+const FRONT_CAMERA = /front|vorder|user|selfie/i;
+
+/**
+ * The back cameras the browser exposes. Labels are only filled in once camera permission has
+ * been granted, so this is called after the stream is running.
+ */
+async function listBackCameras(): Promise<ScanCamera[]> {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices
+    .filter((device) => device.kind === "videoinput" && !FRONT_CAMERA.test(device.label))
+    .map((device, index) => ({
+      deviceId: device.deviceId,
+      label: device.label || `Kamera ${index + 1}`,
+    }));
+}
+
+function isMissingDevice(err: unknown) {
+  return (
+    err instanceof Error && (err.name === "OverconstrainedError" || err.name === "NotFoundError")
+  );
+}
 
 /**
  * Haelt einen Leser an, ohne dass sein Versprechen unbehandelt liegenbleibt.
@@ -222,10 +251,24 @@ const NO_STREAK: MatchStreak = { text: null, format: null, count: 0, at: 0 };
  * torch) but drops every read. It is a prop derived from the caller's state on purpose: the
  * previous hand-set block flag outlived a commit through <Activity>, and every later visit
  * showed a live camera that never recognised anything.
+ *
+ * `camera` pins one lens instead of letting the browser choose. When its deviceId no longer
+ * opens, the hook starts automatically and reports the same lens found by label through
+ * `onCameraChange` -- or `null` when it is gone, so the caller can forget the choice.
  */
 export function useBarcodeScanner(
   videoRef: RefObject<HTMLVideoElement | null>,
-  { paused, onCode }: { paused: boolean; onCode: (barcode: string) => void },
+  {
+    paused,
+    camera,
+    onCode,
+    onCameraChange,
+  }: {
+    paused: boolean;
+    camera: ScanCamera | null;
+    onCode: (barcode: string) => void;
+    onCameraChange: (camera: ScanCamera | null) => void;
+  },
 ) {
   const controlsRef = useRef<IScannerControls | null>(null);
   const streakRef = useRef<MatchStreak>(NO_STREAK);
@@ -238,6 +281,9 @@ export function useBarcodeScanner(
   const [videoReady, setVideoReady] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
+  const [cameras, setCameras] = useState<ScanCamera[]>([]);
+  const cameraId = camera?.deviceId ?? null;
+  const cameraLabel = camera?.label ?? null;
 
   // Layout effect so the pause is in place before the decoder's next task can run, e.g. between
   // the click on "übernehmen" and the import request.
@@ -252,6 +298,7 @@ export function useBarcodeScanner(
   }, [paused]);
 
   const report = useEffectEvent((barcode: string) => onCode(barcode));
+  const reportCamera = useEffectEvent((next: ScanCamera | null) => onCameraChange(next));
 
   /**
    * Nimmt eine Fehlermeldung zurueck, sobald sie widerlegt ist.
@@ -336,6 +383,9 @@ export function useBarcodeScanner(
       if (!repeat) report(text);
     }
 
+    // The lens actually requested; drops to null (automatic) when the pinned one does not open.
+    let target = cameraId;
+
     function startScanning() {
       if (!active) return;
       setError(null);
@@ -347,7 +397,7 @@ export function useBarcodeScanner(
       const reader = new BrowserMultiFormatReader(SCAN_HINTS, READER_OPTIONS);
 
       reader
-        .decodeFromConstraints({ video: VIDEO_CONSTRAINTS }, video ?? undefined, (result, err) => {
+        .decodeFromConstraints({ video: videoConstraints(target) }, video ?? undefined, (result, err) => {
           if (!active) return;
           if (result) {
             handleResult(result.getText(), result.getBarcodeFormat());
@@ -382,10 +432,24 @@ export function useBarcodeScanner(
           // fehlt auf vielen Geraeten -- deshalb erscheint der Schalter nur,
           // wenn er da ist.
           setTorchAvailable(typeof controls.switchTorch === "function");
+          void listBackCameras()
+            .then((found) => {
+              if (!active) return;
+              setCameras(found);
+              if (cameraId === null || target !== null) return;
+              // The pinned deviceId did not open. Same lens under a new id, or gone for good.
+              reportCamera(found.find((option) => option.label === cameraLabel) ?? null);
+            })
+            .catch(() => {});
         })
         .catch((err: Error) => {
-          console.error("Camera start error:", err);
           if (!active) return;
+          if (target !== null && isMissingDevice(err)) {
+            target = null;
+            startScanning();
+            return;
+          }
+          console.error("Camera start error:", err);
           setError(
             err.name === "NotAllowedError"
               ? "Kamera-Zugriff wurde verweigert. Bitte in den Browser-Einstellungen erlauben."
@@ -415,7 +479,7 @@ export function useBarcodeScanner(
       // eines, das noch belegt ist und ein schwarzes Bild liefert.
       BrowserCodeReader.releaseAllStreams();
     };
-  }, [videoRef, session, clearScanError]);
+  }, [videoRef, session, cameraId, cameraLabel, clearScanError]);
 
   const retry = useCallback(() => setSession((s) => s + 1), []);
 
@@ -430,5 +494,5 @@ export function useBarcodeScanner(
     }
   }, [torchOn]);
 
-  return { error, retry, videoReady, torchAvailable, torchOn, toggleTorch };
+  return { error, retry, videoReady, torchAvailable, torchOn, toggleTorch, cameras };
 }

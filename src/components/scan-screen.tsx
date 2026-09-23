@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CalendarClock, Flashlight, FlashlightOff, X } from "lucide-react";
+import { CalendarClock, Flashlight, FlashlightOff, SwitchCamera, X } from "lucide-react";
 import { toast } from "sonner";
 import type { StepPatch } from "@/components/review-step";
 import { ScanExpirySheet } from "@/components/scan-expiry-sheet";
 import { buttonVariants } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { Sheet } from "@/components/ui/sheet";
 import { commitBatch } from "@/lib/batch-commit";
 import { formatShort, fromDateInputValue, startOfDay } from "@/lib/expiry";
 import {
@@ -20,7 +22,7 @@ import {
   useBatch,
   type BatchEntry,
 } from "@/lib/review-batch";
-import { setAutoExpiry, useAutoExpiry } from "@/lib/scan-prefs";
+import { setAutoExpiry, setScanCamera, useAutoExpiry, useScanCamera } from "@/lib/scan-prefs";
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 import { cn } from "@/lib/utils";
 import type { Category, Place } from "@/db/schema";
@@ -253,9 +255,13 @@ export function ScanScreen({
     if (autoExpiry) openSheet(entry.id);
   }
 
+  const camera = useScanCamera();
+  const [cameraPickerOpen, setCameraPickerOpen] = useState(false);
   const scanner = useBarcodeScanner(videoRef, {
     paused: activeId !== null || committing,
+    camera,
     onCode: captureBarcode,
+    onCameraChange: setScanCamera,
   });
 
   // Die zuletzt getroffene Zeile ins Sichtfeld holen. Bei einem langen
@@ -313,24 +319,39 @@ export function ScanScreen({
         >
           <X className="size-5" strokeWidth={2} />
         </button>
-        <span className="font-heading text-base font-bold">Scanner</span>
-        {scanner.torchAvailable ? (
-          <button
-            type="button"
-            aria-label={scanner.torchOn ? "Licht ausschalten" : "Licht einschalten"}
-            aria-pressed={scanner.torchOn}
-            onClick={scanner.toggleTorch}
-            className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
-          >
-            {scanner.torchOn ? (
-              <Flashlight className="size-5" />
-            ) : (
-              <FlashlightOff className="size-5" />
-            )}
-          </button>
-        ) : (
-          <span className="size-11" aria-hidden="true" />
-        )}
+        <span className="font-heading absolute left-1/2 -translate-x-1/2 text-base font-bold">Scanner</span>
+        <div className="flex gap-2">
+          {/* Phones with several back lenses often start on one that cannot focus this close and
+              only switch to the macro lens after a while; pinning a lens skips that. Only offered
+              when the browser exposes more than one. */}
+          {scanner.cameras.length > 1 && (
+            <button
+              type="button"
+              aria-label="Kamera wählen"
+              onClick={() => setCameraPickerOpen(true)}
+              className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+            >
+              <SwitchCamera className="size-5" />
+            </button>
+          )}
+          {scanner.torchAvailable ? (
+            <button
+              type="button"
+              aria-label={scanner.torchOn ? "Licht ausschalten" : "Licht einschalten"}
+              aria-pressed={scanner.torchOn}
+              onClick={scanner.toggleTorch}
+              className="flex size-11 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-[6px] outline-none focus-visible:ring-3 focus-visible:ring-white/50"
+            >
+              {scanner.torchOn ? (
+                <Flashlight className="size-5" />
+              ) : (
+                <FlashlightOff className="size-5" />
+              )}
+            </button>
+          ) : (
+            scanner.cameras.length <= 1 && <span className="size-11" aria-hidden="true" />
+          )}
+        </div>
       </div>
 
       <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-6.5">
@@ -592,6 +613,24 @@ export function ScanScreen({
           `today` steht erst, wenn es einmal geoeffnet wurde -- vorher gibt es
           nichts zu zeigen und `new Date()` duerfte im Prerender gar nicht
           fallen. */}
+      <Sheet open={cameraPickerOpen} onOpenChange={setCameraPickerOpen} title="Kamera wählen">
+        <div className="flex flex-col gap-2 px-1.5 pb-2">
+          {[null, ...scanner.cameras].map((option) => (
+            <Chip
+              key={option?.deviceId ?? "auto"}
+              active={(option?.deviceId ?? null) === (camera?.deviceId ?? null)}
+              onClick={() => {
+                setScanCamera(option);
+                setCameraPickerOpen(false);
+              }}
+              className="h-11 w-full justify-start"
+            >
+              <span className="truncate">{option ? option.label : "Automatisch"}</span>
+            </Chip>
+          ))}
+        </div>
+      </Sheet>
+
       {today && (
         <ScanExpirySheet
           entry={activeEntry}
