@@ -288,7 +288,7 @@ export function ScanScreen({
   // steht die Hausregel entgegen, und sie liefe bei der naechsten
   // Palettenaenderung auseinander.
   return (
-    <div className="dark relative -mt-[max(env(safe-area-inset-top),1.75rem)] flex flex-1 flex-col overflow-hidden bg-[#0d1512] text-white">
+    <div className="dark relative -mt-[max(env(safe-area-inset-top),1.75rem)] [--finder-h:clamp(112px,19svh,160px)] flex flex-1 flex-col overflow-hidden bg-[#0d1512] text-white">
       {/* absolute inset-0 statt h-full/w-full: manche mobilen Browser (v.a.
           iOS Safari) belassen <video> bei seiner intrinsischen Groesse, obwohl
           object-cover gesetzt ist, solange die Groesse ueber Flex-/Block-Layout
@@ -354,14 +354,33 @@ export function ScanScreen({
         </div>
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-6.5">
-        {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
-            bleibt genau der Ausschnitt hell, in dem der Code liegen soll --
-            der zweite Ring mit seinen 2000px Streuung *ist* die Abdunklung,
-            kein Rahmen daneben. */}
-        <div className="relative h-[186px] w-[262px] overflow-hidden rounded-[34px] shadow-[0_0_0_3px_rgb(255_255_255/0.92),0_0_0_2000px_rgb(0_0_0/0.46)]">
-          <span className="bg-primary-light absolute inset-x-4.5 top-4.5 h-1 animate-scan rounded-full shadow-[0_0_20px_var(--primary-light)]" />
-        </div>
+      {/* The finder sits at the centre of the video, not of the space left over: iOS focuses and
+          meters on the frame centre, and a finder that drifted up with a growing tray put codes
+          out of focus. Everything else is laid out around it. */}
+      {/* Der riesige Schlagschatten nach aussen ist die Abdunklung: so
+          bleibt genau der Ausschnitt hell, in dem der Code liegen soll --
+          der zweite Ring mit seinen 2000px Streuung *ist* die Abdunklung,
+          kein Rahmen daneben. */}
+      <div className="absolute top-1/2 left-1/2 h-(--finder-h) w-[262px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[34px] shadow-[0_0_0_3px_rgb(255_255_255/0.92),0_0_0_2000px_rgb(0_0_0/0.46)]">
+        <span className="bg-primary-light absolute inset-x-4.5 top-4.5 h-1 animate-scan rounded-full shadow-[0_0_20px_var(--primary-light)]" />
+      </div>
+
+      <div className="absolute inset-x-0 bottom-[calc(50%+var(--finder-h)/2+1rem)] flex flex-col items-center gap-2 px-6.5">
+        {scanner.error && (
+          <div className="mb-1 flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
+            <p className="text-center text-sm font-semibold text-[#e88e78]">
+              {scanner.error}
+            </p>
+            <button
+              type="button"
+              onClick={scanner.retry}
+              className="h-10 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white"
+            >
+              Kamera neu starten
+            </button>
+          </div>
+        )}
+
         {/* One line, not a card: everything here sits on top of the viewfinder. The text follows
             the switch, because when the date is asked for is the only difference between the two
             flows. */}
@@ -379,7 +398,7 @@ export function ScanScreen({
           aria-pressed={autoExpiry}
           onClick={() => setAutoExpiry(!autoExpiry)}
           className={cn(
-            "font-heading -mt-1 flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold backdrop-blur-[8px] outline-none focus-visible:ring-3 focus-visible:ring-white/50",
+            "font-heading flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold backdrop-blur-[8px] outline-none focus-visible:ring-3 focus-visible:ring-white/50",
             autoExpiry
               ? "bg-white/92 text-[#0b1f14]"
               : "border border-white/20 bg-white/10 text-white/75",
@@ -388,27 +407,13 @@ export function ScanScreen({
           <CalendarClock className="size-3.5" strokeWidth={2.2} />
           MHD gleich abfragen
         </button>
-
-        {scanner.error && (
-          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
-            <p className="text-center text-sm font-semibold text-[#e88e78]">
-              {scanner.error}
-            </p>
-            <button
-              type="button"
-              onClick={scanner.retry}
-              className="h-10 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white"
-            >
-              Kamera neu starten
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Der Ausweg gehoert auf diesen Screen: wer hier steht, hat einen Code
           vor sich, den die Kamera nicht liest. Ihn ueber den zentralen
           Hinzufuegen-Button suchen zu lassen, hilft in dem Moment niemandem. */}
-      <div className="relative flex flex-col gap-2.5 px-5 pb-[max(env(safe-area-inset-bottom),2.5rem)]">
+      {/* Capped at the space below the finder; a long tray scrolls inside instead of pushing up. */}
+      <div className="absolute inset-x-0 bottom-0 flex max-h-[calc(50%-var(--finder-h)/2-0.75rem)] flex-col gap-2.5 px-5 pb-[max(env(safe-area-inset-bottom),1.5rem)]">
         {batch.length > 0 ? (
           <>
             {/* Nur die eigenen Treffer: der Rechnungsimport schreibt in
@@ -425,19 +430,17 @@ export function ScanScreen({
                 genau bg-black/50 + border-white/12. Die Ausnahme steht so im
                 Plan (Abschnitt "Batch-Ablage (8e)"). */}
             {scanned.length > 0 && (
-              <div className="rounded-[26px] border border-white/12 bg-black/50 p-4 backdrop-blur-[8px]">
+              <div className="flex min-h-0 flex-col rounded-[26px] border border-white/12 bg-black/50 p-4 backdrop-blur-[8px]">
                 <p className="text-[11px] font-extrabold tracking-[0.1em] text-white/60 uppercase">
                   Ablage · {scanned.length} erfasst
                 </p>
-                {/* max-h statt fester Hoehe: nach dem Wocheneinkauf stehen hier
-                    zwanzig Zeilen, und der Sucher darf darunter nicht
-                    verschwinden. aria-live, damit ein Screenreader den Treffer
-                    meldet -- sehen kann man ihn beim Scannen ohnehin nicht,
-                    weil das Telefon auf die Packung zeigt. */}
+                {/* Shrinks with the panel: after the weekly shop there are twenty rows here, and
+                    they scroll rather than reach into the finder. aria-live so a screen reader
+                    announces the hit -- nobody sees it while the phone points at the pack. */}
                 <ul
                   ref={trayRef}
                   aria-live="polite"
-                  className="mt-3 max-h-[30vh] space-y-1.5 overflow-y-auto"
+                  className="mt-3 min-h-0 space-y-1.5 overflow-y-auto"
                 >
                   {scanned.map((entry) => {
                     // Der zuletzt gescannte Eintrag ist immer der, dessen Name
@@ -530,7 +533,7 @@ export function ScanScreen({
                 gleich mitgeprueft -- verschwiegen ergaebe der Knopf darunter
                 keinen Sinn, der zaehlt naemlich alles. */}
             {fromReceipt > 0 && (
-              <p className="px-1 text-[12.5px] leading-snug font-semibold text-white/60">
+              <p className="shrink-0 px-1 text-[12.5px] leading-snug font-semibold text-white/60">
                 Aus einer Rechnung warten noch {fromReceipt} Artikel auf die
                 Prüfung.
               </p>
@@ -557,7 +560,7 @@ export function ScanScreen({
                   // shadow-none: der Verlauf ist hier die hellste Flaeche
                   // ueberhaupt, ein Schein darunter waere auf dem
                   // Kamerabild nicht zu sehen und nur Rechenarbeit.
-                  "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none",
+                  "h-14 shrink-0 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none",
                 )}
               >
                 {batch.filter((entry) => entry.status === "pending").length} Artikel
@@ -570,7 +573,7 @@ export function ScanScreen({
                 disabled={committing}
                 className={cn(
                   buttonVariants(),
-                  "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none disabled:opacity-60",
+                  "h-14 shrink-0 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none disabled:opacity-60",
                 )}
               >
                 {committing
@@ -585,7 +588,7 @@ export function ScanScreen({
                 Einkauf liegen lassen. */}
             <Link
               href="/scan-ean"
-              className="font-heading flex h-9 items-center justify-center text-[13px] font-bold text-white/62"
+              className="font-heading flex h-9 shrink-0 items-center justify-center text-[13px] font-bold text-white/62"
             >
               EAN von Hand eingeben
             </Link>
