@@ -22,6 +22,7 @@ import { SectionLabel } from "@/components/section-label";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Sheet } from "@/components/ui/sheet";
+import { commitBatch } from "@/lib/batch-commit";
 import {
   DEFAULT_SHELF_LIFE_DAYS,
   formatShort,
@@ -163,91 +164,34 @@ function ReviewFlow({
   /**
    * Der Abschluss: ein einziger Import für den ganzen Einkauf.
    *
-   * `POST /api/items/import` schreibt in einer Transaktion, fasst über
-   * `findMergeTarget` zusammen und lernt über `rememberProduct` -- genau
-   * deshalb entsteht der Eintrag in `product_knowledge` auch erst hier und
-   * nicht schon bei der Kategoriewahl: sonst lernte die App auch aus
-   * Durchläufen, die der Nutzer abgebrochen hat.
+   * Das Schreiben selbst liegt in `lib/batch-commit.ts`, weil es seit dem
+   * MHD-Blatt am Scanner zwei Aufrufer hat. Hier bleibt nur die Reihenfolge
+   * danach, und die ist an beiden Stellen dieselbe: Batch leeren, die
+   * serverseitig gerenderten Vorratsseiten auffrischen, weiter nach /saved.
    */
   async function commit() {
-    // Typprädikat statt eines "!" weiter unten: der Filter beweist, dass
-    // expiryDate dasteht, und TypeScript kann das aus einem gewöhnlichen
-    // Vergleich nicht ableiten.
-    const ready = batch.filter(
-      (item): item is BatchEntry & { expiryDate: string } =>
-        item.status === "done" && item.expiryDate !== null,
-    );
-    if (ready.length === 0) {
-      // Alles übersprungen: es gibt nichts zu schreiben, aber der Batch muss
-      // trotzdem weg -- sonst begrüßt derselbe Einkauf den Nutzer beim
-      // nächsten Scan erneut.
-      setCommitting(true);
-      clearBatch();
-      router.replace("/");
-      return;
-    }
-
     setCommitting(true);
     try {
-      const res = await fetch("/api/items/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: ready.map((item) => ({
-            name: item.name.trim(),
-            // Die Schreibweise vom Beleg bzw. aus Open Food Facts, falls der
-            // Nutzer den Namen begradigt hat -- daraus lernt der Import den
-            // Alias in product_knowledge.
-            rawName: item.rawName,
-            // Der Barcode muss mit, obwohl der Prüf-Flow ihn nirgends mehr
-            // anzeigt: ohne ihn lernt `product_knowledge` den Scan nur unter
-            // dem Namen, und der nächste Scan desselben Artikels fragt
-            // `GET /api/items/known?barcode=…` -- also genau nach dem Feld,
-            // das dann leer ist. Der Artikel bliebe für immer "neu", und das
-            // Versprechen "Danach merkt sich die Liste die Einordnung für den
-            // nächsten Einkauf" wäre keins. Auf dem alten Weg (/scan ->
-            // /confirm -> POST /api/items) ging er mit; beim Batch-Import
-            // fiel er heraus. `null` bei Belegzeilen, die keinen haben.
-            barcode: item.barcode,
-            note: item.note,
-            category: item.category,
-            placeId: item.placeId,
-            quantity: item.quantity,
-            expiryDate: fromDateInputValue(item.expiryDate).toISOString(),
-          })),
-        }),
-      });
-      const payload = (await res.json()) as {
-        created?: number;
-        merged?: number;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(payload.error ?? "Der Import ist fehlgeschlagen.");
-
-      const created = payload.created ?? 0;
-      const merged = payload.merged ?? 0;
-      const summary =
-        merged > 0
-          ? `${created} angelegt · ${merged} zusammengefasst`
-          : `${created} Artikel übernommen`;
+      const outcome = await commitBatch(batch);
+      if (!outcome.wrote) {
+        // Alles übersprungen: es gibt nichts zu schreiben, aber der Batch muss
+        // trotzdem weg -- sonst begrüßt derselbe Einkauf den Nutzer beim
+        // nächsten Scan erneut.
+        clearBatch();
+        router.replace("/");
+        return;
+      }
 
       clearBatch();
       // Die Vorratsseiten sind serverseitig gerendert und müssen den Zuwachs
       // sehen, sobald der Nutzer hinüberwechselt.
       router.refresh();
       // replace statt push: der Prüf-Flow ist abgearbeitet, ein Schritt
-      // zurück führte nur auf einen leeren Batch.
-      // Der Weg zurück ist der, auf dem der Einkauf hereinkam: nach einem
-      // Beleg der nächste Beleg, nach einem Scan die Kamera.
-      // Der letzte Eintrag und nicht der erste: der Rechnungsimport haengt
-      // seine Zeilen an einen laufenden Batch an, statt ihn zu ersetzen
-      // (receipt-import.tsx, handOver). Wer erst ein paar Artikel scannt und
-      // dann einen Beleg einliest, kam ueber den Beleg herein -- `batch[0]`
-      // zeigte in dem Fall auf den ersten Scan und schickte ihn zurueck an
-      // die Kamera.
-      const arrivedVia = batch[batch.length - 1]?.source === "receipt" ? "receipt" : "scan";
+      // zurück führte nur auf einen leeren Batch. Der Weg zurück ist der, auf
+      // dem der Einkauf hereinkam: nach einem Beleg der nächste Beleg, nach
+      // einem Scan die Kamera.
       router.replace(
-        `/saved?name=${encodeURIComponent(summary)}&method=${arrivedVia}`,
+        `/saved?name=${encodeURIComponent(outcome.summary)}&method=${outcome.method}`,
       );
     } catch (caught) {
       setCommitting(false);
@@ -435,7 +379,7 @@ function ReviewFlow({
  * Der Schritt selbst
  * ------------------------------------------------------------------ */
 
-type StepPatch = {
+export type StepPatch = {
   category: string | null;
   placeId: number | null;
   /** Nur gesetzt, wenn der Nutzer den Namen in diesem Schritt geändert hat. */
@@ -446,11 +390,21 @@ type StepPatch = {
   expiryDate?: string | null;
 };
 
-function StepCard({
+/**
+ * Ein Artikel, eine Entscheidung.
+ *
+ * Exportiert, weil derselbe Schritt an zwei Stellen steht: als Karte im
+ * Prüf-Flow und als Blatt über dem laufenden Kamerabild
+ * (`scan-expiry-sheet.tsx`). Dass das ohne Umbau geht, liegt an `onCommit` /
+ * `onSkip`: die Komponente entscheidet nicht selbst, was danach passiert -- ob
+ * eine Route wechselt oder ein Blatt zufährt, weiß nur der Aufrufer.
+ */
+export function StepCard({
   entry,
   categories,
   places,
   today,
+  embedded = false,
   onCommit,
   onSkip,
 }: {
@@ -458,6 +412,8 @@ function StepCard({
   categories: Category[];
   places: Place[];
   today: Date;
+  /** Steht der Schritt schon auf einer Kartenfläche? Dann ohne eigene. */
+  embedded?: boolean;
   onCommit: (patch: StepPatch) => void;
   onSkip: (patch: StepPatch) => void;
 }) {
@@ -555,7 +511,15 @@ function StepCard({
 
   return (
     <>
-      <div className="rounded-[30px] bg-card p-[18px] shadow-card">
+      <div
+        className={cn(
+          // Im Blatt liegt der Schritt bereits auf einer Kartenfläche -- ein
+          // zweiter Radius mit Schatten darin wäre eine Karte in der Karte.
+          // Die 1.5er Polsterung ist die, mit der jedes Blatt im Repo seine
+          // Abschnitte einrückt.
+          embedded ? "px-1.5" : "rounded-[30px] bg-card p-[18px] shadow-card",
+        )}
+      >
         <div className="flex items-center gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
             <CategoryIcon categoryKey={category ?? "sonstiges"} className="size-6" />

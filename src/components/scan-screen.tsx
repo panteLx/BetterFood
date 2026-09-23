@@ -17,18 +17,27 @@ import {
   NotFoundException,
   ReaderException,
 } from "@zxing/library";
-import { Flashlight, FlashlightOff, X } from "lucide-react";
+import { CalendarClock, Flashlight, FlashlightOff, X } from "lucide-react";
+import { toast } from "sonner";
 import { Avo } from "@/components/avo";
+import type { StepPatch } from "@/components/review-step";
+import { ScanExpirySheet } from "@/components/scan-expiry-sheet";
 import { buttonVariants } from "@/components/ui/button";
+import { commitBatch } from "@/lib/batch-commit";
+import { formatShort, fromDateInputValue, startOfDay } from "@/lib/expiry";
 import {
+  clearBatch,
   createEntry,
+  firstPendingIndex,
   mergeEntry,
   readBatch,
   updateBatch,
   useBatch,
   type BatchEntry,
 } from "@/lib/review-batch";
+import { readAutoExpiry, setAutoExpiry, useAutoExpiry } from "@/lib/scan-prefs";
 import { cn } from "@/lib/utils";
+import type { Category, Place } from "@/db/schema";
 
 // @zxing/browser meldet fuer sein Canvas-Bild "Drehen wird unterstuetzt",
 // kann es aber nicht: HTMLCanvasElementLuminanceSource initialisiert
@@ -218,8 +227,20 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
  * fuer den invertierten Toast gedacht ist, nicht fuer dieses immer-dunkle
  * Kamerabild.
  */
-type TrayStatus = "recognized" | "pending" | "known" | "new";
+type TrayStatus =
+  | "done"
+  | "skipped"
+  | "recognized"
+  | "pending"
+  | "known"
+  | "new";
 const TRAY_STATUS: Record<TrayStatus, { className: string; label: string }> = {
+  // "fertig" und "gerade erkannt" teilen den Ton: beides sind gute Nachrichten,
+  // und der Unterschied steht im Wort. Das Datum haengt bei "fertig" daneben --
+  // ohne es waere nicht zu sehen, WAS entschieden wurde, und genau davon haengt
+  // ab, ob der Knopf unten "pruefen" oder "uebernehmen" sagt.
+  done: { className: "text-[#7ce8a8]", label: "fertig" },
+  skipped: { className: "text-white/35", label: "verworfen" },
   recognized: { className: "text-[#7ce8a8]", label: "gerade erkannt" },
   pending: { className: "text-white/35", label: "…" },
   known: { className: "text-white/60", label: "bekannt" },
@@ -238,7 +259,13 @@ type MatchStreak = {
   at: number;
 };
 
-export default function ScanPage() {
+export function ScanScreen({
+  categories,
+  places,
+}: {
+  categories: Category[];
+  places: Place[];
+}) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const trayRef = useRef<HTMLUListElement>(null);
@@ -287,6 +314,126 @@ export default function ScanPage() {
   // Anzeigezustand dieses Screens und geht den Pruef-Flow nichts an.
   const [resolving, setResolving] = useState<string[]>([]);
   const [lastTouchedId, setLastTouchedId] = useState<string | null>(null);
+
+  /* ---------------------------------------------------------------- *
+   * Das MHD-Blatt
+   *
+   * Der Prüf-Schritt darf auch hier stehen, statt erst hinter dem
+   * Abschluss-Knopf: wer die Packung noch in der Hand hält, liest das Datum
+   * ohnehin gerade ab. Der Schalter darunter entscheidet nur, ob das Blatt von
+   * selbst aufgeht -- angetippt werden kann eine Ablage-Zeile immer.
+   * ---------------------------------------------------------------- */
+  const autoExpiry = useAutoExpiry();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
+  /**
+   * Der Stichtag, an dem die Richtwerte hängen.
+   *
+   * Erst beim Öffnen gesetzt und nicht im Render: `new Date()` während des
+   * Prerender bricht unter `cacheComponents` die Route ab (derselbe Grund,
+   * warum `review-step.tsx` hinter `useIsClient` wartet). Ein Handler läuft
+   * ausschließlich im Browser -- und stempelt nebenbei bei jedem Öffnen neu,
+   * was einem Tab recht ist, der über Mitternacht offen bleibt.
+   */
+  const [today, setToday] = useState<Date | null>(null);
+  /**
+   * Solange das gesetzt ist, werden gelesene Codes verworfen.
+   *
+   * @zxing/browser kennt kein Pausieren -- `IScannerControls` hat nur `stop()`,
+   * und das beendet in `decodeFromConstraints` auch die Tracks
+   * (BrowserCodeReader.js). Jedes Anhalten wäre also ein Kaltstart, und genau
+   * die abzuschaffen ist der Sinn des Batch-Scans. Die Schleife dreht deshalb
+   * weiter und der Treffer fällt bei uns unter den Tisch: zwei Dekodierungen
+   * pro Sekunde, solange das Blatt offen ist, sind billiger als ein Neustart
+   * der Kamera.
+   *
+   * Ein Ref und kein State: der Decoder-Callback wird @zxing genau einmal je
+   * Kamerastart übergeben und sähe einen State-Wert für immer als `false`.
+   */
+  const blockCaptureRef = useRef(false);
+
+  const activeEntry = batch.find((entry) => entry.id === activeId) ?? null;
+  const pendingIndex = firstPendingIndex(batch);
+
+  const openSheet = useCallback((id: string) => {
+    setToday(startOfDay(new Date()));
+    blockCaptureRef.current = true;
+    setActiveId(id);
+  }, []);
+
+  /**
+   * Blatt zu -- und der Scanner wieder scharf.
+   *
+   * Die beiden Refs müssen dabei frisch gestempelt werden, sonst zählt die
+   * Packung, die noch in der Hand liegt, sofort ein zweites Mal:
+   * `REHIT_COOLDOWN_MS` rechnet ab der letzten vollständigen Serie, und die lag
+   * vor dem Öffnen -- also längst außerhalb der Sperrzeit. Der Joghurt hätte
+   * stillschweigend Menge 2.
+   */
+  function closeSheet() {
+    streakRef.current = { text: null, format: null, count: 0, at: 0 };
+    lastHitRef.current = { text: activeEntry?.barcode ?? null, at: Date.now() };
+    blockCaptureRef.current = false;
+    setActiveId(null);
+  }
+
+  /** Dieselbe Projektion wie im Prüf-Flow (`applyAndAdvance`), nur ohne Route. */
+  function decideActive(patch: StepPatch, status: "done" | "skipped") {
+    const id = activeId;
+    if (!id) return;
+    const change =
+      status === "done"
+        ? { ...patch, status }
+        : { ...patch, status, expiryDate: null };
+    updateBatch((entries) =>
+      entries.map((entry) => (entry.id === id ? { ...entry, ...change } : entry)),
+    );
+    closeSheet();
+  }
+
+  /**
+   * Der Abschluss von hier aus -- für den Fall, dass im Blatt schon alles
+   * entschieden wurde und der Prüf-Flow nichts mehr zu fragen hätte.
+   */
+  async function handleCommit() {
+    // Zuerst sperren: ein Code, der während des Imports gelesen wird, legt
+    // einen Eintrag an, der nicht im abgeschickten Payload steht -- und das
+    // clearBatch() danach löscht ihn. Ein still verschluckter Artikel.
+    blockCaptureRef.current = true;
+    // Frisch aus dem Speicher: zwischen dem Render, der diesen Knopf gezeichnet
+    // hat, und dem Antippen kann ein Treffer liegen. Dann ist wieder etwas
+    // offen, und der Weg dorthin ist der Prüf-Flow -- nicht ein Import, der
+    // diesen Artikel gerade verlieren würde.
+    const current = readBatch();
+    const stillOpen = firstPendingIndex(current);
+    if (stillOpen >= 0) {
+      blockCaptureRef.current = false;
+      router.push(`/review/${stillOpen}`);
+      return;
+    }
+
+    setCommitting(true);
+    try {
+      const outcome = await commitBatch(current);
+      clearBatch();
+      if (!outcome.wrote) {
+        router.replace("/");
+        return;
+      }
+      // Die Vorratsseiten sind serverseitig gerendert und müssen den Zuwachs
+      // sehen, sobald der Nutzer hinüberwechselt.
+      router.refresh();
+      router.replace(
+        `/saved?name=${encodeURIComponent(outcome.summary)}&method=${outcome.method}`,
+      );
+    } catch (caught) {
+      setCommitting(false);
+      blockCaptureRef.current = false;
+      toast.error(
+        caught instanceof Error ? caught.message : "Der Import ist fehlgeschlagen.",
+      );
+    }
+  }
 
   const patchEntry = useCallback((id: string, change: Partial<BatchEntry>) => {
     updateBatch((entries) =>
@@ -373,11 +520,18 @@ export default function ScanPage() {
       );
       updateBatch((entries) => mergeEntry(entries, entry));
       setLastTouchedId(existing ? existing.id : entry.id);
+      // Ein zweites Mal derselbe Code ist eine Menge, keine neue Entscheidung:
+      // nachgefragt wird nicht noch einmal, und das Blatt geht auch nicht
+      // wieder auf -- sonst datierte man denselben Joghurt zweimal. Ueber die
+      // Ablage antippen geht natuerlich weiter.
       if (existing) return;
       setResolving((ids) => [...ids, entry.id]);
       void resolveEntry(entry.id, barcode);
+      // Nicht ueber den Hook-Wert: dieser Callback haengt an der
+      // Decoder-Schleife und saehe einen Umschalter mitten im Einkauf nie.
+      if (readAutoExpiry()) openSheet(entry.id);
     },
-    [resolveEntry],
+    [openSheet, resolveEntry],
   );
 
   // Die zuletzt getroffene Zeile ins Sichtfeld holen. Bei einem langen
@@ -428,6 +582,12 @@ export default function ScanPage() {
           (result, err) => {
             if (!active) return;
             if (result) {
+              // Blatt offen oder Import unterwegs: die Schleife laeuft weiter,
+              // der Treffer zaehlt nicht. Absichtlich hier und nicht vor
+              // "if (result)" -- der Fehlerzweig darunter startet die Kamera
+              // nach einem harten Fehler neu, und die Sperre darf ihn nicht
+              // aushebeln.
+              if (blockCaptureRef.current) return;
               const text = result.getText();
               const format = result.getBarcodeFormat();
               const now = Date.now();
@@ -681,14 +841,40 @@ export default function ScanPage() {
         </div>
         <div className="flex items-center gap-3 rounded-[24px] bg-white/10 px-4 py-3 backdrop-blur-[8px]">
           <Avo size="sm" mood="happy" onDark />
+          {/* Der Text folgt dem Schalter: "Geprüft wird danach" wäre im
+              eingeschalteten Zustand schlicht falsch, und die Zusage darüber,
+              wann das MHD kommt, ist das Einzige, was die beiden Abläufe
+              unterscheidet. */}
           <p className="font-heading text-[15px] leading-snug font-bold text-pretty text-white/90">
-            Einfach weiterscannen.
+            {autoExpiry ? "Scannen, eintragen, weiter." : "Einfach weiterscannen."}
             <br />
             <span className="font-sans text-[12.5px] font-semibold text-white/60">
-              Geprüft wird danach — einer nach dem anderen.
+              {autoExpiry
+                ? "Nach jedem Code fragt das Blatt gleich nach dem MHD."
+                : "Geprüft wird danach — einer nach dem anderen."}
             </span>
           </p>
         </div>
+
+        {/* Der Schalter steht hier und nicht unter "Mehr": wie jemand sein
+            Telefon beim Einräumen hält, entscheidet er in dem Moment, in dem er
+            davorsteht -- und er muss es vor dem ersten Code entscheiden können,
+            also auch bei leerer Ablage. Gemerkt wird er pro Gerät
+            (lib/scan-prefs.ts). */}
+        <button
+          type="button"
+          aria-pressed={autoExpiry}
+          onClick={() => setAutoExpiry(!autoExpiry)}
+          className={cn(
+            "font-heading flex h-11 items-center gap-2 rounded-full px-4 text-[13px] font-bold backdrop-blur-[8px] outline-none focus-visible:ring-3 focus-visible:ring-white/50",
+            autoExpiry
+              ? "bg-white/92 text-[#0b1f14]"
+              : "border border-white/20 bg-white/10 text-white/75",
+          )}
+        >
+          <CalendarClock className="size-4" strokeWidth={2.2} />
+          MHD gleich abfragen
+        </button>
 
         {error && (
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/50 px-5 py-4 backdrop-blur-sm">
@@ -750,32 +936,56 @@ export default function ScanPage() {
                     // Farbe und Wort haengen an genau einem Zustand -- als
                     // zwei parallele Ternaerketten liefen sie beim naechsten
                     // Zustand auseinander.
-                    const status: TrayStatus = justRecognized
-                      ? "recognized"
-                      : resolving.includes(entry.id)
-                        ? "pending"
-                        : entry.known
-                          ? "known"
-                          : "new";
+                    // Eine getroffene Entscheidung schlaegt jede Herkunft:
+                    // "bekannt" neben einem fertig datierten Artikel sagt nur
+                    // noch, wo sein Name herkam, und nicht das, was jetzt zaehlt.
+                    const status: TrayStatus =
+                      entry.status === "done"
+                        ? "done"
+                        : entry.status === "skipped"
+                          ? "skipped"
+                          : justRecognized
+                            ? "recognized"
+                            : resolving.includes(entry.id)
+                              ? "pending"
+                              : entry.known
+                                ? "known"
+                                : "new";
+                    const label =
+                      entry.status === "done" && entry.expiryDate
+                        ? `fertig · ${formatShort(fromDateInputValue(entry.expiryDate))}`
+                        : TRAY_STATUS[status].label;
                     return (
-                      <li
-                        key={entry.id}
-                        data-entry-id={entry.id}
-                        className={`flex items-center gap-2.5 rounded-[14px] px-2.5 py-1.5 text-[14.5px] ${
-                          justRecognized
-                            ? // rgba(79,212,140,.18) ist kein Token: der Wert
-                              // gehoert nur dieser einen Markierung auf dem
-                              // Kamerabild, nicht der Palette.
-                              "bg-[rgba(79,212,140,.18)]"
-                            : "bg-white/6"
-                        }`}
-                      >
+                      <li key={entry.id} data-entry-id={entry.id}>
+                        {/* Die Zeile ist der Knopf: jeder Artikel in der Ablage
+                            laesst sich hier schon fertig machen, und ein
+                            verworfener laesst sich so auch wieder hereinholen --
+                            das "Doch uebernehmen" des Pruef-Flows, ohne ihn zu
+                            betreten. Vor der ersten Antwort noch nicht: bis
+                            Name und Einordnung da sind, waere das Blatt eine
+                            leere Karte mit einer EAN darin. */}
+                        <button
+                          type="button"
+                          disabled={resolving.includes(entry.id)}
+                          onClick={() => openSheet(entry.id)}
+                          aria-label={`${entry.name} eintragen`}
+                          className={`flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-1.5 text-left text-[14.5px] outline-none focus-visible:ring-3 focus-visible:ring-white/50 ${
+                            justRecognized
+                              ? // rgba(79,212,140,.18) ist kein Token: der Wert
+                                // gehoert nur dieser einen Markierung auf dem
+                                // Kamerabild, nicht der Palette.
+                                "bg-[rgba(79,212,140,.18)]"
+                              : "bg-white/6"
+                          }`}
+                        >
                         <span
-                          className={`min-w-0 flex-1 truncate font-bold ${
+                          className={cn(
+                            "min-w-0 flex-1 truncate font-bold",
                             resolving.includes(entry.id)
                               ? "font-mono text-[13px]"
-                              : "font-heading"
-                          }`}
+                              : "font-heading",
+                            entry.status === "skipped" && "text-white/45 line-through",
+                          )}
                         >
                           {entry.name}
                         </span>
@@ -793,8 +1003,9 @@ export default function ScanPage() {
                         <span
                           className={`font-heading shrink-0 text-[12.5px] font-bold ${TRAY_STATUS[status].className}`}
                         >
-                          {TRAY_STATUS[status].label}
+                          {label}
                         </span>
+                        </button>
                       </li>
                     );
                   })}
@@ -817,18 +1028,43 @@ export default function ScanPage() {
                 Text darauf saeuft kaum weniger ab als ein dunkler -- der
                 Entwurf misst hier bewusst dunkle Schrift, anders als jeder
                 andere Primaerknopf im Repo. */}
-            <Link
-              href="/review/0"
-              className={cn(
-                buttonVariants(),
-                // shadow-none: der Verlauf ist hier die hellste Flaeche
-                // ueberhaupt, ein Schein darunter waere auf dem
-                // Kamerabild nicht zu sehen und nur Rechenarbeit.
-                "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none",
-              )}
-            >
-              {batch.length} Artikel prüfen
-            </Link>
+            {/* Ein Knopf, zwei Zustaende -- und kein dritter Bildschirm
+                dazwischen. Wer im Blatt schon alles entschieden hat, haette im
+                Pruef-Flow nichts mehr zu beantworten; der Weg dorthin waere ein
+                leerer Durchlauf, nur um "Uebernehmen" zu druecken. Gezaehlt
+                wird der ganze Batch und nicht nur die eigenen Scans: liegt eine
+                angefangene Rechnung darin, ist eben noch nicht alles
+                entschieden, auch wenn jeder gescannte Artikel ein Datum hat.
+                Der Hinweis darueber sagt genau das. */}
+            {pendingIndex >= 0 ? (
+              <Link
+                href={`/review/${pendingIndex}`}
+                className={cn(
+                  buttonVariants(),
+                  // shadow-none: der Verlauf ist hier die hellste Flaeche
+                  // ueberhaupt, ein Schein darunter waere auf dem
+                  // Kamerabild nicht zu sehen und nur Rechenarbeit.
+                  "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none",
+                )}
+              >
+                {batch.filter((entry) => entry.status === "pending").length} Artikel
+                prüfen
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCommit}
+                disabled={committing}
+                className={cn(
+                  buttonVariants(),
+                  "h-14 rounded-[22px] text-[16.5px] text-[#0b1f14] shadow-none disabled:opacity-60",
+                )}
+              >
+                {committing
+                  ? "Wird übernommen …"
+                  : `${batch.length} Artikel übernehmen`}
+              </button>
+            )}
             {/* Der Ausweg bleibt auch mitten im Batch erreichbar: dass Code 1
                 bis 4 gelesen wurden, hilft bei dem fuenften nicht, der sich
                 nicht lesen laesst. "Kein Barcode vorhanden" faellt hier weg --
@@ -858,6 +1094,23 @@ export default function ScanPage() {
           </>
         )}
       </div>
+
+      {/* Liegt in einem Portal und damit ausserhalb des dark-Wrappers: das
+          Blatt traegt das Theme der App, nicht die Dunkelheit des Suchers.
+          `today` steht erst, wenn es einmal geoeffnet wurde -- vorher gibt es
+          nichts zu zeigen und `new Date()` duerfte im Prerender gar nicht
+          fallen. */}
+      {today && (
+        <ScanExpirySheet
+          entry={activeEntry}
+          resolving={activeId !== null && resolving.includes(activeId)}
+          categories={categories}
+          places={places}
+          today={today}
+          onClose={closeSheet}
+          onDecide={decideActive}
+        />
+      )}
     </div>
   );
 }
